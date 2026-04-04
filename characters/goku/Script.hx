@@ -207,7 +207,7 @@ function kaiokenReset() {
             this.kaiokenHUD.gotoAndStop("k" + Math.floor(this.kaiokenPower));
             self.setGlobalVariable("canKK",false);
             setCostume(getCostume(),getTeamID());
-            this.powerDown();
+            self.powerDown();
          }
       
 }
@@ -320,7 +320,7 @@ function kaiokenSpark(param1:* = null) {
             },
             "special":{"deny":true}
          };
-         if((_local2[getCurrentAnimation( != null)]) && _local2[getCurrentAnimation()].deny === true)
+         if(Boolean(_local2[getCurrentAnimation()]) && _local2[getCurrentAnimation()].deny === true)
          {
             return;
          }
@@ -359,7 +359,7 @@ function kaiokenCharge() {
          }
          else
          {
-            this.powerUp();
+            self.powerUp();
             self.setGlobalVariable("canKK",false);
             this.kaiokenPower = 30;
             self.enableTeleportation();
@@ -380,7 +380,7 @@ function kaioKamehameha(param1:Int) {
          {
             this.kaiokenPower = 0;
             this.kaiokenHUD.gotoAndStop("k" + Math.floor(this.kaiokenPower));
-            this.powerDown();
+            self.powerDown();
          }
       
 }
@@ -389,7 +389,7 @@ function checkKameCharge() {
 
          if(this.kaiokenPower < 10)
          {
-            this.stancePlayFrame("quickfire");
+            self.stancePlayFrame("quickfire");
          }
          else
          {
@@ -431,7 +431,7 @@ function checkKaioKameCharge() {
             this.kaiokenPower = 0;
             this.kaiokenHUD.gotoAndStop("k" + Math.floor(this.kaiokenPower));
             self.setGlobalVariable("canKK",false);
-            this.powerDown();
+            self.powerDown();
          }
       
 }
@@ -440,8 +440,8 @@ function disableDragonDash(param1:* = null) {
 
          if(!self.isOnFloor())
          {
-            self.setActionEnabled(false, "b_forward");
-            self.setActionEnabled(false, "b_forward_air");
+            setAttackEnabled(false,"b_forward");
+            setAttackEnabled(false,"b_forward_air");
             addEventListener(SSF2Event.GROUND_TOUCH,this.enableDragonDash,{"persistent":true});
             addEventListener(SSF2Event.CHAR_HURT,this.enableDragonDash,{"persistent":true});
             addEventListener(SSF2Event.CHAR_GRABBED,this.enableDragonDash,{"persistent":true});
@@ -452,8 +452,8 @@ function disableDragonDash(param1:* = null) {
 
 function enableDragonDash(param1:* = null) {
 
-         self.setActionEnabled(true, "b_forward");
-         self.setActionEnabled(true, "b_forward_air");
+         setAttackEnabled(true,"b_forward");
+         setAttackEnabled(true,"b_forward_air");
          removeEventListener(SSF2Event.GROUND_TOUCH,this.enableDragonDash);
          removeEventListener(SSF2Event.CHAR_HURT,this.enableDragonDash);
          removeEventListener(SSF2Event.CHAR_GRABBED,this.enableDragonDash);
@@ -463,8 +463,8 @@ function enableDragonDash(param1:* = null) {
 
 function disableTeleportation(param1:* = null) {
 
-         self.setActionEnabled(false, "b_up");
-         self.setActionEnabled(false, "b_up_air");
+         setAttackEnabled(false,"b_up");
+         setAttackEnabled(false,"b_up_air");
          addEventListener(SSF2Event.GROUND_TOUCH,this.enableTeleportation,{"persistent":true});
          addEventListener(SSF2Event.CHAR_HURT,this.enableTeleportation,{"persistent":true});
          addEventListener(SSF2Event.CHAR_GRABBED,this.enableTeleportation,{"persistent":true});
@@ -474,8 +474,8 @@ function disableTeleportation(param1:* = null) {
 
 function enableTeleportation(param1:* = null) {
 
-         self.setActionEnabled(true, "b_up");
-         self.setActionEnabled(true, "b_up_air");
+         setAttackEnabled(true,"b_up");
+         setAttackEnabled(true,"b_up_air");
          removeEventListener(SSF2Event.GROUND_TOUCH,this.enableTeleportation);
          removeEventListener(SSF2Event.CHAR_HURT,this.enableTeleportation);
          removeEventListener(SSF2Event.CHAR_GRABBED,this.enableTeleportation);
@@ -496,7 +496,7 @@ function powerupAttackBox(param1:Int) {
 
 function applyDamageMod(param1:Int) {
 
-         self.updateAttackBoxStats(param1,{"damage":this.damageMod(self.getAttackBoxStat(param1,"damage"))});
+         self.updateAttackBoxStats(param1,{"damage":self.damageMod(self.getAttackBoxStat(param1,"damage"))});
       
 }
 
@@ -533,7 +533,7 @@ function powerUp() {
 
 function powerDown() {
 
-         var _local3:MovieClip = null;
+         var _local3:Dynamic  // MovieClip → use Sprite or Container = null;
          if(!this.isPoweredUp)
          {
             return;
@@ -550,13 +550,13 @@ function powerDown() {
          });
          self.setColorFilters(false);
          var _local2:Int = 0;
-         _local3 = getHealthBox().getChildByName("charHead") as MovieClip;
+         _local3 = getHealthBox().getChildByName("charHead") cast(MovieClip);
          if(_local3)
          {
             SSF2Utils.setColorFilters(_local3,false);
             _local3.filters = this.extraFilter;
          }
-         _local3 = getHealthBox().getChildByName("stockiconsingle") as MovieClip;
+         _local3 = getHealthBox().getChildByName("stockiconsingle") cast(MovieClip);
          if(_local3)
          {
             SSF2Utils.setColorFilters(_local3,false);
@@ -565,7 +565,7 @@ function powerDown() {
          {
             while(_local2 < getLives())
             {
-               _local3 = getHealthBox().getChildByName("stockicon" + _local2) as MovieClip;
+               _local3 = getHealthBox().getChildByName("stockicon" + _local2) cast(MovieClip);
                if(_local3)
                {
                   SSF2Utils.setColorFilters(_local3,{
@@ -626,7 +626,7 @@ function update() {
             else
             {
                self.setGlobalVariable("canKK",false);
-               this.powerDown();
+               self.powerDown();
             }
          }
          if(this.isPoweredUp && this.showBackEffect)
@@ -681,7 +681,7 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }
 
@@ -693,7 +693,7 @@ function setKKLandingLag(param1:Bool) {
             self.addEventListener(SSF2Event.GROUND_TOUCH,this.toLand);
             if(self.isOnFloor())
             {
-               this.toLand();
+               self.toLand();
             }
          }
          else
@@ -702,7 +702,7 @@ function setKKLandingLag(param1:Bool) {
             self.addEventListener(SSF2Event.GROUND_TOUCH,this.toIdle);
             if(self.isOnFloor())
             {
-               this.toIdle();
+               self.toIdle();
             }
          }
       

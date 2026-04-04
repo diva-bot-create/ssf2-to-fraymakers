@@ -234,7 +234,7 @@ function killAllDots() {
          var _local1:Float = 0;
          while(_local1 < this.dotCount)
          {
-            if((this.dotArray[_local1] != null) && !this.dotArray[_local1].isDisposed())
+            if(Boolean(this.dotArray[_local1]) && !this.dotArray[_local1].isDisposed())
             {
                this.dotArray[_local1].destroy();
             }
@@ -246,7 +246,7 @@ function killAllDots() {
 
 function removeLocked() {
 
-         this.destroyTimer(this.checkLocked);
+         self.destroyTimer(this.checkLocked);
          if(this.attachedMovieClip != null && this.attachedMovieClip.currentFrameLabel != "die" && this.canRemove)
          {
             this.attachedMovieClip.gotoAndStop("die");
@@ -272,9 +272,9 @@ function checkLocked() {
 function lockEffect(param1:String, param2:Float = 0, param3:Float = 0, param4:Bool = true, param5:Bool = true) {
 
          this.canAnimRemove = param5;
-         this.destroyTimer(this.checkLocked);
+         self.destroyTimer(this.checkLocked);
          this.attachedFrame = self.getMC().currentFrameLabel;
-         this.attachedMovieClip = this.attachEffect(param1,{
+         this.attachedMovieClip = self.attachEffect(param1,{
             "x":param2,
             "y":param3,
             "flip":param4
@@ -294,11 +294,11 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }
 
-function applyColourTo(param1:MovieClip) {
+function applyColourTo(param1:Dynamic  // MovieClip → use Sprite or Container) {
 
          this.colTrans = param1.transform.colorTransform;
          this.colTrans.color = uint("0x" + getPaletteSwapData().paletteSwap.replacements[1].toString(16).slice(2));

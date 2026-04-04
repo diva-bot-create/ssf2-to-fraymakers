@@ -212,7 +212,7 @@ function update() {
          {
             if(self.isOnFloor() || self.getState() == CState.LEDGE_HANG)
             {
-               self.setActionEnabled(true, "b_down_air");
+               /* TODO: removeStatusEffect for CharacterActions.SPECIAL_DOWN — store effect id on addStatusEffect */;
             }
          }
       
@@ -225,6 +225,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }

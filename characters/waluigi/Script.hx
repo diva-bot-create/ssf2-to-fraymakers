@@ -210,8 +210,8 @@ function update() {
 
          if(self.getGlobalVariable("plantspawn") == false)
          {
-            self.setActionEnabled(false, "b_down");
-            self.setActionEnabled(false, "b_down_air");
+            self.addStatusEffect(StatusEffectType.DISABLE_ACTION, CharacterActions.SPECIAL_DOWN);
+            self.addStatusEffect(StatusEffectType.DISABLE_ACTION, CharacterActions.SPECIAL_DOWN);
          }
       
 }

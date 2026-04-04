@@ -208,35 +208,35 @@ function initialize() {
 
 function update() {
 
-         var _local1:* = // TODO: getNearestLedge();
-         if((self.isBot( != null)) && (_local1 != null) && !self.isOnFloor())
+         var _local1:* = self.getNearestLedge();
+         if((self.isBot() != null) && (_local1 != null) && !self.isOnFloor())
          {
-            if(// TODO: inUpperLeftWarningBounds())
+            if(self.inUpperLeftWarningBounds())
             {
                if(Math.abs(self.getX() - _local1.x) < this.SIDE_B_MIN_DISTANCE_X || Math.abs(self.getY() - _local1.y) < this.SIDE_B_MIN_DISTANCE_Y)
                {
-                  self.setActionEnabled(false, "b_forward_air");
+                  self.addStatusEffect(StatusEffectType.DISABLE_ACTION, CharacterActions.SPECIAL_SIDE);
                }
                else if(!this.sonicSideBDisabled)
                {
-                  self.setActionEnabled(true, "b_forward_air");
+                  /* TODO: removeStatusEffect for CharacterActions.SPECIAL_SIDE — store effect id on addStatusEffect */;
                }
             }
-            else if(// TODO: inUpperRightWarningBounds())
+            else if(self.inUpperRightWarningBounds())
             {
                if(Math.abs(_local1.x - self.getX()) < this.SIDE_B_MIN_DISTANCE_X || Math.abs(self.getY() - _local1.y) < this.SIDE_B_MIN_DISTANCE_Y)
                {
-                  self.setActionEnabled(false, "b_forward_air");
+                  self.addStatusEffect(StatusEffectType.DISABLE_ACTION, CharacterActions.SPECIAL_SIDE);
                }
                else if(!this.sonicSideBDisabled)
                {
-                  self.setActionEnabled(true, "b_forward_air");
+                  /* TODO: removeStatusEffect for CharacterActions.SPECIAL_SIDE — store effect id on addStatusEffect */;
                }
             }
          }
          if(isUsingFinalSmash())
          {
-            if(self.isBot())
+            if(isCPU())
             {
                self.runFSAI();
             }
@@ -250,12 +250,12 @@ function update() {
 
 function restoreSpecials() {
 
-         self.setActionEnabled(true, "b");
-         self.setActionEnabled(true, "b_air");
-         self.setActionEnabled(true, "b_forward");
-         self.setActionEnabled(true, "b_forward_air");
-         self.setActionEnabled(true, "b_up");
-         self.setActionEnabled(true, "b_up_air");
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_NEUTRAL — store effect id on addStatusEffect */;
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_NEUTRAL — store effect id on addStatusEffect */;
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_SIDE — store effect id on addStatusEffect */;
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_SIDE — store effect id on addStatusEffect */;
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_UP — store effect id on addStatusEffect */;
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_UP — store effect id on addStatusEffect */;
          this.sonicSideBDisabled = false;
       
 }

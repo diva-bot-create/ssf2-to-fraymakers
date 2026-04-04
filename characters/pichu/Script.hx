@@ -253,14 +253,14 @@ function dischargeEffects(param1:* = null) {
                this.playedSevere = true;
                // TODO: SSF2API.shakeCamera(this.SevereCamShakeIntensity);
                self.playSound(this.SevereSFX);
-               this.attachEffect(this.SevereFX);
+               self.attachEffect(this.SevereFX);
             }
             else if(!this.playedDamaged && (self.getDamage() > this.DamagedThreshold - 1 && getCharacterStat("stamina") <= 0 || self.getDamage() < getCharacterStat("stamina") * this.DamagedRatio && getCharacterStat("stamina") > 0))
             {
                this.playedDamaged = true;
                // TODO: SSF2API.shakeCamera(this.DamagedCamShakeIntensity);
                self.playSound(this.DamagedSFX);
-               this.attachEffect(this.DamagedFX);
+               self.attachEffect(this.DamagedFX);
             }
          }
       
@@ -314,7 +314,7 @@ function getDischargeFrame() {
 
          var _local1:* = self.getCurrentAnimation();
          var _local2:* = null;
-         if(this.DischargeEnabled && self.getStanceMC().currentFrame === 1 && (_local1 != null))
+         if(this.DischargeEnabled && self.getStanceMC().currentFrame === 1 && (_local1) != null)
          {
             _local2 = _local1;
             if(this.SevereEnabled && self.getDamage() > this.SevereThreshold - 1)
@@ -359,10 +359,10 @@ function hurtSelf(param1:Float) {
          {
             self.setDamage(self.getDamage() - param1);
          }
-         this.throbDamageCounter();
+         self.throbDamageCounter();
          if(this.DischargeEnabled && (self.getDamage() > this.DamagedThreshold - 1 && getCharacterStat("stamina") <= 0 || self.getDamage() < getCharacterStat("stamina") * this.DamagedRatio && getCharacterStat("stamina") > 0))
          {
-            this.dischargeEffects();
+            self.dischargeEffects();
          }
       
 }
@@ -399,7 +399,7 @@ function fireProjectile(param1:*, param2:Float = 0, param3:Float = 0, param4:Boo
          var _local7:Int = 0;
          var _local8:* = undefined;
          var _local6:* = super.fireProjectile(param1,param2,param3,param4,param5);
-         if(self.isElectricTerrainActive() && (_local6 != null))
+         if(self.isElectricTerrainActive() && (_local6) != null)
          {
             _local7 = 1;
             _local8 = _local6.getAttackBoxStat(_local7,"damage");
@@ -424,7 +424,7 @@ function crouchHeal() {
          {
             return;
          }
-         this.recover(1);
+         self.recover(1);
       
 }
 

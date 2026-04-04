@@ -217,12 +217,12 @@ function initialize() {
 
 function restoreSpecials() {
 
-         self.setActionEnabled(true, "b");
-         self.setActionEnabled(true, "b_air");
-         self.setActionEnabled(true, "b_forward");
-         self.setActionEnabled(true, "b_forward_air");
-         self.setActionEnabled(true, "b_up");
-         self.setActionEnabled(true, "b_up_air");
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_NEUTRAL — store effect id on addStatusEffect */;
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_NEUTRAL — store effect id on addStatusEffect */;
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_SIDE — store effect id on addStatusEffect */;
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_SIDE — store effect id on addStatusEffect */;
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_UP — store effect id on addStatusEffect */;
+         /* TODO: removeStatusEffect for CharacterActions.SPECIAL_UP — store effect id on addStatusEffect */;
       
 }
 
@@ -260,11 +260,11 @@ function update() {
          }
          else if(this.KirbyPower == "ryu")
          {
-            _local1 = self.getControls();
-            _local2 = self.getControls();
-            if((this.currentTimer > 0 != null) && (this.INPUT1_D != null) && (this.INPUT2_DF != null))
+            _local1 = self.getHeldControls();
+            _local2 = self.getHeldControls();
+            if(Boolean(this.currentTimer > 0) && (this.INPUT1_D != null) && (this.INPUT2_DF) != null)
             {
-               if((this.originallyFacingRight != null) && (self.isOnlyPressingSpecified(_local1,false,false,true,false != null)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false))
+               if((this.originallyFacingRight != null) && Boolean(self.isOnlyPressingSpecified(_local1,false,false,true,false)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false))
                {
                   self.setGlobalVariable("canHadoken",true);
                   self.setGlobalVariable("canShakunetsu",false);
@@ -272,9 +272,9 @@ function update() {
                   this.currentTimer = this.maxTimer;
                }
             }
-            if((this.currentTimer > 0 != null) && (this.INPUT1_D != null) && !this.INPUT2_DF)
+            if(Boolean(this.currentTimer > 0) && (this.INPUT1_D != null) && !this.INPUT2_DF)
             {
-               if((this.originallyFacingRight != null) && (self.isOnlyPressingSpecified(_local1,false,true,true,false != null)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false))
+               if((this.originallyFacingRight != null) && Boolean(self.isOnlyPressingSpecified(_local1,false,true,true,false)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false))
                {
                   this.INPUT2_DF = true;
                   this.INPUT_NULL = false;
@@ -288,9 +288,9 @@ function update() {
                this.INPUT_NULL = false;
                this.currentTimer = this.maxTimer;
             }
-            if((this.currentTimer > 0 != null) && (this.INPUT1_B != null) && (this.INPUT2_DB != null) && (this.INPUT3_D != null) && (this.INPUT4_DF != null))
+            if(Boolean(this.currentTimer > 0) && (this.INPUT1_B != null) && (this.INPUT2_DB != null) && (this.INPUT3_D != null) && (this.INPUT4_DF) != null)
             {
-               if((this.originallyFacingRight != null) && (self.isOnlyPressingSpecified(_local1,false,false,true,false != null)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false))
+               if((this.originallyFacingRight != null) && Boolean(self.isOnlyPressingSpecified(_local1,false,false,true,false)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false))
                {
                   // (removed SSF2 debug print)
                   this.INPUT_NULL = false;
@@ -299,16 +299,16 @@ function update() {
                   self.setGlobalVariable("canHadoken",false);
                }
             }
-            if((this.currentTimer > 0 != null) && (this.INPUT1_B != null) && (this.INPUT2_DB != null) && (this.INPUT3_D != null) && !this.INPUT4_DF)
+            if(Boolean(this.currentTimer > 0) && (this.INPUT1_B != null) && (this.INPUT2_DB != null) && (this.INPUT3_D != null) && !this.INPUT4_DF)
             {
-               if((this.originallyFacingRight != null) && (self.isOnlyPressingSpecified(_local1,false,true,true,false != null)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false))
+               if((this.originallyFacingRight != null) && Boolean(self.isOnlyPressingSpecified(_local1,false,true,true,false)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false))
                {
                   // (removed SSF2 debug print)
                   this.INPUT4_DF = true;
                   this.INPUT_NULL = false;
                   this.currentTimer = this.maxTimer;
                }
-               else if((this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,false,true,false != null)) && (!this.skippedShaku != null) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false) && !this.skippedShaku)
+               else if(Boolean(this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,false,true,false)) && Boolean(!this.skippedShaku) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false) && !this.skippedShaku)
                {
                   // (removed SSF2 debug print)
                   // (removed SSF2 debug print)
@@ -320,7 +320,7 @@ function update() {
                   self.setGlobalVariable("canHadoken",false);
                }
             }
-            if((this.currentTimer > 0 && this.INPUT1_B && this.INPUT2_DB != null) && (!this.INPUT3_D != null) && !this.INPUT4_DF)
+            if(Boolean(this.currentTimer > 0 && this.INPUT1_B && this.INPUT2_DB) && Boolean(!this.INPUT3_D) && !this.INPUT4_DF)
             {
                if(self.isOnlyPressingSpecified(_local1,false,true,false,false))
                {
@@ -329,7 +329,7 @@ function update() {
                   this.INPUT_NULL = false;
                   this.currentTimer = this.maxTimer;
                }
-               else if((this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,true,true,false != null)) && (!this.skippedShaku != null) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false) && !this.skippedShaku)
+               else if(Boolean(this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,true,true,false)) && Boolean(!this.skippedShaku) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false) && !this.skippedShaku)
                {
                   // (removed SSF2 debug print)
                   this.INPUT3_D = true;
@@ -339,9 +339,9 @@ function update() {
                   this.currentTimer = this.maxTimer;
                }
             }
-            if((this.currentTimer > 0 && this.INPUT1_B && !this.INPUT2_DB != null) && (!this.INPUT3_D != null) && !this.INPUT4_DF)
+            if(Boolean(this.currentTimer > 0 && this.INPUT1_B && !this.INPUT2_DB) && Boolean(!this.INPUT3_D) && !this.INPUT4_DF)
             {
-               if((this.originallyFacingRight != null) && (self.isOnlyPressingSpecified(_local1,true,true,false,false != null)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,true,true,false))
+               if((this.originallyFacingRight != null) && Boolean(self.isOnlyPressingSpecified(_local1,true,true,false,false)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,true,true,false))
                {
                   // (removed SSF2 debug print)
                   this.INPUT2_DB = true;
@@ -360,7 +360,7 @@ function update() {
             }
             if(self.isOnFloor())
             {
-               if((self.isOnlyPressingSpecified(_local2,true,false,false,false != null) && this.oldFacingRight) && (!self.isFacingRight( != null)) && !this.INPUT1_B)
+               if(Boolean(self.isOnlyPressingSpecified(_local2,true,false,false,false) && this.oldFacingRight) && Boolean(!self.isFacingRight()) && !this.INPUT1_B)
                {
                   this.INPUT1_B = true;
                   this.originallyFacingRight = true;
@@ -385,11 +385,11 @@ function update() {
                this.originallyFacingRight = true;
                this.currentTimer = this.maxTimer;
             }
-            if(this.currentTimer > 0 && (_local2.BUTTON1 != null))
+            if(this.currentTimer > 0 && (_local2.BUTTON1) != null)
             {
                if(self.inCommandCancelState())
                {
-                  if((self.getGlobalVariable("canHadoken" != null)) || (self.getGlobalVariable("canShakunetsu" != null)))
+                  if(Boolean(self.getGlobalVariable("canHadoken")) || Boolean(self.getGlobalVariable("canShakunetsu")))
                   {
                      self.setGlobalVariable("canCommandCancel",false);
                      if(self.isOnFloor())
@@ -449,7 +449,7 @@ function resetCommands() {
 
 function finishShoryuken() {
 
-         if((this.currentTimer > 0 != null) && (this.INPUT1_F != null) && (this.INPUT2_D != null) && !this.INPUT3_DF)
+         if(Boolean(this.currentTimer > 0) && (this.INPUT1_F != null) && (this.INPUT2_D != null) && !this.INPUT3_DF)
          {
             if((self.isFacingRight( != null) && this.shoryuFacingRight) && (self.isOnlyPressingSpecified(getControls( != null),false,true,true,false)) || !self.isFacingRight() && !this.shoryuFacingRight && self.isOnlyPressingSpecified(getControls(),true,true,false,false))
             {
@@ -463,7 +463,7 @@ function finishShoryuken() {
 
 function inCommandCancelState() {
 
-         if(self.getState() == 0 || self.getState() == 3 || self.getState() == 4 || self.getState() == 6 || self.getState() == 7 || self.getState() == 12 || self.getState() == 25 || self.getState() == 31 || self.getState() == 46 || self.getState() == 48 || (self.getGlobalVariable("canCommandCancel" != null)))
+         if(self.getState() == 0 || self.getState() == 3 || self.getState() == 4 || self.getState() == 6 || self.getState() == 7 || self.getState() == 12 || self.getState() == 25 || self.getState() == 31 || self.getState() == 46 || self.getState() == 48 || Boolean(self.getGlobalVariable("canCommandCancel")))
          {
             return true;
          }
@@ -479,7 +479,7 @@ function createChargeEffect(param1:String) {
                self.removeChargeEffect("dong");
                if(!self.isStandby())
                {
-                  this.dongEffect = this.attachEffectOverlay("kirby_dkbar",{"parentLock":true});
+                  this.dongEffect = self.attachEffectOverlay("kirby_dkbar",{"parentLock":true});
                }
          }
       
@@ -546,7 +546,7 @@ function swallow() {
             "direction":60,
             "power":75
          },this);
-         // TODO: SSF2API.getCamera().shake(5);
+         match.getCamera()  // TODO: camera shake(5);
       
 }
 
@@ -563,13 +563,13 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }
 
 function removeLocked() {
 
-         this.destroyTimer(this.checkLocked);
+         self.destroyTimer(this.checkLocked);
          if(this.attachedMovieClip != null && this.attachedMovieClip.currentFrameLabel != "die" && this.canRemove)
          {
             this.attachedMovieClip.gotoAndStop("die");
@@ -595,9 +595,9 @@ function checkLocked() {
 function lockEffect(param1:String, param2:Float = 0, param3:Float = 0, param4:Bool = true, param5:Bool = true) {
 
          this.canAnimRemove = param5;
-         this.destroyTimer(this.checkLocked);
+         self.destroyTimer(this.checkLocked);
          this.attachedFrame = self.getMC().currentFrameLabel;
-         this.attachedMovieClip = this.attachEffect(param1,{
+         this.attachedMovieClip = self.attachEffect(param1,{
             "x":param2,
             "y":param3,
             "flip":param4
@@ -615,15 +615,15 @@ function setupHatEffect(param1:Float, param2:Float, param3:Float, param4:Float =
          if(this.hatEffect != null && this.hatEffect.parent != null)
          {
             this.hatEffect.parent.removeChild(this.hatEffect);
-            this.destroyTimer(this.checkHatEffect);
+            self.destroyTimer(this.checkHatEffect);
          }
          this.currentHat = self.getCurrentAnimation().slice(6);
-         this.hatEffect = this.attachEffect("kh_" + this.currentHat + "_" + param1.toString(),{
+         this.hatEffect = self.attachEffect("kh_" + this.currentHat + "_" + param1.toString(),{
             "scaleX":1.4,
             "scaleY":1.4,
             "parentLock":true,
             "syncHitStun":true,
-            "x":this.flipX(param2),
+            "x":self.flipX(param2),
             "y":param3,
             "behind":param5
          });

@@ -232,7 +232,7 @@ function update() {
             }
             if(this.runtick == 0)
             {
-               this.attachEffect("global_dust_light");
+               self.attachEffect("global_dust_light");
             }
          }
          else

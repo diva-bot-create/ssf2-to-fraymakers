@@ -242,7 +242,7 @@ function isDarkPit() {
 
 function removeLocked() {
 
-         this.destroyTimer(this.checkLocked);
+         self.destroyTimer(this.checkLocked);
          if(this.attachedMovieClip != null && this.attachedMovieClip.currentFrameLabel != "die" && this.canRemove)
          {
             this.attachedMovieClip.gotoAndStop("die");
@@ -267,9 +267,9 @@ function checkLocked() {
 
 function lockEffect(param1:String, param2:Float = 0, param3:Float = 0, param4:Bool = true) {
 
-         this.destroyTimer(this.checkLocked);
+         self.destroyTimer(this.checkLocked);
          this.attachedFrame = self.getCurrentAttackFrame();
-         this.attachedMovieClip = this.attachEffect(param1,{
+         this.attachedMovieClip = self.attachEffect(param1,{
             "x":param2,
             "y":param3,
             "flip":param4
@@ -284,11 +284,11 @@ function lockEffect(param1:String, param2:Float = 0, param3:Float = 0, param4:Bo
 
 function feather(param1:Float = 1, param2:Float = 0, param3:Float = 360, param4:Float = 0, param5:Float = 20, param6:Float = 20, param7:Float = 70) {
 
-         var _local8:MovieClip = null;
+         var _local8:Dynamic  // MovieClip → use Sprite or Container = null;
          while(param1 > 0)
          {
             _local8 = attachEffect("pit_feather",{
-               "x":this.flipX(// TODO: SSF2API.randomInteger(param4,param5) - (param5 - param4) / 2),
+               "x":self.flipX(// TODO: SSF2API.randomInteger(param4,param5) - (param5 - param4) / 2),
                "y":-// TODO: SSF2API.randomInteger(param6,param7)
             });
             SSF2Utils.replacePalette(_local8,getPaletteSwapData().paletteSwap,3);
@@ -306,6 +306,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }

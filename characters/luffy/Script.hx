@@ -214,7 +214,7 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }
 
@@ -229,7 +229,7 @@ function useDownB() {
          --this.downBuses;
          if(self.isBot() && this.downBuses <= 0)
          {
-            self.setActionEnabled(false, "b_down_air");
+            self.addStatusEffect(StatusEffectType.DISABLE_ACTION, CharacterActions.SPECIAL_DOWN);
          }
       
 }
@@ -246,7 +246,7 @@ function resetDownB(param1:* = null) {
          this.downBuses = 2;
          if(self.isBot())
          {
-            self.setActionEnabled(true, "b_down_air");
+            /* TODO: removeStatusEffect for CharacterActions.SPECIAL_DOWN — store effect id on addStatusEffect */;
          }
       
 }

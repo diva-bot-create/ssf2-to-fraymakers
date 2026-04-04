@@ -226,7 +226,7 @@ function applyGigaBowserPalette() {
          // (removed SSF2 debug print)
          if(!getMetalStatus())
          {
-            setPaletteSwapData(this.gigaBowserPalette(this.currentCostume()));
+            setPaletteSwapData(self.gigaBowserPalette(self.currentCostume()));
          }
       
 }
@@ -446,6 +446,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }

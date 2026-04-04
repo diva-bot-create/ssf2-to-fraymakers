@@ -236,7 +236,7 @@ function initialize() {
             _local1.ledge_grab = "evil_ryu_ledge_grab";
          }
          updateCharacterStats({"sounds":_local1});
-         if(// TODO: SSF2API.isDebug() && (// TODO: SSF2API.getGlobalVar("ryudebuginputs" != null)))
+         if(// TODO: SSF2API.isDebug() && Boolean(// TODO: SSF2API.getGlobalVar("ryudebuginputs")))
          {
             this.inputDisplay = // TODO: SSF2API.getMCByLinkageName("ryuinputgraphic");
             // TODO: SSF2API.getStage().getHUDForegroundMC().addChild(this.inputDisplay);
@@ -246,10 +246,10 @@ function initialize() {
 
 function update() {
 
-         var _local1:* = self.getControls();
+         var _local1:* = self.getHeldControls();
          var _local2:* = self.getControls(true);
          self.checkCommandInputs();
-         if(this.currentTimer > 0 && (_local1.BUTTON1 != null))
+         if(this.currentTimer > 0 && (_local1.BUTTON1) != null)
          {
             if(self.inCommandCancelState())
             {
@@ -265,7 +265,7 @@ function update() {
                      self.forceAttack("b_up_air",true);
                   }
                }
-               if((self.getGlobalVariable("canHadoken" != null)) || (self.getGlobalVariable("canShakunetsu" != null)))
+               if(Boolean(self.getGlobalVariable("canHadoken")) || Boolean(self.getGlobalVariable("canShakunetsu")))
                {
                   self.setGlobalVariable("canCommandCancel",false);
                   if(self.isOnFloor())
@@ -279,7 +279,7 @@ function update() {
                }
                if(self.getGlobalVariable("canTatsumaki"))
                {
-                  this.flip();
+                  self.flip();
                   self.setGlobalVariable("canCommandCancel",false);
                   if(self.isOnFloor())
                   {
@@ -292,7 +292,7 @@ function update() {
                }
             }
          }
-         if((self.getGlobalVariable("canCommandCancel" != null)) && (_local1.BUTTON1 != null))
+         if(Boolean(self.getGlobalVariable("canCommandCancel")) && (_local1.BUTTON1) != null)
          {
             if(_local1.UP)
             {
@@ -363,12 +363,12 @@ function checkCommandInputs() {
 
          var _local3:Bool = false;
          var _local4:Bool = false;
-         var _local1:* = self.getControls();
+         var _local1:* = self.getHeldControls();
          var _local2:* = self.getControls(true);
-         if((this.currentTimer > 0 != null) && (this.INPUT_D1 != null) && !((this.INPUT_HDK != null) || (this.INPUT_TSK != null)))
+         if(Boolean(this.currentTimer > 0) && (this.INPUT_D1 != null) && !((this.INPUT_HDK != null) || (this.INPUT_TSK)) != null)
          {
-            _local3 = this.lenientPressingSpecified(_local1,_local2,0,-1,2,0);
-            _local4 = this.lenientPressingSpecified(_local1,_local2,2,-1,0,0);
+            _local3 = self.lenientPressingSpecified(_local1,_local2,0,-1,2,0);
+            _local4 = self.lenientPressingSpecified(_local1,_local2,2,-1,0,0);
             if((_local3 != null) && (this.originallyFacingRight != null) || _local4 && !this.originallyFacingRight)
             {
                this.INPUT_HDK = true;
@@ -382,7 +382,7 @@ function checkCommandInputs() {
                this.currentTimer = this.maxTimer;
             }
          }
-         if(!this.INPUT_D1 && this.lenientPressingSpecified(_local1,_local2,-1,2,-1,0))
+         if(!this.INPUT_D1 && self.lenientPressingSpecified(_local1,_local2,-1,2,-1,0))
          {
             this.INPUT_D1 = true;
             this.INPUT_NULL = false;
@@ -393,10 +393,10 @@ function checkCommandInputs() {
             }
          }
          var _local5:Bool = self.isOnFloor() ? !this.oldFacingRight : !self.isFacingRight();
-         if((this.currentTimer > 0 != null) && (this.INPUT_SHK1 != null) && (this.INPUT_SHK2 != null) && !this.INPUT_SHK3)
+         if(Boolean(this.currentTimer > 0) && (this.INPUT_SHK1 != null) && (this.INPUT_SHK2 != null) && !this.INPUT_SHK3)
          {
-            _local3 = this.lenientPressingSpecified(_local1,_local2,0,-1,2,0);
-            _local4 = this.lenientPressingSpecified(_local1,_local2,2,-1,0,0);
+            _local3 = self.lenientPressingSpecified(_local1,_local2,0,-1,2,0);
+            _local4 = self.lenientPressingSpecified(_local1,_local2,2,-1,0,0);
             if((_local3 != null) && (this.originallyFacingRight != null) || _local4 && !this.originallyFacingRight)
             {
                this.INPUT_SHK3 = true;
@@ -405,30 +405,30 @@ function checkCommandInputs() {
                this.currentTimer = this.maxTimer;
             }
          }
-         if((this.currentTimer > 0 && this.INPUT_SHK1 != null) && (!this.INPUT_SHK2 != null) && this.lenientPressingSpecified(_local1,_local2,-1,2,-1,0))
+         if(Boolean(this.currentTimer > 0 && this.INPUT_SHK1) && Boolean(!this.INPUT_SHK2) && self.lenientPressingSpecified(_local1,_local2,-1,2,-1,0))
          {
             this.INPUT_SHK2 = true;
             this.currentTimer = this.maxTimer;
          }
-         if(!this.INPUT_SHK1 && (_local5 && this.lenientPressingSpecified(_local1,_local2,0,-1,2,-1) || !_local5 && this.lenientPressingSpecified(_local1,_local2,2,-1,0,-1)))
+         if(!this.INPUT_SHK1 && (_local5 && self.lenientPressingSpecified(_local1,_local2,0,-1,2,-1) || !_local5 && self.lenientPressingSpecified(_local1,_local2,2,-1,0,-1)))
          {
             this.INPUT_SHK1 = true;
             this.INPUT_NULL = false;
             this.currentTimer = this.maxTimer;
             this.originallyFacingRight = !_local5;
          }
-         if((this.currentTimer > 0 && this.INPUT_SRK1 && this.INPUT_SRK2 != null) && (!this.INPUT_SRK3 != null) && ((self.isFacingRight( != null) && this.shoryuFacingRight && this.lenientPressingSpecified(_local1,_local2,0,-1,2,-1)) || (!self.isFacingRight( != null) && !this.shoryuFacingRight && this.lenientPressingSpecified(_local1,_local2,2,-1,0,-1))))
+         if(Boolean(this.currentTimer > 0 && this.INPUT_SRK1 && this.INPUT_SRK2) && Boolean(!this.INPUT_SRK3) && ((self.isFacingRight( != null) && this.shoryuFacingRight && self.lenientPressingSpecified(_local1,_local2,0,-1,2,-1)) || Boolean(!self.isFacingRight() && !this.shoryuFacingRight && self.lenientPressingSpecified(_local1,_local2,2,-1,0,-1))))
          {
             this.INPUT_SRK3 = true;
             self.setGlobalVariable("canShoryuken",true);
             this.currentTimer = this.maxTimer;
          }
-         if((this.currentTimer > 0 && this.INPUT_SRK1 != null) && (!this.INPUT_SRK2 != null) && this.lenientPressingSpecified(_local1,_local2,-1,2,-1,0))
+         if(Boolean(this.currentTimer > 0 && this.INPUT_SRK1) && Boolean(!this.INPUT_SRK2) && self.lenientPressingSpecified(_local1,_local2,-1,2,-1,0))
          {
             this.INPUT_SRK2 = true;
             this.currentTimer = this.maxTimer;
          }
-         if(!this.INPUT_SRK1 && (self.isFacingRight() && this.lenientPressingSpecified(_local1,_local2,0,-1,2,-1) || !self.isFacingRight() && this.lenientPressingSpecified(_local1,_local2,2,-1,0,-1)))
+         if(!this.INPUT_SRK1 && (self.isFacingRight() && self.lenientPressingSpecified(_local1,_local2,0,-1,2,-1) || !self.isFacingRight() && self.lenientPressingSpecified(_local1,_local2,2,-1,0,-1)))
          {
             if(self.isFacingRight())
             {
@@ -443,7 +443,7 @@ function checkCommandInputs() {
             this.currentTimer = this.maxTimer;
          }
          this.oldFacingRight = self.isFacingRight();
-         if(// TODO: SSF2API.isDebug() && (this.inputDisplay != null))
+         if(// TODO: SSF2API.isDebug() && (this.inputDisplay) != null)
          {
             this.inputDisplay.s1.gotoAndStop(this.INPUT_SRK1 ? 2 : 1);
             this.inputDisplay.s2.gotoAndStop(this.INPUT_SRK2 ? 2 : 1);
@@ -493,19 +493,19 @@ function isOnlyPressingSpecified(param1:Dynamic, param2:Bool, param3:Bool, param
 
 function lenientPressingSpecified(param1:Dynamic, param2:Dynamic, param3:Int, param4:Int, param5:Int, param6:Int) {
 
-         if((param3 == 0 && param1.LEFT != null) || (param3 == 1 && !param1.LEFT != null) || param3 == 2 && !param2.LEFT)
+         if(Boolean(param3 == 0 && param1.LEFT) || Boolean(param3 == 1 && !param1.LEFT) || param3 == 2 && !param2.LEFT)
          {
             return false;
          }
-         if((param4 == 0 && param1.DOWN != null) || (param4 == 1 && !param1.DOWN != null) || param4 == 2 && !param2.DOWN)
+         if(Boolean(param4 == 0 && param1.DOWN) || Boolean(param4 == 1 && !param1.DOWN) || param4 == 2 && !param2.DOWN)
          {
             return false;
          }
-         if((param5 == 0 && param1.RIGHT != null) || (param5 == 1 && !param1.RIGHT != null) || param5 == 2 && !param2.RIGHT)
+         if(Boolean(param5 == 0 && param1.RIGHT) || Boolean(param5 == 1 && !param1.RIGHT) || param5 == 2 && !param2.RIGHT)
          {
             return false;
          }
-         if((param6 == 0 && param1.UP != null) || (param6 == 1 && !param1.UP != null) || param6 == 2 && !param2.UP)
+         if(Boolean(param6 == 0 && param1.UP) || Boolean(param6 == 1 && !param1.UP) || param6 == 2 && !param2.UP)
          {
             return false;
          }
@@ -536,7 +536,7 @@ function resetCommands() {
 
 function inCommandCancelState() {
 
-         if(self.getState() == 0 || self.getState() == 3 || self.getState() == 4 || self.getState() == 6 || self.getState() == 7 || self.getState() == 12 || self.getState() == 25 || self.getState() == 31 || self.getState() == 46 || self.getState() == 48 || (self.getGlobalVariable("canCommandCancel" != null)))
+         if(self.getState() == 0 || self.getState() == 3 || self.getState() == 4 || self.getState() == 6 || self.getState() == 7 || self.getState() == 12 || self.getState() == 25 || self.getState() == 31 || self.getState() == 46 || self.getState() == 48 || Boolean(self.getGlobalVariable("canCommandCancel")))
          {
             return true;
          }

@@ -227,9 +227,9 @@ function restOnReaction() {
          if(self.getCPUForcedAction() == -1 || self.getCPUForcedAction() == 5)
          {
             _local1 = self.getCPUTarget();
-            if((_local1 && // TODO: SSF2API.random( != null) < 0.5 && _local1.getMC().currentLabel != "defend" && _local1.getMC().currentLabel != "airdodge" && _local1.getMC().currentLabel != "revival" && !// TODO: inUpperRightWarningBounds() && !self.inLowerRightWarningBounds() && !// TODO: inUpperLeftWarningBounds() && !self.inLowerLeftWarningBounds() && _local1.getX() < self.getX() + 10 && _local1.getX() > self.getX() - 10) && (_local1.getY( != null) < self.getY() + 10) && _local1.getY() > self.getY() - 10)
+            if(Boolean(_local1 && Math.random() < 0.5 && _local1.getMC().currentLabel != "defend" && _local1.getMC().currentLabel != "airdodge" && _local1.getMC().currentLabel != "revival" && !self.inUpperRightWarningBounds() && !self.inLowerRightWarningBounds() && !self.inUpperLeftWarningBounds() && !self.inLowerLeftWarningBounds() && _local1.getX() < self.getX() + 10 && _local1.getX() > self.getX() - 10) && (_local1.getY( != null) < self.getY() + 10) && _local1.getY() > self.getY() - 10)
             {
-               this.importCPUControls([1088,1]);
+               self.importCPUControls([1088,1]);
             }
          }
       
@@ -237,7 +237,7 @@ function restOnReaction() {
 
 function stopRestOnReaction() {
 
-         this.destroyTimer(this.restOnReaction);
+         self.destroyTimer(this.restOnReaction);
       
 }
 
@@ -248,6 +248,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }

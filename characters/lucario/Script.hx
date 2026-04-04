@@ -212,7 +212,7 @@ function initialize() {
 function update() {
 
          this.auraSet = false;
-         this.doChargeEffect();
+         self.doChargeEffect();
       
 }
 

@@ -258,7 +258,7 @@ function createFartEffect() {
          }
          if(!self.isStandby())
          {
-            this.fartEffect = this.attachEffect("effect_wario_waftcharge");
+            this.fartEffect = self.attachEffect("effect_wario_waftcharge");
          }
       
 }
@@ -390,7 +390,7 @@ function smash64(param1:Array<Dynamic>) {
          var _local2:* = 0;
          while(_local2 < param1.length)
          {
-            this.rand = 1 + int(// TODO: SSF2API.random() * 5) % 5;
+            this.rand = 1 + Std.int(Math.random() * 5) % 5;
             self.updateAttackBoxStats(_local2,{"effectSound":"ssb_hit" + this.rand.toString()});
             // (removed SSF2 debug print)
             _local2++;

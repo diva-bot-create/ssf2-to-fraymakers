@@ -213,7 +213,7 @@ def parse_flat_object(text):
             else:
                 break
         elif i < n and text[i] == '[':
-            # Array — find closing bracket
+            # Array - find closing bracket
             depth = 0
             j = i
             while j < n:
@@ -225,7 +225,7 @@ def parse_flat_object(text):
             result[key] = text[i:j+1]  # keep as string
             i = j + 1
         else:
-            # Scalar value — read until comma or closing brace
+            # Scalar value - read until comma or closing brace
             j = i
             while j < n and text[j] not in ',}':
                 if text[j] == '"':
@@ -504,7 +504,7 @@ def gen_char_stats(char_name, own_stats):
             jumps = [val] * int(max_jump) if isinstance(max_jump, int) else [val]
             assigned[fm_key] = (f"[{', '.join(str(j) for j in jumps)}]", comment)
         elif fm_key == "dashSpeed" and scale is None:
-            # accel_start_dash is acceleration, not a speed cap — approximate
+            # accel_start_dash is acceleration, not a speed cap - approximate
             dash = own_stats.get("accel_start_dash", val)
             run_cap = own_stats.get("max_xSpeed", 9)
             assigned[fm_key] = (round(run_cap * 0.9, 2), comment + " (estimated as 90% of max_xSpeed)")
@@ -631,7 +631,7 @@ def gen_anim_stats(char_name, own_stats):
         )
         return template
     except FileNotFoundError:
-        return f"// AnimationStats for {char_name.title()} — template not found\n{{}}"
+        return f"// AnimationStats for {char_name.title()} - template not found\n{{}}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -640,36 +640,218 @@ def gen_anim_stats(char_name, own_stats):
 
 SCRIPT_TEMPLATE_PATH = '/tmp/fraymakers-template/library/scripts/Character/Script.hx'
 
+# SSF2 move name string → Fraymakers CharacterActions constant
+SSF2_MOVE_TO_ACTION = {
+    'a':               'CharacterActions.JAB',
+    'a_tilt':          'CharacterActions.JAB',
+    'a_forward':       'CharacterActions.DASH_ATTACK',
+    'a_forward_tilt':  'CharacterActions.TILT_FORWARD',
+    'a_up_tilt':       'CharacterActions.TILT_UP',
+    'a_down_tilt':     'CharacterActions.TILT_DOWN',
+    'crouch_attack':   'CharacterActions.TILT_DOWN',
+    'a_forwardsmash':  'CharacterActions.STRONG_FORWARD',
+    'a_up':            'CharacterActions.STRONG_UP',
+    'a_down':          'CharacterActions.STRONG_DOWN',
+    'a_air':           'CharacterActions.AERIAL_NEUTRAL',
+    'a_air_forward':   'CharacterActions.AERIAL_FORWARD',
+    'a_air_backward':  'CharacterActions.AERIAL_BACK',
+    'a_air_up':        'CharacterActions.AERIAL_UP',
+    'a_air_down':      'CharacterActions.AERIAL_DOWN',
+    'b':               'CharacterActions.SPECIAL_NEUTRAL',
+    'b_air':           'CharacterActions.SPECIAL_NEUTRAL',
+    'b_forward':       'CharacterActions.SPECIAL_SIDE',
+    'b_forward_air':   'CharacterActions.SPECIAL_SIDE',
+    'b_up':            'CharacterActions.SPECIAL_UP',
+    'b_up_air':        'CharacterActions.SPECIAL_UP',
+    'b_down':          'CharacterActions.SPECIAL_DOWN',
+    'b_down_air':      'CharacterActions.SPECIAL_DOWN',
+    'throw_forward':   'CharacterActions.THROW_FORWARD',
+    'throw_back':      'CharacterActions.THROW_BACK',
+    'throw_up':        'CharacterActions.THROW_UP',
+    'throw_down':      'CharacterActions.THROW_DOWN',
+    'ledge_attack':    'CharacterActions.LEDGE_ATTACK',
+    'getup_attack':    'CharacterActions.CRASH_ATTACK',
+}
+
+def _move_to_action(move_name):
+    """Convert SSF2 move name string to CharacterActions constant."""
+    return SSF2_MOVE_TO_ACTION.get(move_name, f'// TODO: unknown move "{move_name}"')
+
+
 TRANSLATIONS = [
+    # ── Debug ────────────────────────────────────────────────────────────────
     (r'SSF2API\.print\([^;]*\);', '// (removed SSF2 debug print)'),
-    (r'(?:this\.)?setAttackEnabled\(false\s*,\s*"([^"]+)"\)', r'self.setActionEnabled(false, "\1")'),
-    (r'(?:this\.)?setAttackEnabled\(true\s*,\s*"([^"]+)"\)', r'self.setActionEnabled(true, "\1")'),
-    (r'(?:this\.)?isCPU\(\)', 'self.isBot()'),
+
+    # ── setAttackEnabled → addStatusEffect/removeStatusEffect ────────────────
+    # These need manual attention since enable requires tracking the effect id.
+    # The converter emits a comment pattern; devs should use the template pattern
+    # from the character-template's Script.hx (addStatusEffect/removeStatusEffect).
+    (r'\bthis\.setAttackEnabled\(false\s*,\s*"([^"]+)"\)',
+     lambda m: f'self.addStatusEffect(StatusEffectType.DISABLE_ACTION, {_move_to_action(m.group(1))})'),
+    (r'\bthis\.setAttackEnabled\(true\s*,\s*"([^"]+)"\)',
+     lambda m: f'/* TODO: removeStatusEffect for {_move_to_action(m.group(1))} — store effect id on addStatusEffect */'),
+
+    # ── isCPU ────────────────────────────────────────────────────────────────
+    (r'\bthis\.isCPU\(\)', 'self.isBot()'),
+
+    # ── Position & velocity ───────────────────────────────────────────────────
     (r'\bthis\.getX\(\)', 'self.getX()'),
     (r'\bthis\.getY\(\)', 'self.getY()'),
+    (r'\bthis\.setX\(([^)]+)\)', r'self.setX(\1)'),
+    (r'\bthis\.setY\(([^)]+)\)', r'self.setY(\1)'),
     (r'\bthis\.getXSpeed\(\)', 'self.getXVelocity()'),
     (r'\bthis\.getYSpeed\(\)', 'self.getYVelocity()'),
     (r'\bthis\.setXSpeed\(([^)]+)\)', r'self.setXVelocity(\1)'),
     (r'\bthis\.setYSpeed\(([^)]+)\)', r'self.setYVelocity(\1)'),
-    (r'(?:this\.)?isOnGround\(\)', 'self.isOnFloor()'),
-    (r'(?:this\.)?getHeldControls\(\)', 'self.getHeldControls()'),
-    (r'(?:this\.)?getPressedControls\(\)', 'self.getPressedControls()'),
-    (r'(?:this\.)?getNearestLedge\(\)', '// TODO: getNearestLedge()'),
-    (r'(?:this\.)?inUpperLeftWarningBounds\(\)', '// TODO: inUpperLeftWarningBounds()'),
-    (r'(?:this\.)?inUpperRightWarningBounds\(\)', '// TODO: inUpperRightWarningBounds()'),
-    (r'\bthis\.(get|set|is|in|has|check|reset|fire|kill|restore|update|play|apply|remove|add|create|disable|enable|start|stop|loop|follow|clear|push|run|force)(\w+)\(', r'self.\1\2('),
+    (r'\bthis\.getNetXSpeed\(\)', 'self.getNetXVelocity()'),
+    (r'\bthis\.getNetYSpeed\(\)', 'self.getNetYVelocity()'),
+    (r'\bthis\.setXSpeedScaled\(([^)]+)\)', r'self.setXVelocityScaled(\1)'),
+    (r'\bthis\.setYSpeedScaled\(([^)]+)\)', r'self.setYVelocityScaled(\1)'),
+
+    # ── Facing ────────────────────────────────────────────────────────────────
+    (r'\bthis\.faceLeft\(\)', 'self.faceLeft()'),
+    (r'\bthis\.faceRight\(\)', 'self.faceRight()'),
+    (r'\bthis\.flipX\(([^)]+)\)', r'self.flipX(\1)'),
+    (r'\bthis\.isFacingLeft\(\)', 'self.isFacingLeft()'),
+    (r'\bthis\.isFacingRight\(\)', 'self.isFacingRight()'),
+
+    # ── Physics state ─────────────────────────────────────────────────────────
+    (r'\bthis\.isOnGround\(\)', 'self.isOnFloor()'),
+    (r'\bthis\.isOnFloor\(\)', 'self.isOnFloor()'),
+    (r'\bthis\.toggleGravity\(([^)]+)\)', r'self.toggleGravity(\1)'),
+    (r'\bthis\.resetMomentum\(\)', 'self.resetMomentum()'),
+
+    # ── State ─────────────────────────────────────────────────────────────────
+    (r'\bthis\.getState\(\)', 'self.getState()'),
+    (r'\bthis\.getPreviousState\(\)', 'self.getPreviousState()'),
+    (r'\bthis\.inState\(([^)]+)\)', r'self.inState(\1)'),
+    (r'\bthis\.inStateGroup\(([^)]+)\)', r'self.inStateGroup(\1)'),
+    (r'\bthis\.inActionableState\(\)', 'self.inActionableState()'),
+    (r'\bthis\.inHurtState\(\)', 'self.inHurtState()'),
+    (r'\bthis\.inAerialAttackState\(\)', 'self.inAerialAttackState()'),
+    (r'\bthis\.inSpecialAttackState\(\)', 'self.inSpecialAttackState()'),
+    (r'\bthis\.toState\(([^)]+)\)', r'self.toState(\1)'),
+    (r'\bthis\.toStateFromInput\(([^)]+)\)', r'self.toStateFromInput(\1)'),
+
+    # ── Animation ─────────────────────────────────────────────────────────────
+    (r'\\bthis\.playAnimation\(([^)]+)\)', r'self.playAnimation(\1)'),
+    (r'\\bthis\.playFrame\(([^)]+)\)', r'self.playFrame(\1)'),
+    (r'\\bthis\.playFrameLabel\(([^)]+)\)', r'self.playFrameLabel(\1)'),
+    (r'\\bthis\.getCurrentFrame\(\)', 'self.getCurrentFrame()'),
+    (r'\\bthis\.getTotalFrames\(\)', 'self.getTotalFrames()'),
+    (r'\\bthis\.getAnimation\(\)', 'self.getAnimation()'),
+    (r'\\bthis\.hasAnimation\(([^)]+)\)', r'self.hasAnimation(\1)'),
+    (r'\\bthis\.finalFramePlayed\(\)', 'self.finalFramePlayed()'),
+    (r'\\bthis\.stancePlayFrame\(([^)]+)\)', r'self.playFrame(\1)'),
+    (r'\\bthis\.updateAttackStats\((\{[^}]+\})\)', r'self.updateAnimationStats(\1)'),
+    (r'\\bthis\.updateAttackBoxStats\((\d+)\s*,\s*(\{)', r'self.updateHitboxStats(\1, \2'),
+    (r'\\bthis\.refreshAttackID\(\)', 'self.reactivateHitboxes()'),
+    (r'\\bthis\.endAttack\(\)', 'self.resetMomentum()  // TODO: verify endAttack behavior'),
+
+    # ── Timers ────────────────────────────────────────────────────────────────
+    (r'\\bthis\.addTimer\((\d+)\s*,\s*(-?\d+)\s*,\s*([^,)]+)\)', r'self.addTimer(\1, \2, \3)'),
+    (r'\\bthis\.removeTimer\(([^)]+)\)', r'self.removeTimer(\1)'),
+    (r'\\bthis\.createTimer\(([^,)]+)\s*,\s*([^,)]+)\s*,\s*([^)]+)\)', r'self.addTimer(\1, \2, \3)'),
+
+    # ── Controls ──────────────────────────────────────────────────────────────
+    (r'\bthis\.getControls\(\)', 'self.getHeldControls()'),
+    (r'\bthis\.getHeldControls\(\)', 'self.getHeldControls()'),
+    (r'\bthis\.getPressedControls\(\)', 'self.getPressedControls()'),
+    (r'\bthis\.getRawHeldControls\(\)', 'self.getRawHeldControls()'),
+    (r'\bthis\.clearInputBuffer\(\)', 'self.clearInputBuffer()'),
+    (r'\bthis\.isFirstInputUpdate\(\)', 'self.isFirstInputUpdate()'),
+
+    # ── Damage ────────────────────────────────────────────────────────────────
+    (r'\\bthis\.getDamage\(\)', 'self.getDamage()'),
+    (r'\\bthis\.setDamage\(([^)]+)\)', r'self.setDamage(\1)'),
+    (r'\\bthis\.addDamage\(([^)]+)\)', r'self.addDamage(\1)'),
+    (r'\\bthis\.getHitstop\(\)', 'self.getHitstop()'),
+    (r'\\bthis\.getHitstun\(\)', 'self.getHitstun()'),
+    (r'\\bthis\.startHitstop\(([^)]+)\)', r'self.startHitstop(\1)'),
+    (r'\\bthis\.startHitstun\(([^)]+)\)', r'self.startHitstun(\1)'),
+
+    # ── Jumping / movement ────────────────────────────────────────────────────
+    (r'\\bthis\.getDoubleJumpCount\(\)', 'self.getDoubleJumpCount()'),
+    (r'\\bthis\.setDoubleJumpCount\(([^)]+)\)', r'self.setDoubleJumpCount(\1)'),
+    (r'\\bthis\.getAirdashCount\(\)', 'self.getAirdashCount()'),
+    (r'\\bthis\.setAirdashCount\(([^)]+)\)', r'self.setAirdashCount(\1)'),
+    (r'\\bthis\.resetSingleUse\(([^)]*)\)', r'self.resetSingleUse(\1)'),
+    (r'\bthis\.isRecoveryMove\b', '// NOTE: isRecoveryMove is an AnimationStats field, not a runtime check'),
+
+    # ── Grabbing ──────────────────────────────────────────────────────────────
+    (r'\\bthis\.getGrabbedFoe\(\)', 'self.getGrabbedFoe()'),
+    (r'\\bthis\.getAllGrabbedFoes\(\)', 'self.getAllGrabbedFoes()'),
+    (r'\\bthis\.releaseCharacter\(([^)]+)\)', r'self.releaseCharacter(\1)'),
+    (r'\\bthis\.releaseAllCharacters\(([^)]*)\)', r'self.releaseAllCharacters(\1)'),
+    (r'\\bthis\.attemptGrab\(([^)]+)\)', r'self.attemptGrab(\1)'),
+
+    # ── Ledge ─────────────────────────────────────────────────────────────────
+    (r'\\bthis\.attachToLedge\(([^)]*)\)', r'self.attachToLedge(\1)'),
+    (r'\\bthis\.attemptLedgeGrab\(\)', 'self.attemptLedgeGrab()'),
+    (r'\\bthis\.releaseLedge\(\)', 'self.releaseLedge()'),
+    (r'\\bthis\.getNearestLedge\(\)', '// TODO: getNearestLedge() - no direct FM equivalent; use match.getStructures()'),
+    (r'\\bthis\.inUpperLeftWarningBounds\(\)', '// TODO: inUpperLeftWarningBounds() - check self.getX() vs stage bounds'),
+    (r'\\bthis\.inUpperRightWarningBounds\(\)', '// TODO: inUpperRightWarningBounds() - check self.getX() vs stage bounds'),
+
+    # ── StatusEffects ─────────────────────────────────────────────────────────
+    (r'\bthis\.addStatusEffect\(([^)]+)\)', r'self.addStatusEffect(\1)'),
+    (r'\bthis\.removeStatusEffect\(([^)]+)\)', r'self.removeStatusEffect(\1)'),
+    (r'\bthis\.getStatusEffectByType\(([^)]+)\)', r'self.getStatusEffectByType(\1)'),
+    (r'\bthis\.hasBodyStatus\(([^)]+)\)', r'self.hasBodyStatus(\1)'),
+    (r'\bthis\.applyGlobalBodyStatus\(([^)]+)\)', r'self.applyGlobalBodyStatus(\1)'),
+
+    # ── Audio ─────────────────────────────────────────────────────────────────
+    (r'\\bthis\.playSound\("([^"]+)"[^)]*\)', r'AudioClip.play(self.getResource().getContent("\1"))'),
+    (r'\\bthis\.playAttackSound\(\d+\)', 'self.playAttackVoice()'),
+    (r'\\bthis\.playVoiceSound\(\d+\)', 'self.playAttackVoice()  // TODO: map to correct voice type'),
+
+    # ── Global variable → match.globals ───────────────────────────────────────
+    (r'\\bthis\.setGlobalVariable\("([^"]+)"\s*,\s*([^)]+)\)', r'match.globals["\1"] = \2'),
+    (r'\\bthis\.getGlobalVariable\("([^"]+)"\)', r'match.globals["\1"]'),
+
+    # ── Projectile creation ───────────────────────────────────────────────────
+    (r'\\bthis\.fireProjectile\("([^"]+)"\s*,\s*([^,)]+)\s*,\s*([^)]+)\)',
+     r'{ var _proj = match.createProjectile(self.getResource().getContent("\1"), self); _proj.setX(self.getX() + self.flipX(\2)); _proj.setY(self.getY() + \3); }'),
+    (r'\\bthis\.fireProjectile\(([^)]*?)\)', r'// TODO: fireProjectile(\1) → match.createProjectile(...)'),
+
+    # ── isUsingFinalSmash → emote state ───────────────────────────────────────
+    (r'\bthis\.isUsingFinalSmash\(\)', 'self.inState(CState.EMOTE)'),
+
+    # ── SSF2API.random ────────────────────────────────────────────────────────
+    (r'SSF2API\.safeRandomInteger\(([^)]+)\)', r'Math.floor(Math.random() * (\1))'),
+    (r'SSF2API\.safeRandom\(\)', 'Math.random()'),
+    (r'SSF2API\.random\(\)', 'Math.random()'),
+    (r'SSF2API\.getCamera\(\)\.shake\(([^)]+)\)', r'match.getCamera()  // TODO: camera shake(\1)'),
+    (r'SSF2API\.getMatch\(\)', 'match'),
     (r'SSF2API\.(\w+)\(', r'// TODO: SSF2API.\1('),
+
+    # ── Catch-all this.method → self.method ───────────────────────────────────
+    (r'\bthis\.(\w+)\(', r'self.\1('),
+
+    # ── Decompiler temp var names ─────────────────────────────────────────────
     (r'\bvar _loc(\d+)_\s*:', r'var _local\1:'),
     (r'\b_loc(\d+)_\b', r'_local\1'),
+
+    # ── AS3 type annotations → Haxe ───────────────────────────────────────────
     (r':\s*void\b', ''),
     (r':\s*Boolean\b', ':Bool'),
     (r':\s*Number\b', ':Float'),
     (r':\s*int\b', ':Int'),
+    (r':\s*uint\b', ':Int'),
     (r':\s*String\b', ':String'),
     (r':\s*Object\b', ':Dynamic'),
     (r':\s*Array\b', ':Array<Dynamic>'),
     (r':\s*\*\b', ':Dynamic'),
-    (r'Boolean\(([^)]+)\)', r'(\1 != null)'),
+    (r':\s*MovieClip\b', ':Dynamic  // MovieClip → use Sprite or Container'),
+    (r':\s*Point\b', ':Point'),
+
+    # ── AS3 misc syntax ───────────────────────────────────────────────────────
+    (r'\bas\s+(\w+)\b', r'cast(\1)'),
+    # Boolean() cast: simple identifier only; complex expressions left as-is
+    (r'Boolean\(([A-Za-z_][A-Za-z0-9_.()]+)\)', r'(\1 != null)'),
+    (r'\bNumber\(([^)]+)\)', r'Std.parseFloat(\1)'),
+    (r'\bint\(([^)]+)\)', r'Std.int(\1)'),
+    (r'\btrace\(([^)]+)\)', r'// trace(\1)'),
 ]
 
 SKIP_FUNCTIONS = {

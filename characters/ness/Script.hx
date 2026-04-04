@@ -211,7 +211,7 @@ function randVoice() {
          var _local1:Float = 4;
          var _local2:String = "ness_grunt";
          var _local3:Float = 1 / (_local1 + 1);
-         var _local4:Float = // TODO: SSF2API.random();
+         var _local4:Float = Math.random();
          var _local5:Float = self.getGlobalVariable("audio");
          var _local6:Int = 0;
          while(_local6 < _local1)
@@ -235,8 +235,8 @@ function pkFire(param1:Float) {
          self.fireProjectile("ness_pkfire");
          self.getCurrentProjectile().setXSpeed(_local2 * Math.sin(param1 * Math.PI / 180),false);
          self.getCurrentProjectile().setYSpeed(_local2 * Math.cos(param1 * Math.PI / 180));
-         this.attachEffect("global_dust_heavy");
-         this.attachEffect("global_spark",{
+         self.attachEffect("global_dust_heavy");
+         self.attachEffect("global_spark",{
             "x":flipX(24),
             "y":-10
          });
@@ -260,7 +260,7 @@ function toRocket(param1:*, param2:* = null) {
          var _local3:* = 23;
          var _local4:* = SSF2Utils.getAngleBetween(new Point(param1.getX(),param1.getY()),new Point(param2.getX(),param2.getY() - param2.getCharacterStat("height") / 2));
          var _local5:* = -0.7;
-         this.rocket(_local3,_local4,_local5);
+         self.rocket(_local3,_local4,_local5);
       
 }
 
@@ -276,7 +276,7 @@ function rocket(param1:Float, param2:Float, param3:Float, param4:Bool = true) {
          this.m_rocketSpeed = param1;
          self.updateCharacterStats({"gravity":0});
          self.addEventListener(SSF2Event.STATE_CHANGE,this.resetGravity);
-         if(self.isOnFloor() && (this.m_rocketAngle >= 260 && this.m_rocketAngle <= 280))
+         if(isOnGround() && (this.m_rocketAngle >= 260 && this.m_rocketAngle <= 280))
          {
             endAttack();
             self.resetGravity();
@@ -285,7 +285,7 @@ function rocket(param1:Float, param2:Float, param3:Float, param4:Bool = true) {
          }
          else
          {
-            if(self.isOnFloor() && (this.m_rocketAngle > 180 && this.m_rocketAngle < 360))
+            if(isOnGround() && (this.m_rocketAngle > 180 && this.m_rocketAngle < 360))
             {
                this.m_rocketAngle = this.m_rocketAngle < 270 ? 180 : 0;
                resetRotation();

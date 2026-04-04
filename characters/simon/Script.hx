@@ -244,11 +244,11 @@ function jumpToContinue(param1:* = null) {
          });
          if(this.landFrame == null)
          {
-            this.stancePlayFrame("continue");
+            self.stancePlayFrame("continue");
          }
          else
          {
-            this.stancePlayFrame(this.landFrame);
+            self.stancePlayFrame(this.landFrame);
          }
       
 }

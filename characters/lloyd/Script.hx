@@ -222,7 +222,7 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }
 
@@ -232,15 +232,15 @@ function resetLandingLag() {
          self.addEventListener(SSF2Event.GROUND_TOUCH,this.jumpToContinue);
          if(self.isOnFloor())
          {
-            this.jumpToContinue();
+            self.jumpToContinue();
          }
       
 }
 
 function disableUpB(param1:* = null) {
 
-         self.setActionEnabled(false, "b_up");
-         self.setActionEnabled(false, "b_up_air");
+         setAttackEnabled(false,"b_up");
+         setAttackEnabled(false,"b_up_air");
          addEventListener(SSF2Event.GROUND_TOUCH,this.enableUpB,{"persistent":true});
          addEventListener(SSF2Event.CHAR_HURT,this.enableUpB,{"persistent":true});
          addEventListener(SSF2Event.CHAR_GRABBED,this.enableUpB,{"persistent":true});
@@ -250,8 +250,8 @@ function disableUpB(param1:* = null) {
 
 function enableUpB(param1:* = null) {
 
-         self.setActionEnabled(true, "b_up");
-         self.setActionEnabled(true, "b_up_air");
+         setAttackEnabled(true,"b_up");
+         setAttackEnabled(true,"b_up_air");
          removeEventListener(SSF2Event.GROUND_TOUCH,this.enableUpB);
          removeEventListener(SSF2Event.CHAR_HURT,this.enableUpB);
          removeEventListener(SSF2Event.CHAR_GRABBED,this.enableUpB);

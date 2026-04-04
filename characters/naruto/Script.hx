@@ -232,7 +232,7 @@ function onAttackEnabled(param1:*) {
          if(!isDisposed() && (param1.data.attackData.name == "b_down" || param1.data.attackData.name == "b_down_air"))
          {
             // TODO: SSF2API.removeEventListener(SSF2Event.GAME_TICK_END,this.recolorReenabledEffects);
-            if((this.downBReenableEffectMC != null) && (this.downBReenableEffectMC.parent != null))
+            if((this.downBReenableEffectMC != null) && (this.downBReenableEffectMC.parent) != null)
             {
                this.downBReenableEffectMC.parent.removeChild(this.downBReenableEffectMC);
             }
@@ -271,7 +271,7 @@ function createChargeEffect() {
          self.removeChargeEffect();
          if(!self.isStandby())
          {
-            this.chargeEffect = this.attachEffectOverlay("naruto_fullChargeFlash",{"parentLock":true});
+            this.chargeEffect = self.attachEffectOverlay("naruto_fullChargeFlash",{"parentLock":true});
             this.redoTimer.reset();
          }
       
@@ -304,6 +304,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }

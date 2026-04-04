@@ -248,7 +248,7 @@ function isMetalDedede() {
 function effect(param1:String, param2:Float = 0, param3:Float = 0) {
 
          return attachEffect(param1,{
-            "x":this.flipX(param2),
+            "x":self.flipX(param2),
             "y":param3
          });
       
@@ -261,7 +261,7 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }
 
@@ -280,6 +280,6 @@ function swallow() {
             "direction":60,
             "power":75
          },this);
-         // TODO: SSF2API.getCamera().shake(5);
+         match.getCamera()  // TODO: camera shake(5);
       
 }

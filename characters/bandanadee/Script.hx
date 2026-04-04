@@ -213,7 +213,7 @@ function update() {
 
 function killSpear() {
 
-         if((this.spearObj && !this.spearObj.isDisposed( != null)) && (!this.spearObj.inState(PState.DEAD != null)) && (this.killSpearEnabled != null))
+         if(Boolean(this.spearObj && !this.spearObj.isDisposed()) && Boolean(!this.spearObj.inState(PState.DEAD)) && (this.killSpearEnabled) != null)
          {
             this.spearObj.destroy();
          }

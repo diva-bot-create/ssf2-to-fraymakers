@@ -212,8 +212,8 @@ function update() {
          var _local1:* = undefined;
          if(self.isOnFloor())
          {
-            self.setActionEnabled(true, "b_forward_air");
-            self.setActionEnabled(true, "b_forward");
+            /* TODO: removeStatusEffect for CharacterActions.SPECIAL_SIDE — store effect id on addStatusEffect */;
+            /* TODO: removeStatusEffect for CharacterActions.SPECIAL_SIDE — store effect id on addStatusEffect */;
          }
          else
          {
@@ -226,8 +226,8 @@ function update() {
                case CState.LEDGE_ROLL:
                case CState.REVIVAL:
                case CState.TUMBLE_FALL:
-                  self.setActionEnabled(true, "b_forward_air");
-                  self.setActionEnabled(true, "b_forward");
+                  /* TODO: removeStatusEffect for CharacterActions.SPECIAL_SIDE — store effect id on addStatusEffect */;
+                  /* TODO: removeStatusEffect for CharacterActions.SPECIAL_SIDE — store effect id on addStatusEffect */;
             }
          }
       
@@ -247,6 +247,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }

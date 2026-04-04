@@ -231,7 +231,7 @@ function createChargeEffect() {
          self.removeChargeEffect();
          if(!self.isStandby())
          {
-            this.chargeEffect = this.attachEffectOverlay("dk_chargebar",{
+            this.chargeEffect = self.attachEffectOverlay("dk_chargebar",{
                "y":-10,
                "parentLock":true
             });
@@ -267,6 +267,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         this.stancePlayFrame("continue");
+         self.stancePlayFrame("continue");
       
 }
