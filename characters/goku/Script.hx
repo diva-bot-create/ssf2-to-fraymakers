@@ -1,8 +1,7 @@
 // Script.hx for Goku
 // Ported from SSF2 GokuExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,8 +197,7 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
-
-// ── Goku-specific overrides (ported from SSF2 GokuExt.as) ──
+// ── Goku-specific overrides ──────────────────────────────────
 
 function kaiokenReset() {
 
@@ -207,7 +205,7 @@ function kaiokenReset() {
          {
             this.kaiokenPower = 0;
             this.kaiokenHUD.gotoAndStop("k" + Math.floor(this.kaiokenPower));
-            // TODO: setGlobalVariable("canKK", false);
+            self.setGlobalVariable("canKK",false);
             setCostume(getCostume(),getTeamID());
             this.powerDown();
          }
@@ -322,13 +320,13 @@ function kaiokenSpark(param1:* = null) {
             },
             "special":{"deny":true}
          };
-         if((_local2[getCurrentAnimation( != null && _local2[getCurrentAnimation( != false)]) && _local2[getCurrentAnimation()].deny === true)
+         if((_local2[getCurrentAnimation( != null)]) && _local2[getCurrentAnimation()].deny === true)
          {
             return;
          }
          if(this.isPoweredUp == false)
          {
-            if(!// TODO: getGlobalVariable("canKK"))
+            if(!self.getGlobalVariable("canKK"))
             {
                if(this.kaiokenPower < 30)
                {
@@ -336,7 +334,7 @@ function kaiokenSpark(param1:* = null) {
                   this.kaiokenHUD.gotoAndStop("k" + Math.min(Math.floor(this.kaiokenPower),30));
                   if(this.kaiokenPower >= 30)
                   {
-                     // TODO: setGlobalVariable("canKK", true);
+                     self.setGlobalVariable("canKK",true);
                   }
                }
             }
@@ -346,7 +344,7 @@ function kaiokenSpark(param1:* = null) {
 
 function kaiokenCharge() {
 
-         if(!// TODO: getGlobalVariable("canKK"))
+         if(!self.getGlobalVariable("canKK"))
          {
             if(this.kaiokenPower < 30)
             {
@@ -354,7 +352,7 @@ function kaiokenCharge() {
                this.kaiokenHUD.gotoAndStop("k" + Math.floor(this.kaiokenPower));
                if(this.kaiokenPower >= 30)
                {
-                  // TODO: setGlobalVariable("canKK", true);
+                  self.setGlobalVariable("canKK",true);
                   self.forceAttack("b_down","full_KK",true);
                }
             }
@@ -362,7 +360,7 @@ function kaiokenCharge() {
          else
          {
             this.powerUp();
-            // TODO: setGlobalVariable("canKK", false);
+            self.setGlobalVariable("canKK",false);
             this.kaiokenPower = 30;
             self.enableTeleportation();
             self.enableDragonDash();
@@ -372,7 +370,7 @@ function kaiokenCharge() {
 
 function kaioKamehameha(param1:Int) {
 
-         // TODO: setGlobalVariable("canKK", false);
+         self.setGlobalVariable("canKK",false);
          if(this.kaiokenPower > param1)
          {
             this.kaiokenPower -= param1;
@@ -391,13 +389,13 @@ function checkKameCharge() {
 
          if(this.kaiokenPower < 10)
          {
-            self.playFrame("quickfire");
+            this.stancePlayFrame("quickfire");
          }
          else
          {
             this.kaiokenPower -= 10;
             this.kaiokenHUD.gotoAndStop("k" + Math.floor(this.kaiokenPower));
-            // TODO: setGlobalVariable("canKK", false);
+            self.setGlobalVariable("canKK",false);
             if(this.kaiokenPower <= 0)
             {
                this.kaiokenPower = 0;
@@ -410,7 +408,7 @@ function checkKaioKameCharge() {
 
          if(this.kaiokenPower > 10)
          {
-            self.updateHitboxStats(1, {
+            self.updateAttackBoxStats(1,{
                "damage":4,
                "hitStun":2,
                "selfHitStun":0,
@@ -418,11 +416,11 @@ function checkKaioKameCharge() {
                "power":53,
                "kbConstant":74
             });
-            // TODO: setGlobalVariable("canKK", false);
+            self.setGlobalVariable("canKK",false);
          }
          else
          {
-            self.updateHitboxStats(1, {
+            self.updateAttackBoxStats(1,{
                "damage":6,
                "hitStun":3,
                "selfHitStun":0,
@@ -432,7 +430,7 @@ function checkKaioKameCharge() {
             });
             this.kaiokenPower = 0;
             this.kaiokenHUD.gotoAndStop("k" + Math.floor(this.kaiokenPower));
-            // TODO: setGlobalVariable("canKK", false);
+            self.setGlobalVariable("canKK",false);
             this.powerDown();
          }
       
@@ -440,7 +438,7 @@ function checkKaioKameCharge() {
 
 function disableDragonDash(param1:* = null) {
 
-         if(!self.self.isOnFloor())
+         if(!self.isOnFloor())
          {
             self.setActionEnabled(false, "b_forward");
             self.setActionEnabled(false, "b_forward_air");
@@ -552,13 +550,13 @@ function powerDown() {
          });
          self.setColorFilters(false);
          var _local2:Int = 0;
-         _local3 = getHealthBox().getChildByName("charHead") cast(MovieClip);
+         _local3 = getHealthBox().getChildByName("charHead") as MovieClip;
          if(_local3)
          {
             SSF2Utils.setColorFilters(_local3,false);
             _local3.filters = this.extraFilter;
          }
-         _local3 = getHealthBox().getChildByName("stockiconsingle") cast(MovieClip);
+         _local3 = getHealthBox().getChildByName("stockiconsingle") as MovieClip;
          if(_local3)
          {
             SSF2Utils.setColorFilters(_local3,false);
@@ -567,7 +565,7 @@ function powerDown() {
          {
             while(_local2 < getLives())
             {
-               _local3 = getHealthBox().getChildByName("stockicon" + _local2) cast(MovieClip);
+               _local3 = getHealthBox().getChildByName("stockicon" + _local2) as MovieClip;
                if(_local3)
                {
                   SSF2Utils.setColorFilters(_local3,{
@@ -588,8 +586,7 @@ function powerDown() {
       
 }
 
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -609,7 +606,6 @@ function initialize() {
       
 }
 
-// Overrides the base template update()
 function update() {
 
          if(this.isPoweredUp == true)
@@ -629,7 +625,7 @@ function update() {
             }
             else
             {
-               // TODO: setGlobalVariable("canKK", false);
+               self.setGlobalVariable("canKK",false);
                this.powerDown();
             }
          }
@@ -637,14 +633,14 @@ function update() {
          {
             if(this.kaiokenBackEffect == null)
             {
-               this.kaiokenBackEffect = // TODO: attachEffect("goku_kk_back") — use Fraymakers VFX system;
+               this.kaiokenBackEffect = attachEffect("goku_kk_back",{"behind":true});
             }
             else
             {
                if(this.kaiokenBackEffect.parent == null)
                {
                   this.kaiokenBackEffect = null;
-                  this.kaiokenBackEffect = // TODO: attachEffect("goku_kk_back") — use Fraymakers VFX system;
+                  this.kaiokenBackEffect = attachEffect("goku_kk_back",{"behind":true});
                }
                if(this.kaiokenBackEffect.parent != null)
                {
@@ -685,7 +681,7 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }
 
@@ -695,7 +691,7 @@ function setKKLandingLag(param1:Bool) {
          {
             self.removeEventListener(SSF2Event.GROUND_TOUCH,this.toIdle);
             self.addEventListener(SSF2Event.GROUND_TOUCH,this.toLand);
-            if(self.self.isOnFloor())
+            if(self.isOnFloor())
             {
                this.toLand();
             }
@@ -704,7 +700,7 @@ function setKKLandingLag(param1:Bool) {
          {
             self.removeEventListener(SSF2Event.GROUND_TOUCH,this.toLand);
             self.addEventListener(SSF2Event.GROUND_TOUCH,this.toIdle);
-            if(self.self.isOnFloor())
+            if(self.isOnFloor())
             {
                this.toIdle();
             }

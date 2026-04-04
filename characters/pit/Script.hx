@@ -1,8 +1,7 @@
 // Script.hx for Pit
 // Ported from SSF2 PitExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Pit-specific overrides ──────────────────────────────────
 
-// ── Pit-specific overrides (ported from SSF2 PitExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -279,7 +276,7 @@ function lockEffect(param1:String, param2:Float = 0, param3:Float = 0, param4:Bo
          });
          this.attachX = param2;
          this.attachY = param3;
-         self.addTimer(1, -1, this.checkLocked,{"persistent":true});
+         self.createTimer(1,-1,this.checkLocked,{"persistent":true});
          this.canRemove = true;
          return this.attachedMovieClip;
       
@@ -291,7 +288,7 @@ function feather(param1:Float = 1, param2:Float = 0, param3:Float = 360, param4:
          while(param1 > 0)
          {
             _local8 = attachEffect("pit_feather",{
-               "x":self.flipX(// TODO: SSF2API.randomInteger(param4,param5) - (param5 - param4) / 2),
+               "x":this.flipX(// TODO: SSF2API.randomInteger(param4,param5) - (param5 - param4) / 2),
                "y":-// TODO: SSF2API.randomInteger(param6,param7)
             });
             SSF2Utils.replacePalette(_local8,getPaletteSwapData().paletteSwap,3);
@@ -309,6 +306,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }

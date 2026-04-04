@@ -1,5 +1,6 @@
-// AnimationStats for Ganondorf (converted from SSF2)
-// Fill in SSF2-specific timing and flags below.
+// Animation stats for Ganondorf (converted from SSF2)
+// Many values are automatically set by our Common class
+// Values assigned in this file will override those values
 {
 	//MOTIONS
 	stand: {},
@@ -22,6 +23,40 @@
 	crouch_in: {},
 	crouch_loop: {},
 	crouch_out: {},
+
+	//AIRDASHES
+	airdash_up: {},
+	airdash_down: {},
+	airdash_forward: {},
+	airdash_back: {},
+	airdash_forward_up: {},
+	airdash_forward_down: {},
+	airdash_back_up: {},
+	airdash_back_down: {},
+	// These animations refer to the special fall state a character enters after an airdash completes or an attack-canceled airdash that whiffs completes (respectively)
+	// Previously aerialSpeedCap was applied on these animations, causing the character to have much less air speed while in these animations compared to the character's typical air speed while in special fall
+	// If you would like to use the old aerialSpeedCap, simply uncomment the stat name and its value
+	airdash_freefall: {
+		//aerialSpeedCap:1.75
+	},
+	airdash_freefall_whiff: {
+		//aerialSpeedCap:1.75
+	},
+
+	//DEFENSE
+	shield_in: {},
+	shield_loop: {},
+	shield_hurt: {},
+	shield_out: {}, 
+	parry_in: {},
+	parry_success: {},
+	parry_fail: {},
+	roll: {},
+	spot_dodge: {},
+
+	//ASSIST CALL
+	assist_call: {},
+	assist_call_air: {},
 
 	//LIGHT ATTACKS
 	jab1: {},
@@ -60,11 +95,19 @@
 	//SPECIAL ATTACKS
 	special_neutral: {},
 	special_neutral_air: {},
-	special_up: {leaveGroundCancel:false, xSpeedConservation:0.5, ySpeedConservation:0.5, nextState:CState.FALL_SPECIAL},
-	special_up_air: {leaveGroundCancel:false, xSpeedConservation:0.5, ySpeedConservation:0.5, nextState:CState.FALL_SPECIAL, landType:LandType.TOUCH},
-	special_down: {allowFastFall:false, leaveGroundCancel:false, xSpeedConservation:0, ySpeedConservation:0},
-	special_side: {allowFastFall: false, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: "land_heavy", singleUse:true},
-	special_side_air: {allowFastFall: false, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: "land_heavy", singleUse:true},
+	special_up: {leaveGroundCancel:false, xSpeedConservation:0.5, ySpeedConservation:0.5, allowMovement: true, groundSpeedCap: 5.5, aerialSpeedCap: 3.25, nextState:CState.FALL_SPECIAL}, 
+	special_up_air: {leaveGroundCancel:false, xSpeedConservation:0.5, ySpeedConservation:0.5, groundSpeedCap: 5.5, aerialSpeedCap: 3.25, nextState:CState.FALL_SPECIAL, landType:LandType.TOUCH}, 
+	special_down: {allowFastFall:false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, xSpeedConservation:0, ySpeedConservation:0, gravityMultiplier:0.75}, 
+	special_down_loop: {endType:AnimationEndType.LOOP, allowJump:true},
+	special_down_endlag: {allowJump:true},
+	special_down_air: {allowFastFall:false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, xSpeedConservation:0, ySpeedConservation:0, gravityMultiplier:0.75, landType:LandType.LINK_FRAMES, landAnimation:"special_down"},
+	special_down_air_loop: {endType:AnimationEndType.LOOP, allowJump:true, landType:LandType.LINK_FRAMES, landAnimation:"special_down_loop"},
+	special_down_air_endlag: {allowJump:true, landType:LandType.LINK_FRAMES, landAnimation:"special_down"},
+	special_side: {allowFastFall: false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: "land_heavy", singleUse:true},
+	special_side_air: {allowFastFall: false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: "land_heavy", singleUse:true}, 
+    //example of how to turn off armor color overlay using `bodyStatusShaderColor` below
+	//special_side: {bodyStatusShaderColor: 0x000000, allowFastFall: false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: "land_heavy", singleUse:true},
+	//special_side_air: {bodyStatusShaderColor: 0x000000, allowFastFall: false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: "land_heavy", singleUse:true}, 
 
 	//THROWS
 	grab: {},
@@ -74,8 +117,35 @@
 	throw_up: {},
 	throw_down: {},
 
-	//MISC
-	ledge_attack: {},
+	//HURT ANIMATIONS
+	hurt_light_low: {},
+	hurt_light_middle: {},
+	hurt_light_high: {},
+	hurt_medium: {},
+	hurt_heavy: {},
+	hurt_thrown: {},
+	tumble: {},
+
+	//CRASH
+	crash_bounce: {},
+	crash_loop: {},
+	crash_get_up: {},
 	crash_attack: {},
+	crash_roll: {},
+
+	//LEDGE
+	ledge_in: {},
+	ledge_loop: {},
+	ledge_roll_in: {},
+	ledge_roll: {},
+	ledge_climb_in: {},
+	ledge_climb: {},
+	ledge_attack_in: {},
+	ledge_attack: {},
+	ledge_jump_in: {},
+	ledge_jump: {},
+
+	//MISC
+	revival: {},
 	emote: {}
 }

@@ -1,8 +1,7 @@
 // Script.hx for Dedede
 // Ported from SSF2 DededeExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Dedede-specific overrides ──────────────────────────────────
 
-// ── Dedede-specific overrides (ported from SSF2 DededeExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -212,7 +209,6 @@ function initialize() {
       
 }
 
-// Overrides the base template update()
 function update() {
 
          this.inhale.update();
@@ -252,7 +248,7 @@ function isMetalDedede() {
 function effect(param1:String, param2:Float = 0, param3:Float = 0) {
 
          return attachEffect(param1,{
-            "x":self.flipX(param2),
+            "x":this.flipX(param2),
             "y":param3
          });
       
@@ -265,7 +261,7 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }
 
@@ -284,6 +280,6 @@ function swallow() {
             "direction":60,
             "power":75
          },this);
-         match.getCameraManager().shake(5);
+         // TODO: SSF2API.getCamera().shake(5);
       
 }

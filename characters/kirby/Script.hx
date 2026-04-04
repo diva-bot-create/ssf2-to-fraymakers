@@ -1,8 +1,7 @@
 // Script.hx for Kirby
 // Ported from SSF2 KirbyExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,19 +197,17 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Kirby-specific overrides ──────────────────────────────────
 
-// ── Kirby-specific overrides (ported from SSF2 KirbyExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
          this.dongTimer = new FrameTimer(126);
          this.fruit = 0;
-         // TODO: setGlobalVariable("canCommandCancel", false);
-         // TODO: setGlobalVariable("canHadoken", false);
-         // TODO: setGlobalVariable("canShakunetsu", false);
+         self.setGlobalVariable("canCommandCancel",false);
+         self.setGlobalVariable("canHadoken",false);
+         self.setGlobalVariable("canShakunetsu",false);
          self.addEventListener(SSF2Event.CHAR_KO_DEATH,this.resetCharge,{"persistent":true});
          this.inhale = new InhaleController(this);
          this.inhale.spitInterrupt = this.spitInterrupt;
@@ -229,7 +226,6 @@ function restoreSpecials() {
       
 }
 
-// Overrides the base template update()
 function update() {
 
          var _local1:* = undefined;
@@ -264,21 +260,21 @@ function update() {
          }
          else if(this.KirbyPower == "ryu")
          {
-            _local1 = self.self.getHeldControls();
-            _local2 = self.self.getHeldControls();
-            if((this.currentTimer > 0 != null && this.currentTimer > 0 != false) && (this.INPUT1_D != null && this.INPUT1_D != false) && (this.INPUT2_DF != null && this.INPUT2_DF != false))
+            _local1 = self.getControls();
+            _local2 = self.getControls();
+            if((this.currentTimer > 0 != null) && (this.INPUT1_D != null) && (this.INPUT2_DF != null))
             {
-               if((this.originallyFacingRight != null && this.originallyFacingRight != false) && (self.isOnlyPressingSpecified(_local1,false,false,true,false != null && self.isOnlyPressingSpecified(_local1,false,false,true,false != false)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false))
+               if((this.originallyFacingRight != null) && (self.isOnlyPressingSpecified(_local1,false,false,true,false != null)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false))
                {
-                  // TODO: setGlobalVariable("canHadoken", true);
-                  // TODO: setGlobalVariable("canShakunetsu", false);
+                  self.setGlobalVariable("canHadoken",true);
+                  self.setGlobalVariable("canShakunetsu",false);
                   this.INPUT_NULL = false;
                   this.currentTimer = this.maxTimer;
                }
             }
-            if((this.currentTimer > 0 != null && this.currentTimer > 0 != false) && (this.INPUT1_D != null && this.INPUT1_D != false) && !this.INPUT2_DF)
+            if((this.currentTimer > 0 != null) && (this.INPUT1_D != null) && !this.INPUT2_DF)
             {
-               if((this.originallyFacingRight != null && this.originallyFacingRight != false) && (self.isOnlyPressingSpecified(_local1,false,true,true,false != null && self.isOnlyPressingSpecified(_local1,false,true,true,false != false)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false))
+               if((this.originallyFacingRight != null) && (self.isOnlyPressingSpecified(_local1,false,true,true,false != null)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false))
                {
                   this.INPUT2_DF = true;
                   this.INPUT_NULL = false;
@@ -292,27 +288,27 @@ function update() {
                this.INPUT_NULL = false;
                this.currentTimer = this.maxTimer;
             }
-            if((this.currentTimer > 0 != null && this.currentTimer > 0 != false) && (this.INPUT1_B != null && this.INPUT1_B != false) && (this.INPUT2_DB != null && this.INPUT2_DB != false) && (this.INPUT3_D != null && this.INPUT3_D != false) && (this.INPUT4_DF != null && this.INPUT4_DF != false))
+            if((this.currentTimer > 0 != null) && (this.INPUT1_B != null) && (this.INPUT2_DB != null) && (this.INPUT3_D != null) && (this.INPUT4_DF != null))
             {
-               if((this.originallyFacingRight != null && this.originallyFacingRight != false) && (self.isOnlyPressingSpecified(_local1,false,false,true,false != null && self.isOnlyPressingSpecified(_local1,false,false,true,false != false)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false))
+               if((this.originallyFacingRight != null) && (self.isOnlyPressingSpecified(_local1,false,false,true,false != null)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false))
                {
                   // (removed SSF2 debug print)
                   this.INPUT_NULL = false;
                   this.currentTimer = this.maxTimer;
-                  // TODO: setGlobalVariable("canShakunetsu", true);
-                  // TODO: setGlobalVariable("canHadoken", false);
+                  self.setGlobalVariable("canShakunetsu",true);
+                  self.setGlobalVariable("canHadoken",false);
                }
             }
-            if((this.currentTimer > 0 != null && this.currentTimer > 0 != false) && (this.INPUT1_B != null && this.INPUT1_B != false) && (this.INPUT2_DB != null && this.INPUT2_DB != false) && (this.INPUT3_D != null && this.INPUT3_D != false) && !this.INPUT4_DF)
+            if((this.currentTimer > 0 != null) && (this.INPUT1_B != null) && (this.INPUT2_DB != null) && (this.INPUT3_D != null) && !this.INPUT4_DF)
             {
-               if((this.originallyFacingRight != null && this.originallyFacingRight != false) && (self.isOnlyPressingSpecified(_local1,false,true,true,false != null && self.isOnlyPressingSpecified(_local1,false,true,true,false != false)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false))
+               if((this.originallyFacingRight != null) && (self.isOnlyPressingSpecified(_local1,false,true,true,false != null)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false))
                {
                   // (removed SSF2 debug print)
                   this.INPUT4_DF = true;
                   this.INPUT_NULL = false;
                   this.currentTimer = this.maxTimer;
                }
-               else if((this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,false,true,false != null && this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,false,true,false != false)) && (!this.skippedShaku != null && !this.skippedShaku != false) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false) && !this.skippedShaku)
+               else if((this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,false,true,false != null)) && (!this.skippedShaku != null) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,false,false,false) && !this.skippedShaku)
                {
                   // (removed SSF2 debug print)
                   // (removed SSF2 debug print)
@@ -320,11 +316,11 @@ function update() {
                   this.INPUT_NULL = false;
                   this.skippedShaku = true;
                   this.currentTimer = this.maxTimer;
-                  // TODO: setGlobalVariable("canShakunetsu", true);
-                  // TODO: setGlobalVariable("canHadoken", false);
+                  self.setGlobalVariable("canShakunetsu",true);
+                  self.setGlobalVariable("canHadoken",false);
                }
             }
-            if((this.currentTimer > 0 && this.INPUT1_B && this.INPUT2_DB != null && this.currentTimer > 0 && this.INPUT1_B && this.INPUT2_DB != false) && (!this.INPUT3_D != null && !this.INPUT3_D != false) && !this.INPUT4_DF)
+            if((this.currentTimer > 0 && this.INPUT1_B && this.INPUT2_DB != null) && (!this.INPUT3_D != null) && !this.INPUT4_DF)
             {
                if(self.isOnlyPressingSpecified(_local1,false,true,false,false))
                {
@@ -333,7 +329,7 @@ function update() {
                   this.INPUT_NULL = false;
                   this.currentTimer = this.maxTimer;
                }
-               else if((this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,true,true,false != null && this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,true,true,false != false)) && (!this.skippedShaku != null && !this.skippedShaku != false) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false) && !this.skippedShaku)
+               else if((this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,true,true,false != null)) && (!this.skippedShaku != null) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,true,true,false,false) && !this.skippedShaku)
                {
                   // (removed SSF2 debug print)
                   this.INPUT3_D = true;
@@ -343,9 +339,9 @@ function update() {
                   this.currentTimer = this.maxTimer;
                }
             }
-            if((this.currentTimer > 0 && this.INPUT1_B && !this.INPUT2_DB != null && this.currentTimer > 0 && this.INPUT1_B && !this.INPUT2_DB != false) && (!this.INPUT3_D != null && !this.INPUT3_D != false) && !this.INPUT4_DF)
+            if((this.currentTimer > 0 && this.INPUT1_B && !this.INPUT2_DB != null) && (!this.INPUT3_D != null) && !this.INPUT4_DF)
             {
-               if((this.originallyFacingRight != null && this.originallyFacingRight != false) && (self.isOnlyPressingSpecified(_local1,true,true,false,false != null && self.isOnlyPressingSpecified(_local1,true,true,false,false != false)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,true,true,false))
+               if((this.originallyFacingRight != null) && (self.isOnlyPressingSpecified(_local1,true,true,false,false != null)) || !this.originallyFacingRight && self.isOnlyPressingSpecified(_local1,false,true,true,false))
                {
                   // (removed SSF2 debug print)
                   this.INPUT2_DB = true;
@@ -362,9 +358,9 @@ function update() {
                   this.currentTimer = this.maxTimer;
                }
             }
-            if(self.self.isOnFloor())
+            if(self.isOnFloor())
             {
-               if((self.isOnlyPressingSpecified(_local2,true,false,false,false != null && self.isOnlyPressingSpecified(_local2,true,false,false,false != false) && this.oldFacingRight) && (!self.isFacingRight( != null && !self.isFacingRight( != false)) && !this.INPUT1_B)
+               if((self.isOnlyPressingSpecified(_local2,true,false,false,false != null) && this.oldFacingRight) && (!self.isFacingRight( != null)) && !this.INPUT1_B)
                {
                   this.INPUT1_B = true;
                   this.originallyFacingRight = true;
@@ -389,14 +385,14 @@ function update() {
                this.originallyFacingRight = true;
                this.currentTimer = this.maxTimer;
             }
-            if(this.currentTimer > 0 && (_local2.BUTTON1 != null && _local2.BUTTON1 != false))
+            if(this.currentTimer > 0 && (_local2.BUTTON1 != null))
             {
                if(self.inCommandCancelState())
                {
-                  if((// TODO: getGlobalVariable("canHadoken" != null && // TODO: getGlobalVariable("canHadoken" != false)) || (// TODO: getGlobalVariable("canShakunetsu" != null && // TODO: getGlobalVariable("canShakunetsu" != false)))
+                  if((self.getGlobalVariable("canHadoken" != null)) || (self.getGlobalVariable("canShakunetsu" != null)))
                   {
-                     // TODO: setGlobalVariable("canCommandCancel", false);
-                     if(self.self.isOnFloor())
+                     self.setGlobalVariable("canCommandCancel",false);
+                     if(self.isOnFloor())
                      {
                         self.forceAttack("b",true);
                      }
@@ -446,18 +442,18 @@ function resetCommands() {
          this.INPUT_NULL = true;
          this.shoryuFacingRight = null;
          this.skippedShaku = false;
-         // TODO: setGlobalVariable("canHadoken", false);
-         // TODO: setGlobalVariable("canShakunetsu", false);
+         self.setGlobalVariable("canHadoken",false);
+         self.setGlobalVariable("canShakunetsu",false);
       
 }
 
 function finishShoryuken() {
 
-         if((this.currentTimer > 0 != null && this.currentTimer > 0 != false) && (this.INPUT1_F != null && this.INPUT1_F != false) && (this.INPUT2_D != null && this.INPUT2_D != false) && !this.INPUT3_DF)
+         if((this.currentTimer > 0 != null) && (this.INPUT1_F != null) && (this.INPUT2_D != null) && !this.INPUT3_DF)
          {
-            if((self.isFacingRight( != null && self.isFacingRight( != false) && this.shoryuFacingRight) && (self.isOnlyPressingSpecified(self.self.getHeldControls( != null && self.isOnlyPressingSpecified(self.self.getHeldControls( != false),false,true,true,false)) || !self.isFacingRight() && !this.shoryuFacingRight && self.isOnlyPressingSpecified(self.self.getHeldControls(),true,true,false,false))
+            if((self.isFacingRight( != null) && this.shoryuFacingRight) && (self.isOnlyPressingSpecified(getControls( != null),false,true,true,false)) || !self.isFacingRight() && !this.shoryuFacingRight && self.isOnlyPressingSpecified(getControls(),true,true,false,false))
             {
-               // TODO: setGlobalVariable("canShoryuken", true);
+               self.setGlobalVariable("canShoryuken",true);
                return true;
             }
          }
@@ -467,7 +463,7 @@ function finishShoryuken() {
 
 function inCommandCancelState() {
 
-         if(self.getState() == 0 || self.getState() == 3 || self.getState() == 4 || self.getState() == 6 || self.getState() == 7 || self.getState() == 12 || self.getState() == 25 || self.getState() == 31 || self.getState() == 46 || self.getState() == 48 || (// TODO: getGlobalVariable("canCommandCancel" != null && // TODO: getGlobalVariable("canCommandCancel" != false)))
+         if(self.getState() == 0 || self.getState() == 3 || self.getState() == 4 || self.getState() == 6 || self.getState() == 7 || self.getState() == 12 || self.getState() == 25 || self.getState() == 31 || self.getState() == 46 || self.getState() == 48 || (self.getGlobalVariable("canCommandCancel" != null)))
          {
             return true;
          }
@@ -550,7 +546,7 @@ function swallow() {
             "direction":60,
             "power":75
          },this);
-         match.getCameraManager().shake(5);
+         // TODO: SSF2API.getCamera().shake(5);
       
 }
 
@@ -567,7 +563,7 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }
 
@@ -608,7 +604,7 @@ function lockEffect(param1:String, param2:Float = 0, param3:Float = 0, param4:Bo
          });
          this.attachX = param2;
          this.attachY = param3;
-         self.addTimer(1, -1, this.checkLocked,{"persistent":true});
+         self.createTimer(1,-1,this.checkLocked,{"persistent":true});
          this.canRemove = true;
          return this.attachedMovieClip;
       
@@ -622,12 +618,12 @@ function setupHatEffect(param1:Float, param2:Float, param3:Float, param4:Float =
             this.destroyTimer(this.checkHatEffect);
          }
          this.currentHat = self.getCurrentAnimation().slice(6);
-         this.hatEffect = // TODO: attachEffect("kh_") — use Fraymakers VFX system,{
+         this.hatEffect = this.attachEffect("kh_" + this.currentHat + "_" + param1.toString(),{
             "scaleX":1.4,
             "scaleY":1.4,
             "parentLock":true,
             "syncHitStun":true,
-            "x":self.flipX(param2),
+            "x":this.flipX(param2),
             "y":param3,
             "behind":param5
          });
@@ -638,7 +634,7 @@ function setupHatEffect(param1:Float, param2:Float, param3:Float, param4:Float =
             this.hatEffect.gotoAndStop(param4);
          }
          this.hatBehind = param5;
-         self.addTimer(1, -1, this.checkHatEffect,{"persistent":true});
+         self.createTimer(1,-1,this.checkHatEffect,{"persistent":true});
          self.addEventListener(SSF2Event.CHAR_SIZE_CHANGE,this.resizeHat);
       
 }

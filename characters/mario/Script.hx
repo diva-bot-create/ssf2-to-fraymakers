@@ -1,8 +1,7 @@
 // Script.hx for Mario
 // Ported from SSF2 MarioExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Mario-specific overrides ──────────────────────────────────
 
-// ── Mario-specific overrides (ported from SSF2 MarioExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -216,6 +213,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }

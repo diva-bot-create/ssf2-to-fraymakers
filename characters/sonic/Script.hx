@@ -1,8 +1,7 @@
 // Script.hx for Sonic
 // Ported from SSF2 SonicExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,22 +197,19 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Sonic-specific overrides ──────────────────────────────────
 
-// ── Sonic-specific overrides (ported from SSF2 SonicExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
       
 }
 
-// Overrides the base template update()
 function update() {
 
-         var _local1:* = // TODO: getNearestLedge() — no direct Fraymakers equivalent;
-         if((self.isBot( != null && self.isBot( != false)) && (_local1 != null && _local1 != false) && !self.self.isOnFloor())
+         var _local1:* = // TODO: getNearestLedge();
+         if((self.isBot( != null)) && (_local1 != null) && !self.isOnFloor())
          {
             if(// TODO: inUpperLeftWarningBounds())
             {

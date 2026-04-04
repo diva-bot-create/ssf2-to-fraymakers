@@ -1,8 +1,7 @@
 // Script.hx for Captainfalcon
-// Ported from SSF2 CaptainExt.as
-// Template reference: Fraymakers character-template
+// Ported from SSF2 CaptainfalconExt.as
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,21 +197,18 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Captainfalcon-specific overrides ──────────────────────────────────
 
-// ── Captainfalcon-specific overrides (ported from SSF2 CaptainExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
       
 }
 
-// Overrides the base template update()
 function update() {
 
-         var _local1:* = // TODO: getNearestLedge() — no direct Fraymakers equivalent;
+         var _local1:* = // TODO: getNearestLedge();
          if(self.isBot() && _local1 != null)
          {
             if(// TODO: inUpperLeftWarningBounds())
@@ -252,6 +248,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }

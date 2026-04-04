@@ -1,8 +1,7 @@
 // Script.hx for Wario
 // Ported from SSF2 WarioExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Wario-specific overrides ──────────────────────────────────
 
-// ── Wario-specific overrides (ported from SSF2 WarioExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -261,12 +258,11 @@ function createFartEffect() {
          }
          if(!self.isStandby())
          {
-            this.fartEffect = // TODO: attachEffect("effect_wario_waftcharge") — use Fraymakers VFX system;
+            this.fartEffect = this.attachEffect("effect_wario_waftcharge");
          }
       
 }
 
-// Overrides the base template update()
 function update() {
 
          if(!this.isFarting && !self.isStandby())
@@ -296,7 +292,7 @@ function update() {
             this.fartEffect.scaleY = self.getMC().scaleY;
             if(self.getStanceMC().waftloc != null)
             {
-               this.fartEffect.x = self.getX() + self.flipX(self.getStanceMC().x + self.getStanceMC().waftloc.x * 1.1);
+               this.fartEffect.x = self.getX() + flipX(self.getStanceMC().x + self.getStanceMC().waftloc.x * 1.1);
                this.fartEffect.y = self.getY() + (self.getStanceMC().y + self.getStanceMC().waftloc.y * 1.1);
             }
             else
@@ -394,7 +390,7 @@ function smash64(param1:Array<Dynamic>) {
          var _local2:* = 0;
          while(_local2 < param1.length)
          {
-            this.rand = 1 + int(Math.random() * 5) % 5;
+            this.rand = 1 + int(// TODO: SSF2API.random() * 5) % 5;
             self.updateAttackBoxStats(_local2,{"effectSound":"ssb_hit" + this.rand.toString()});
             // (removed SSF2 debug print)
             _local2++;

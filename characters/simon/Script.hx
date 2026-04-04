@@ -1,8 +1,7 @@
 // Script.hx for Simon
 // Ported from SSF2 SimonExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,32 +197,29 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Simon-specific overrides ──────────────────────────────────
 
-// ── Simon-specific overrides (ported from SSF2 SimonExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
-         // TODO: setGlobalVariable("canSwing", true);
+         self.setGlobalVariable("canSwing",true);
          self.addEventListener(SSF2Event.CHAR_KO_DEATH,this.resetBounce,{"persistent":true});
          self.addEventListener(SSF2Event.GROUND_TOUCH,this.resetBounce,{"persistent":true});
       
 }
 
-// Overrides the base template update()
 function update() {
 
-         if(!// TODO: getGlobalVariable("canSwing") && (self.self.isOnFloor() || self.getState() == 2 || self.getState() == 14 || self.getState() == 15 || self.getState() == 19))
+         if(!self.getGlobalVariable("canSwing") && (self.isOnFloor() || self.getState() == 2 || self.getState() == 14 || self.getState() == 15 || self.getState() == 19))
          {
-            // TODO: setGlobalVariable("canSwing", true);
+            self.setGlobalVariable("canSwing",true);
          }
          if(this.j == 1)
          {
-            // TODO: setGlobalVariable("normGravity", self.getCharacterStat("gravity"));
-            // TODO: setGlobalVariable("heavyGravity", // TODO: getGlobalVariable("normGravity") * 2);
-            // TODO: setGlobalVariable("lightGravity", // TODO: getGlobalVariable("normGravity") * 0.5);
+            self.setGlobalVariable("normGravity",self.getCharacterStat("gravity"));
+            self.setGlobalVariable("heavyGravity",self.getGlobalVariable("normGravity") * 2);
+            self.setGlobalVariable("lightGravity",self.getGlobalVariable("normGravity") * 0.5);
             ++this.j;
          }
          else if(this.j == 0)
@@ -235,7 +231,7 @@ function update() {
 
 function resetBounce(param1:* = null) {
 
-         // TODO: setGlobalVariable("upBBounces", 0);
+         self.setGlobalVariable("upBBounces",0);
       
 }
 
@@ -248,7 +244,7 @@ function jumpToContinue(param1:* = null) {
          });
          if(this.landFrame == null)
          {
-            self.playFrame("continue");
+            this.stancePlayFrame("continue");
          }
          else
          {

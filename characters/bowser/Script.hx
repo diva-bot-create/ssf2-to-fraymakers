@@ -1,8 +1,7 @@
 // Script.hx for Bowser
 // Ported from SSF2 BowserExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Bowser-specific overrides ──────────────────────────────────
 
-// ── Bowser-specific overrides (ported from SSF2 BowserExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -213,7 +210,6 @@ function initialize() {
       
 }
 
-// Overrides the base template update()
 function update() {
 
          super.update();
@@ -228,7 +224,7 @@ function update() {
 function applyGigaBowserPalette() {
 
          // (removed SSF2 debug print)
-         if(!// TODO: getMetalStatus())
+         if(!getMetalStatus())
          {
             setPaletteSwapData(this.gigaBowserPalette(this.currentCostume()));
          }
@@ -237,7 +233,7 @@ function applyGigaBowserPalette() {
 
 function resetBowserPalette(param1:* = null) {
 
-         if(!// TODO: getMetalStatus())
+         if(!getMetalStatus())
          {
             setPaletteSwapData(this.currentPalette);
          }
@@ -450,6 +446,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }

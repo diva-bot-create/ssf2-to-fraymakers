@@ -1,8 +1,7 @@
 // Script.hx for Metaknight
-// Ported from SSF2 MetaKnightExt.as
-// Template reference: Fraymakers character-template
+// Ported from SSF2 MetaknightExt.as
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,25 +197,22 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Metaknight-specific overrides ──────────────────────────────────
 
-// ── Metaknight-specific overrides (ported from SSF2 MetaKnightExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
       
 }
 
-// Overrides the base template update()
 function update() {
 
          if(this.i == 1)
          {
-            // TODO: setGlobalVariable("normGravity", self.getCharacterStat("gravity"));
-            // TODO: setGlobalVariable("heavyGravity", // TODO: getGlobalVariable("normGravity") * 2);
-            // TODO: setGlobalVariable("lightGravity", // TODO: getGlobalVariable("normGravity") * 0.5);
+            self.setGlobalVariable("normGravity",self.getCharacterStat("gravity"));
+            self.setGlobalVariable("heavyGravity",self.getGlobalVariable("normGravity") * 2);
+            self.setGlobalVariable("lightGravity",self.getGlobalVariable("normGravity") * 0.5);
             ++this.i;
          }
          else if(this.i == 0)
@@ -233,6 +229,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }

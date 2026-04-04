@@ -1,8 +1,7 @@
 // Script.hx for Pacman
-// Ported from SSF2 PacManExt.as
-// Template reference: Fraymakers character-template
+// Ported from SSF2 PacmanExt.as
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,22 +197,19 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Pacman-specific overrides ──────────────────────────────────
 
-// ── Pacman-specific overrides (ported from SSF2 PacManExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
          this.fruit = 0;
          this.dotCount = 0;
          this.dotArray = new Array();
-         // TODO: setGlobalVariable("hasHydrant", true);
+         self.setGlobalVariable("hasHydrant",true);
       
 }
 
-// Overrides the base template update()
 function update() {
 
          if(this.hydrantCD > 0)
@@ -229,7 +225,7 @@ function update() {
 
 function resetHydrant(param1:* = null) {
 
-         // TODO: setGlobalVariable("hasHydrant", true);
+         self.setGlobalVariable("hasHydrant",true);
       
 }
 
@@ -238,7 +234,7 @@ function killAllDots() {
          var _local1:Float = 0;
          while(_local1 < this.dotCount)
          {
-            if((this.dotArray[_local1] != null && this.dotArray[_local1] != false) && !this.dotArray[_local1].isDisposed())
+            if((this.dotArray[_local1] != null) && !this.dotArray[_local1].isDisposed())
             {
                this.dotArray[_local1].destroy();
             }
@@ -285,7 +281,7 @@ function lockEffect(param1:String, param2:Float = 0, param3:Float = 0, param4:Bo
          });
          this.attachX = param2;
          this.attachY = param3;
-         self.addTimer(1, -1, this.checkLocked,{"persistent":true});
+         self.createTimer(1,-1,this.checkLocked,{"persistent":true});
          this.canRemove = true;
          return this.attachedMovieClip;
       
@@ -298,7 +294,7 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }
 

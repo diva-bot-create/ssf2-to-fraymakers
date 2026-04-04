@@ -1,8 +1,7 @@
 // Script.hx for Bandanadee
-// Ported from SSF2 BandanaDeeExt.as
-// Template reference: Fraymakers character-template
+// Ported from SSF2 BandanadeeExt.as
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,18 +197,15 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Bandanadee-specific overrides ──────────────────────────────────
 
-// ── Bandanadee-specific overrides (ported from SSF2 BandanaDeeExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
       
 }
 
-// Overrides the base template update()
 function update() {
 
       
@@ -217,7 +213,7 @@ function update() {
 
 function killSpear() {
 
-         if((this.spearObj && !this.spearObj.isDisposed( != null && this.spearObj && !this.spearObj.isDisposed( != false)) && (!this.spearObj.inState(PState.DEAD != null && !this.spearObj.inState(PState.DEAD != false)) && (this.killSpearEnabled != null && this.killSpearEnabled != false))
+         if((this.spearObj && !this.spearObj.isDisposed( != null)) && (!this.spearObj.inState(PState.DEAD != null)) && (this.killSpearEnabled != null))
          {
             this.spearObj.destroy();
          }
@@ -231,6 +227,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         stancePlayFrame("continue");
       
 }

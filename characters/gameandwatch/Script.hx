@@ -1,8 +1,7 @@
 // Script.hx for Gameandwatch
-// Ported from SSF2 gameandwatchExt.as
-// Template reference: Fraymakers character-template
+// Ported from SSF2 GameandwatchExt.as
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,8 +197,7 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
-
-// ── Gameandwatch-specific overrides (ported from SSF2 gameandwatchExt.as) ──
+// ── Gameandwatch-specific overrides ──────────────────────────────────
 
 function gameandwatchExt(param1:*) {
 
@@ -207,8 +205,7 @@ function gameandwatchExt(param1:*) {
       
 }
 
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)

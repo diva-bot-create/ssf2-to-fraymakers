@@ -1,8 +1,7 @@
 // Script.hx for Pichu
 // Ported from SSF2 PichuExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,8 +197,7 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
-
-// ── Pichu-specific overrides (ported from SSF2 PichuExt.as) ──
+// ── Pichu-specific overrides ──────────────────────────────────
 
 function isShinyPichu() {
 
@@ -207,8 +205,7 @@ function isShinyPichu() {
       
 }
 
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          var _local2:FrameLabel = null;
@@ -226,7 +223,6 @@ function initialize() {
       
 }
 
-// Overrides the base template update()
 function update() {
 
          var _local1:* = self.getDischargeFrame();
@@ -318,7 +314,7 @@ function getDischargeFrame() {
 
          var _local1:* = self.getCurrentAnimation();
          var _local2:* = null;
-         if(this.DischargeEnabled && self.getStanceMC().currentFrame === 1 && (_local1 != null && _local1 != false))
+         if(this.DischargeEnabled && self.getStanceMC().currentFrame === 1 && (_local1 != null))
          {
             _local2 = _local1;
             if(this.SevereEnabled && self.getDamage() > this.SevereThreshold - 1)
@@ -333,7 +329,7 @@ function getDischargeFrame() {
             {
                _local2 = null;
             }
-            if((_local2 != null && _local2 != false) && this.animationArray.indexOf(_local2) != -1)
+            if((_local2 != null) && this.animationArray.indexOf(_local2) != -1)
             {
                if(this.DebugOnSuccess)
                {
@@ -394,7 +390,7 @@ function activateFinalSmash() {
 
 function isElectricTerrainActive() {
 
-         return (this.finalSmash != null && this.finalSmash != false) && !this.finalSmash.isDisposed() ? true : false;
+         return (this.finalSmash != null) && !this.finalSmash.isDisposed() ? true : false;
       
 }
 
@@ -402,8 +398,8 @@ function fireProjectile(param1:*, param2:Float = 0, param3:Float = 0, param4:Boo
 
          var _local7:Int = 0;
          var _local8:* = undefined;
-         var _local6:* = super.// TODO: fireProjectile(param1,param2,param3,param4,param5);
-         if(self.isElectricTerrainActive() && (_local6 != null && _local6 != false))
+         var _local6:* = super.fireProjectile(param1,param2,param3,param4,param5);
+         if(self.isElectricTerrainActive() && (_local6 != null))
          {
             _local7 = 1;
             _local8 = _local6.getAttackBoxStat(_local7,"damage");

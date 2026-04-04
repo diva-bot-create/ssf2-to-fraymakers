@@ -1,8 +1,7 @@
 // Script.hx for Donkeykong
-// Ported from SSF2 DonkeyKongExt.as
-// Template reference: Fraymakers character-template
+// Ported from SSF2 DonkeykongExt.as
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Donkeykong-specific overrides ──────────────────────────────────
 
-// ── Donkeykong-specific overrides (ported from SSF2 DonkeyKongExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -212,7 +209,6 @@ function initialize() {
       
 }
 
-// Overrides the base template update()
 function update() {
 
          if(this.chargeEffect != null)
@@ -255,11 +251,11 @@ function removeChargeEffect() {
 
 function resetChargeOnDeath(param1:* = null) {
 
-         // TODO: setGlobalVariable("DKNSpecCharge", 0);
-         // TODO: setGlobalVariable("DKNSpecFrame", 0);
-         // TODO: setGlobalVariable("DKNSpecPrepIt", false);
-         // TODO: setGlobalVariable("DKNSpecDoIt", false);
-         // TODO: setGlobalVariable("DKNSpecID", null);
+         self.setGlobalVariable("DKNSpecCharge",0);
+         self.setGlobalVariable("DKNSpecFrame",0);
+         self.setGlobalVariable("DKNSpecPrepIt",false);
+         self.setGlobalVariable("DKNSpecDoIt",false);
+         self.setGlobalVariable("DKNSpecID",null);
          self.removeChargeEffect();
       
 }
@@ -271,6 +267,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }

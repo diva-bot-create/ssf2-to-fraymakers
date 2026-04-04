@@ -1,8 +1,7 @@
 // Script.hx for Falco
 // Ported from SSF2 FalcoExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Falco-specific overrides ──────────────────────────────────
 
-// ── Falco-specific overrides (ported from SSF2 FalcoExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -212,9 +209,9 @@ function initialize() {
 
 function resetChargeOnDeath(param1:* = null) {
 
-         // TODO: setGlobalVariable("FalcoDSpecCharge", 0);
-         // TODO: setGlobalVariable("FalcoDSpecFrame", 0);
-         // TODO: setGlobalVariable("FalcoDSpecDoIt", false);
+         self.setGlobalVariable("FalcoDSpecCharge",0);
+         self.setGlobalVariable("FalcoDSpecFrame",0);
+         self.setGlobalVariable("FalcoDSpecDoIt",false);
       
 }
 
@@ -225,6 +222,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }

@@ -1,8 +1,7 @@
 // Script.hx for Jigglypuff
 // Ported from SSF2 JigglypuffExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Jigglypuff-specific overrides ──────────────────────────────────
 
-// ── Jigglypuff-specific overrides (ported from SSF2 JigglypuffExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -219,7 +216,7 @@ function startRestOnReaction() {
 
          if(self.isBot() && self.getCPULevel() == 9)
          {
-            self.addTimer(1, -1, this.restOnReaction);
+            self.createTimer(1,-1,this.restOnReaction);
          }
       
 }
@@ -230,7 +227,7 @@ function restOnReaction() {
          if(self.getCPUForcedAction() == -1 || self.getCPUForcedAction() == 5)
          {
             _local1 = self.getCPUTarget();
-            if((_local1 && Math.random( != null && _local1 && Math.random( != false) < 0.5 && _local1.getMC().currentLabel != "defend" && _local1.getMC().currentLabel != "airdodge" && _local1.getMC().currentLabel != "revival" && !// TODO: inUpperRightWarningBounds() && !self.inLowerRightWarningBounds() && !// TODO: inUpperLeftWarningBounds() && !self.inLowerLeftWarningBounds() && _local1.getX() < self.getX() + 10 && _local1.getX() > self.getX() - 10) && (_local1.getY( != null && _local1.getY( != false) < self.getY() + 10) && _local1.getY() > self.getY() - 10)
+            if((_local1 && // TODO: SSF2API.random( != null) < 0.5 && _local1.getMC().currentLabel != "defend" && _local1.getMC().currentLabel != "airdodge" && _local1.getMC().currentLabel != "revival" && !// TODO: inUpperRightWarningBounds() && !self.inLowerRightWarningBounds() && !// TODO: inUpperLeftWarningBounds() && !self.inLowerLeftWarningBounds() && _local1.getX() < self.getX() + 10 && _local1.getX() > self.getX() - 10) && (_local1.getY( != null) < self.getY() + 10) && _local1.getY() > self.getY() - 10)
             {
                this.importCPUControls([1088,1]);
             }
@@ -251,6 +248,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }

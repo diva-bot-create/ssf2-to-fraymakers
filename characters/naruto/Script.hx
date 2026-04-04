@@ -1,8 +1,7 @@
 // Script.hx for Naruto
 // Ported from SSF2 NarutoExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Naruto-specific overrides ──────────────────────────────────
 
-// ── Naruto-specific overrides (ported from SSF2 NarutoExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -212,7 +209,6 @@ function initialize() {
       
 }
 
-// Overrides the base template update()
 function update() {
 
          if(this.chargeEffect != null)
@@ -236,11 +232,11 @@ function onAttackEnabled(param1:*) {
          if(!isDisposed() && (param1.data.attackData.name == "b_down" || param1.data.attackData.name == "b_down_air"))
          {
             // TODO: SSF2API.removeEventListener(SSF2Event.GAME_TICK_END,this.recolorReenabledEffects);
-            if((this.downBReenableEffectMC != null && this.downBReenableEffectMC != false) && (this.downBReenableEffectMC.parent != null && this.downBReenableEffectMC.parent != false))
+            if((this.downBReenableEffectMC != null) && (this.downBReenableEffectMC.parent != null))
             {
                this.downBReenableEffectMC.parent.removeChild(this.downBReenableEffectMC);
             }
-            this.downBReenableEffectMC = // TODO: attachEffect("cloneReenable_MC") — use Fraymakers VFX system;
+            this.downBReenableEffectMC = attachEffect("cloneReenable_MC");
             // TODO: SSF2API.addEventListener(SSF2Event.GAME_TICK_END,this.recolorReenabledEffects);
          }
       
@@ -293,10 +289,10 @@ function removeChargeEffect() {
 
 function resetChargeOnDeath(param1:* = null) {
 
-         // TODO: setGlobalVariable("NarutoNSpecCharge", 0);
-         // TODO: setGlobalVariable("NarutoNSpecFrame", 0);
-         // TODO: setGlobalVariable("NarutoNSpecDoIt", false);
-         // TODO: setGlobalVariable("NarutoNSpecID", null);
+         self.setGlobalVariable("NarutoNSpecCharge",0);
+         self.setGlobalVariable("NarutoNSpecFrame",0);
+         self.setGlobalVariable("NarutoNSpecDoIt",false);
+         self.setGlobalVariable("NarutoNSpecID",null);
          self.removeChargeEffect();
       
 }
@@ -308,6 +304,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }

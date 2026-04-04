@@ -1,8 +1,7 @@
 // Script.hx for Blackmage
-// Ported from SSF2 BlackMageExt.as
-// Template reference: Fraymakers character-template
+// Ported from SSF2 BlackmageExt.as
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Blackmage-specific overrides ──────────────────────────────────
 
-// ── Blackmage-specific overrides (ported from SSF2 BlackMageExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -212,25 +209,24 @@ function initialize() {
       
 }
 
-// Overrides the base template update()
 function update() {
 
-         if(// TODO: getGlobalVariable("BMageNSpecCharge") > 0)
+         if(self.getGlobalVariable("BMageNSpecCharge") > 0)
          {
             if(this.tintClock == 0)
             {
-               this.colTrans.redOffset = 15 + // TODO: getGlobalVariable("BMageNSpecCharge");
-               this.colTrans.greenOffset = 15 + // TODO: getGlobalVariable("BMageNSpecCharge");
-               this.colTrans.blueOffset = 15 + // TODO: getGlobalVariable("BMageNSpecCharge");
+               this.colTrans.redOffset = 15 + self.getGlobalVariable("BMageNSpecCharge");
+               this.colTrans.greenOffset = 15 + self.getGlobalVariable("BMageNSpecCharge");
+               this.colTrans.blueOffset = 15 + self.getGlobalVariable("BMageNSpecCharge");
                this.colTrans.redMultiplier = 1.22;
                this.colTrans.greenMultiplier = 1.22;
                this.colTrans.blueMultiplier = 1.22;
             }
             else if(this.tintClock == 1)
             {
-               this.colTrans.redOffset = 8 + // TODO: getGlobalVariable("BMageNSpecCharge") / 2;
-               this.colTrans.greenOffset = 8 + // TODO: getGlobalVariable("BMageNSpecCharge") / 2;
-               this.colTrans.blueOffset = 8 + // TODO: getGlobalVariable("BMageNSpecCharge") / 2;
+               this.colTrans.redOffset = 8 + self.getGlobalVariable("BMageNSpecCharge") / 2;
+               this.colTrans.greenOffset = 8 + self.getGlobalVariable("BMageNSpecCharge") / 2;
+               this.colTrans.blueOffset = 8 + self.getGlobalVariable("BMageNSpecCharge") / 2;
                this.colTrans.redMultiplier = 1.11;
                this.colTrans.greenMultiplier = 1.11;
                this.colTrans.blueMultiplier = 1.11;
@@ -245,7 +241,7 @@ function update() {
                this.colTrans.blueMultiplier = 1;
             }
             self.getMC().transform.colorTransform = this.colTrans;
-            this.tintClock = (this.tintClock + 1) % (9 - Math.floor(// TODO: getGlobalVariable("BMageNSpecCharge") / 1.5));
+            this.tintClock = (this.tintClock + 1) % (9 - Math.floor(self.getGlobalVariable("BMageNSpecCharge") / 1.5));
          }
          else
          {
@@ -266,10 +262,10 @@ function update() {
 
 function resetChargeOnDeath(param1:* = null) {
 
-         // TODO: setGlobalVariable("BMageNSpecCharge", 0);
-         // TODO: setGlobalVariable("BMageDSpecCharge", 0);
-         // TODO: setGlobalVariable("BMageDSpecFrame", 0);
-         // TODO: setGlobalVariable("BMageDSpecDoIt", false);
-         // TODO: setGlobalVariable("BMageDSpecProj", null);
+         self.setGlobalVariable("BMageNSpecCharge",0);
+         self.setGlobalVariable("BMageDSpecCharge",0);
+         self.setGlobalVariable("BMageDSpecFrame",0);
+         self.setGlobalVariable("BMageDSpecDoIt",false);
+         self.setGlobalVariable("BMageDSpecProj",null);
       
 }

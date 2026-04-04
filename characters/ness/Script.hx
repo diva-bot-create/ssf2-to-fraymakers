@@ -1,8 +1,7 @@
 // Script.hx for Ness
 // Ported from SSF2 NessExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,8 +197,7 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
-
-// ── Ness-specific overrides (ported from SSF2 NessExt.as) ──
+// ── Ness-specific overrides ──────────────────────────────────
 
 function resetGravity(param1:* = null) {
 
@@ -213,18 +211,18 @@ function randVoice() {
          var _local1:Float = 4;
          var _local2:String = "ness_grunt";
          var _local3:Float = 1 / (_local1 + 1);
-         var _local4:Float = Math.random();
-         var _local5:Float = // TODO: getGlobalVariable("audio");
+         var _local4:Float = // TODO: SSF2API.random();
+         var _local5:Float = self.getGlobalVariable("audio");
          var _local6:Int = 0;
          while(_local6 < _local1)
          {
             if(_local4 > _local3 + _local6 * _local3 && _local4 <= _local3 * 2 + _local6 * _local3 && _local5 != _local6)
             {
-               if(// TODO: getMetalStatus())
+               if(self.getMetalStatus())
                {
                   // TODO: SSF2API.playSound(_local2 + _local6.toString(),true);
                }
-               // TODO: setGlobalVariable("audio", _local6);
+               self.setGlobalVariable("audio",_local6);
             }
             _local6++;
          }
@@ -234,19 +232,18 @@ function randVoice() {
 function pkFire(param1:Float) {
 
          var _local2:Float = 14;
-         // TODO: fireProjectile("ness_pkfire");
+         self.fireProjectile("ness_pkfire");
          self.getCurrentProjectile().setXSpeed(_local2 * Math.sin(param1 * Math.PI / 180),false);
          self.getCurrentProjectile().setYSpeed(_local2 * Math.cos(param1 * Math.PI / 180));
-         // TODO: attachEffect("global_dust_heavy") — use Fraymakers VFX system;
+         this.attachEffect("global_dust_heavy");
          this.attachEffect("global_spark",{
-            "x":self.flipX(24),
+            "x":flipX(24),
             "y":-10
          });
       
 }
 
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -269,7 +266,7 @@ function toRocket(param1:*, param2:* = null) {
 
 function rocket(param1:Float, param2:Float, param3:Float, param4:Bool = true) {
 
-         self.endAttack();
+         endAttack();
          toIdle();
          forceAttack("b_up_air");
          // (removed SSF2 debug print)
@@ -279,16 +276,16 @@ function rocket(param1:Float, param2:Float, param3:Float, param4:Bool = true) {
          this.m_rocketSpeed = param1;
          self.updateCharacterStats({"gravity":0});
          self.addEventListener(SSF2Event.STATE_CHANGE,this.resetGravity);
-         if(self.self.isOnFloor() && (this.m_rocketAngle >= 260 && this.m_rocketAngle <= 280))
+         if(self.isOnFloor() && (this.m_rocketAngle >= 260 && this.m_rocketAngle <= 280))
          {
-            self.endAttack();
+            endAttack();
             self.resetGravity();
             resetRotation();
             toBounce();
          }
          else
          {
-            if(self.self.isOnFloor() && (this.m_rocketAngle > 180 && this.m_rocketAngle < 360))
+            if(self.isOnFloor() && (this.m_rocketAngle > 180 && this.m_rocketAngle < 360))
             {
                this.m_rocketAngle = this.m_rocketAngle < 270 ? 180 : 0;
                resetRotation();
@@ -297,21 +294,21 @@ function rocket(param1:Float, param2:Float, param3:Float, param4:Bool = true) {
             {
                if(this.m_rocketAngle <= 90 && this.m_rocketAngle >= 0 || this.m_rocketAngle >= 270 && this.m_rocketAngle < 360)
                {
-                  self.setFacingRight(true);
+                  faceRight();
                }
                else
                {
-                  self.setFacingRight(false);
+                  faceLeft();
                }
             }
             if(this.m_rocketAngle < 180 && this.m_rocketAngle > 0)
             {
                unnattachFromGround();
             }
-            self.playFrame("rocket");
+            stancePlayFrame("rocket");
             setXSpeed(SSF2Utils.calculateXSpeed(param1,this.m_rocketAngle));
             setYSpeed(-SSF2Utils.calculateYSpeed(param1,this.m_rocketAngle));
-            self.addTimer(1, 0, this.checkRocket);
+            createTimer(1,0,this.checkRocket);
          }
       
 }

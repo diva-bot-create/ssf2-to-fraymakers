@@ -1,8 +1,7 @@
 // Script.hx for Tails
 // Ported from SSF2 TailsExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,27 +197,24 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Tails-specific overrides ──────────────────────────────────
 
-// ── Tails-specific overrides (ported from SSF2 TailsExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
-         // TODO: setGlobalVariable("flyCharged", true);
+         self.setGlobalVariable("flyCharged",true);
          this.runSounds = ["tails_runsfx1","tails_runsfx2","tails_runsfx3","tails_runsfx4"];
          this.runIndex = 0;
          this.runtick = -5;
       
 }
 
-// Overrides the base template update()
 function update() {
 
          if(getCurrentAnimation() == "crouch" && getStanceMC().currentFrame >= 4)
          {
-            // TODO: setGlobalVariable("crouchdown", true);
+            setGlobalVariable("crouchdown",true);
          }
          if(self.getState() == CState.RUN || self.getState() == CState.DASH || self.getState() == CState.TURN)
          {
@@ -236,7 +232,7 @@ function update() {
             }
             if(this.runtick == 0)
             {
-               // TODO: attachEffect("global_dust_light") — use Fraymakers VFX system;
+               this.attachEffect("global_dust_light");
             }
          }
          else

@@ -1,8 +1,7 @@
 // Script.hx for Zelda
 // Ported from SSF2 ZeldaExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Zelda-specific overrides ──────────────────────────────────
 
-// ── Zelda-specific overrides (ported from SSF2 ZeldaExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -210,11 +207,10 @@ function initialize() {
       
 }
 
-// Overrides the base template update()
 function update() {
 
          var _local1:* = undefined;
-         if(self.self.isOnFloor())
+         if(self.isOnFloor())
          {
             self.setActionEnabled(true, "b_forward_air");
             self.setActionEnabled(true, "b_forward");
@@ -239,8 +235,8 @@ function update() {
 
 function resetChargeOnDeath(param1:* = null) {
 
-         // TODO: setGlobalVariable("SheikNSpecCharge", 0);
-         // TODO: setGlobalVariable("SheikNSpecFrame", 0);
+         self.setGlobalVariable("SheikNSpecCharge",0);
+         self.setGlobalVariable("SheikNSpecFrame",0);
       
 }
 
@@ -251,6 +247,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }

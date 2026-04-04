@@ -1,8 +1,7 @@
 // Script.hx for Ryu
 // Ported from SSF2 RyuExt.as
-// Template reference: Fraymakers character-template
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,19 +197,17 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Ryu-specific overrides ──────────────────────────────────
 
-// ── Ryu-specific overrides (ported from SSF2 RyuExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
-         // TODO: setGlobalVariable("canCommandCancel", false);
-         // TODO: setGlobalVariable("canHadoken", false);
-         // TODO: setGlobalVariable("canShoryuken", false);
-         // TODO: setGlobalVariable("canTatsumaki", false);
-         // TODO: setGlobalVariable("canShakunetsu", false);
+         self.setGlobalVariable("canCommandCancel",false);
+         self.setGlobalVariable("canHadoken",false);
+         self.setGlobalVariable("canShoryuken",false);
+         self.setGlobalVariable("canTatsumaki",false);
+         self.setGlobalVariable("canShakunetsu",false);
          var _local1:Dynamic = getCharacterStat("sounds");
          if(getCostume() < 0)
          {
@@ -239,7 +236,7 @@ function initialize() {
             _local1.ledge_grab = "evil_ryu_ledge_grab";
          }
          updateCharacterStats({"sounds":_local1});
-         if(// TODO: SSF2API.isDebug() && (// TODO: SSF2API.getGlobalVar("ryudebuginputs" != null && // TODO: SSF2API.getGlobalVar("ryudebuginputs" != false)))
+         if(// TODO: SSF2API.isDebug() && (// TODO: SSF2API.getGlobalVar("ryudebuginputs" != null)))
          {
             this.inputDisplay = // TODO: SSF2API.getMCByLinkageName("ryuinputgraphic");
             // TODO: SSF2API.getStage().getHUDForegroundMC().addChild(this.inputDisplay);
@@ -247,20 +244,19 @@ function initialize() {
       
 }
 
-// Overrides the base template update()
 function update() {
 
-         var _local1:* = self.self.getHeldControls();
+         var _local1:* = self.getControls();
          var _local2:* = self.getControls(true);
          self.checkCommandInputs();
-         if(this.currentTimer > 0 && (_local1.BUTTON1 != null && _local1.BUTTON1 != false))
+         if(this.currentTimer > 0 && (_local1.BUTTON1 != null))
          {
             if(self.inCommandCancelState())
             {
-               if(// TODO: getGlobalVariable("canShoryuken"))
+               if(self.getGlobalVariable("canShoryuken"))
                {
-                  // TODO: setGlobalVariable("canCommandCancel", false);
-                  if(self.self.isOnFloor())
+                  self.setGlobalVariable("canCommandCancel",false);
+                  if(self.isOnFloor())
                   {
                      self.forceAttack("b_up",true);
                   }
@@ -269,10 +265,10 @@ function update() {
                      self.forceAttack("b_up_air",true);
                   }
                }
-               if((// TODO: getGlobalVariable("canHadoken" != null && // TODO: getGlobalVariable("canHadoken" != false)) || (// TODO: getGlobalVariable("canShakunetsu" != null && // TODO: getGlobalVariable("canShakunetsu" != false)))
+               if((self.getGlobalVariable("canHadoken" != null)) || (self.getGlobalVariable("canShakunetsu" != null)))
                {
-                  // TODO: setGlobalVariable("canCommandCancel", false);
-                  if(self.self.isOnFloor())
+                  self.setGlobalVariable("canCommandCancel",false);
+                  if(self.isOnFloor())
                   {
                      self.forceAttack("b",true);
                   }
@@ -281,11 +277,11 @@ function update() {
                      self.forceAttack("b_air",true);
                   }
                }
-               if(// TODO: getGlobalVariable("canTatsumaki"))
+               if(self.getGlobalVariable("canTatsumaki"))
                {
                   this.flip();
-                  // TODO: setGlobalVariable("canCommandCancel", false);
-                  if(self.self.isOnFloor())
+                  self.setGlobalVariable("canCommandCancel",false);
+                  if(self.isOnFloor())
                   {
                      self.forceAttack("b_forward",true);
                   }
@@ -296,13 +292,13 @@ function update() {
                }
             }
          }
-         if((// TODO: getGlobalVariable("canCommandCancel" != null && // TODO: getGlobalVariable("canCommandCancel" != false)) && (_local1.BUTTON1 != null && _local1.BUTTON1 != false))
+         if((self.getGlobalVariable("canCommandCancel" != null)) && (_local1.BUTTON1 != null))
          {
             if(_local1.UP)
             {
-               // TODO: setGlobalVariable("canShoryuken", false);
-               // TODO: setGlobalVariable("canCommandCancel", false);
-               if(self.self.isOnFloor())
+               self.setGlobalVariable("canShoryuken",false);
+               self.setGlobalVariable("canCommandCancel",false);
+               if(self.isOnFloor())
                {
                   self.forceAttack("b_up",true);
                }
@@ -313,9 +309,9 @@ function update() {
             }
             else if(_local1.LEFT != _local1.RIGHT)
             {
-               // TODO: setGlobalVariable("canTatsumaki", false);
-               // TODO: setGlobalVariable("canCommandCancel", false);
-               if(self.self.isOnFloor())
+               self.setGlobalVariable("canTatsumaki",false);
+               self.setGlobalVariable("canCommandCancel",false);
+               if(self.isOnFloor())
                {
                   self.forceAttack("b_forward",true);
                }
@@ -326,8 +322,8 @@ function update() {
             }
             else if(_local1.DOWN)
             {
-               // TODO: setGlobalVariable("canCommandCancel", false);
-               if(self.self.isOnFloor())
+               self.setGlobalVariable("canCommandCancel",false);
+               if(self.isOnFloor())
                {
                   self.forceAttack("b_down",true);
                }
@@ -338,10 +334,10 @@ function update() {
             }
             else
             {
-               // TODO: setGlobalVariable("canHadoken", false);
-               // TODO: setGlobalVariable("canShakunetsu", false);
-               // TODO: setGlobalVariable("canCommandCancel", false);
-               if(self.self.isOnFloor())
+               self.setGlobalVariable("canHadoken",false);
+               self.setGlobalVariable("canShakunetsu",false);
+               self.setGlobalVariable("canCommandCancel",false);
+               if(self.isOnFloor())
                {
                   self.forceAttack("b",true);
                }
@@ -367,22 +363,22 @@ function checkCommandInputs() {
 
          var _local3:Bool = false;
          var _local4:Bool = false;
-         var _local1:* = self.self.getHeldControls();
+         var _local1:* = self.getControls();
          var _local2:* = self.getControls(true);
-         if((this.currentTimer > 0 != null && this.currentTimer > 0 != false) && (this.INPUT_D1 != null && this.INPUT_D1 != false) && !((this.INPUT_HDK != null && this.INPUT_HDK != false) || (this.INPUT_TSK != null && this.INPUT_TSK != false)))
+         if((this.currentTimer > 0 != null) && (this.INPUT_D1 != null) && !((this.INPUT_HDK != null) || (this.INPUT_TSK != null)))
          {
             _local3 = this.lenientPressingSpecified(_local1,_local2,0,-1,2,0);
             _local4 = this.lenientPressingSpecified(_local1,_local2,2,-1,0,0);
-            if((_local3 != null && _local3 != false) && (this.originallyFacingRight != null && this.originallyFacingRight != false) || _local4 && !this.originallyFacingRight)
+            if((_local3 != null) && (this.originallyFacingRight != null) || _local4 && !this.originallyFacingRight)
             {
                this.INPUT_HDK = true;
-               // TODO: setGlobalVariable("canHadoken", true);
+               self.setGlobalVariable("canHadoken",true);
                this.currentTimer = this.maxTimer;
             }
-            else if((_local4 != null && _local4 != false) && (this.originallyFacingRight != null && this.originallyFacingRight != false) || _local3 && !this.originallyFacingRight)
+            else if((_local4 != null) && (this.originallyFacingRight != null) || _local3 && !this.originallyFacingRight)
             {
                this.INPUT_TSK = true;
-               // TODO: setGlobalVariable("canTatsumaki", true);
+               self.setGlobalVariable("canTatsumaki",true);
                this.currentTimer = this.maxTimer;
             }
          }
@@ -396,20 +392,20 @@ function checkCommandInputs() {
                this.originallyFacingRight = self.isFacingRight();
             }
          }
-         var _local5:Bool = self.self.isOnFloor() ? !this.oldFacingRight : !self.isFacingRight();
-         if((this.currentTimer > 0 != null && this.currentTimer > 0 != false) && (this.INPUT_SHK1 != null && this.INPUT_SHK1 != false) && (this.INPUT_SHK2 != null && this.INPUT_SHK2 != false) && !this.INPUT_SHK3)
+         var _local5:Bool = self.isOnFloor() ? !this.oldFacingRight : !self.isFacingRight();
+         if((this.currentTimer > 0 != null) && (this.INPUT_SHK1 != null) && (this.INPUT_SHK2 != null) && !this.INPUT_SHK3)
          {
             _local3 = this.lenientPressingSpecified(_local1,_local2,0,-1,2,0);
             _local4 = this.lenientPressingSpecified(_local1,_local2,2,-1,0,0);
-            if((_local3 != null && _local3 != false) && (this.originallyFacingRight != null && this.originallyFacingRight != false) || _local4 && !this.originallyFacingRight)
+            if((_local3 != null) && (this.originallyFacingRight != null) || _local4 && !this.originallyFacingRight)
             {
                this.INPUT_SHK3 = true;
-               // TODO: setGlobalVariable("canShakunetsu", true);
-               // TODO: setGlobalVariable("canHadoken", false);
+               self.setGlobalVariable("canShakunetsu",true);
+               self.setGlobalVariable("canHadoken",false);
                this.currentTimer = this.maxTimer;
             }
          }
-         if((this.currentTimer > 0 && this.INPUT_SHK1 != null && this.currentTimer > 0 && this.INPUT_SHK1 != false) && (!this.INPUT_SHK2 != null && !this.INPUT_SHK2 != false) && this.lenientPressingSpecified(_local1,_local2,-1,2,-1,0))
+         if((this.currentTimer > 0 && this.INPUT_SHK1 != null) && (!this.INPUT_SHK2 != null) && this.lenientPressingSpecified(_local1,_local2,-1,2,-1,0))
          {
             this.INPUT_SHK2 = true;
             this.currentTimer = this.maxTimer;
@@ -421,13 +417,13 @@ function checkCommandInputs() {
             this.currentTimer = this.maxTimer;
             this.originallyFacingRight = !_local5;
          }
-         if((this.currentTimer > 0 && this.INPUT_SRK1 && this.INPUT_SRK2 != null && this.currentTimer > 0 && this.INPUT_SRK1 && this.INPUT_SRK2 != false) && (!this.INPUT_SRK3 != null && !this.INPUT_SRK3 != false) && ((self.isFacingRight( != null && self.isFacingRight( != false) && this.shoryuFacingRight && this.lenientPressingSpecified(_local1,_local2,0,-1,2,-1)) || (!self.isFacingRight( != null && !self.isFacingRight( != false) && !this.shoryuFacingRight && this.lenientPressingSpecified(_local1,_local2,2,-1,0,-1))))
+         if((this.currentTimer > 0 && this.INPUT_SRK1 && this.INPUT_SRK2 != null) && (!this.INPUT_SRK3 != null) && ((self.isFacingRight( != null) && this.shoryuFacingRight && this.lenientPressingSpecified(_local1,_local2,0,-1,2,-1)) || (!self.isFacingRight( != null) && !this.shoryuFacingRight && this.lenientPressingSpecified(_local1,_local2,2,-1,0,-1))))
          {
             this.INPUT_SRK3 = true;
-            // TODO: setGlobalVariable("canShoryuken", true);
+            self.setGlobalVariable("canShoryuken",true);
             this.currentTimer = this.maxTimer;
          }
-         if((this.currentTimer > 0 && this.INPUT_SRK1 != null && this.currentTimer > 0 && this.INPUT_SRK1 != false) && (!this.INPUT_SRK2 != null && !this.INPUT_SRK2 != false) && this.lenientPressingSpecified(_local1,_local2,-1,2,-1,0))
+         if((this.currentTimer > 0 && this.INPUT_SRK1 != null) && (!this.INPUT_SRK2 != null) && this.lenientPressingSpecified(_local1,_local2,-1,2,-1,0))
          {
             this.INPUT_SRK2 = true;
             this.currentTimer = this.maxTimer;
@@ -447,7 +443,7 @@ function checkCommandInputs() {
             this.currentTimer = this.maxTimer;
          }
          this.oldFacingRight = self.isFacingRight();
-         if(// TODO: SSF2API.isDebug() && (this.inputDisplay != null && this.inputDisplay != false))
+         if(// TODO: SSF2API.isDebug() && (this.inputDisplay != null))
          {
             this.inputDisplay.s1.gotoAndStop(this.INPUT_SRK1 ? 2 : 1);
             this.inputDisplay.s2.gotoAndStop(this.INPUT_SRK2 ? 2 : 1);
@@ -497,19 +493,19 @@ function isOnlyPressingSpecified(param1:Dynamic, param2:Bool, param3:Bool, param
 
 function lenientPressingSpecified(param1:Dynamic, param2:Dynamic, param3:Int, param4:Int, param5:Int, param6:Int) {
 
-         if((param3 == 0 && param1.LEFT != null && param3 == 0 && param1.LEFT != false) || (param3 == 1 && !param1.LEFT != null && param3 == 1 && !param1.LEFT != false) || param3 == 2 && !param2.LEFT)
+         if((param3 == 0 && param1.LEFT != null) || (param3 == 1 && !param1.LEFT != null) || param3 == 2 && !param2.LEFT)
          {
             return false;
          }
-         if((param4 == 0 && param1.DOWN != null && param4 == 0 && param1.DOWN != false) || (param4 == 1 && !param1.DOWN != null && param4 == 1 && !param1.DOWN != false) || param4 == 2 && !param2.DOWN)
+         if((param4 == 0 && param1.DOWN != null) || (param4 == 1 && !param1.DOWN != null) || param4 == 2 && !param2.DOWN)
          {
             return false;
          }
-         if((param5 == 0 && param1.RIGHT != null && param5 == 0 && param1.RIGHT != false) || (param5 == 1 && !param1.RIGHT != null && param5 == 1 && !param1.RIGHT != false) || param5 == 2 && !param2.RIGHT)
+         if((param5 == 0 && param1.RIGHT != null) || (param5 == 1 && !param1.RIGHT != null) || param5 == 2 && !param2.RIGHT)
          {
             return false;
          }
-         if((param6 == 0 && param1.UP != null && param6 == 0 && param1.UP != false) || (param6 == 1 && !param1.UP != null && param6 == 1 && !param1.UP != false) || param6 == 2 && !param2.UP)
+         if((param6 == 0 && param1.UP != null) || (param6 == 1 && !param1.UP != null) || param6 == 2 && !param2.UP)
          {
             return false;
          }
@@ -531,16 +527,16 @@ function resetCommands() {
          this.INPUT_NULL = true;
          this.shoryuFacingRight = null;
          this.skippedShaku = false;
-         // TODO: setGlobalVariable("canHadoken", false);
-         // TODO: setGlobalVariable("canShakunetsu", false);
-         // TODO: setGlobalVariable("canShoryuken", false);
-         // TODO: setGlobalVariable("canTatsumaki", false);
+         self.setGlobalVariable("canHadoken",false);
+         self.setGlobalVariable("canShakunetsu",false);
+         self.setGlobalVariable("canShoryuken",false);
+         self.setGlobalVariable("canTatsumaki",false);
       
 }
 
 function inCommandCancelState() {
 
-         if(self.getState() == 0 || self.getState() == 3 || self.getState() == 4 || self.getState() == 6 || self.getState() == 7 || self.getState() == 12 || self.getState() == 25 || self.getState() == 31 || self.getState() == 46 || self.getState() == 48 || (// TODO: getGlobalVariable("canCommandCancel" != null && // TODO: getGlobalVariable("canCommandCancel" != false)))
+         if(self.getState() == 0 || self.getState() == 3 || self.getState() == 4 || self.getState() == 6 || self.getState() == 7 || self.getState() == 12 || self.getState() == 25 || self.getState() == 31 || self.getState() == 46 || self.getState() == 48 || (self.getGlobalVariable("canCommandCancel" != null)))
          {
             return true;
          }

@@ -1,8 +1,7 @@
 // Script.hx for Chibirobo
-// Ported from SSF2 ChibiExt.as
-// Template reference: Fraymakers character-template
+// Ported from SSF2 ChibiroboExt.as
 
-// ── Base template (from character-template/Script.hx) ────────────────────────
+// ── Base template ────────────────────────────────────────────────────────────
 // API Script
 
 
@@ -198,11 +197,9 @@ function specialDown_gotoLoop(){
     downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
 }
 
+// ── Chibirobo-specific overrides ──────────────────────────────────
 
-// ── Chibirobo-specific overrides (ported from SSF2 ChibiExt.as) ──
-
-// Overrides the base template initialize()
-// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+// NOTE: merge with base template initialize() if needed
 function initialize() {
 
          // (removed SSF2 debug print)
@@ -212,33 +209,32 @@ function initialize() {
 
 function resetGlobalsOnDeath(param1:* = null) {
 
-         // TODO: setGlobalVariable("chibiProjGlobal", null);
-         // TODO: setGlobalVariable("chibiItemGlobal", null);
-         // TODO: setGlobalVariable("chibiProjMetadata", null);
+         self.setGlobalVariable("chibiProjGlobal",null);
+         self.setGlobalVariable("chibiItemGlobal",null);
+         self.setGlobalVariable("chibiProjMetadata",null);
       
 }
 
-// Overrides the base template update()
 function update() {
 
-         if(!// TODO: getGlobalVariable("telly_timer"))
+         if(!getGlobalVariable("telly_timer"))
          {
             createTimer(1,-1,this.fireTelly,{
                "condition":function():Bool
                {
-                  return !// TODO: getGlobalVariable("telly");
+                  return !getGlobalVariable("telly");
                },
                "persistent":true
             });
-            // TODO: setGlobalVariable("telly_timer", true);
+            setGlobalVariable("telly_timer",true);
          }
       
 }
 
 function fireTelly() {
 
-         var _local1:* = // TODO: fireProjectile("telly_vision");
-         // TODO: setGlobalVariable("telly", getCurrentProjectile());
+         var _local1:* = fireProjectile("telly_vision");
+         setGlobalVariable("telly",getCurrentProjectile());
          if(_local1)
          {
             // (removed SSF2 debug print)
@@ -253,6 +249,6 @@ function jumpToContinue(param1:* = null) {
             "allowControl":false,
             "cancelWhenAirborne":true
          });
-         self.playFrame("continue");
+         this.stancePlayFrame("continue");
       
 }
