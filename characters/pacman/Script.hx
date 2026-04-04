@@ -1,0 +1,311 @@
+// Script.hx for Pacman
+// Ported from SSF2 PacManExt.as
+// Template reference: Fraymakers character-template
+
+// ── Base template (from character-template/Script.hx) ────────────────────────
+// API Script
+
+
+var neutralSpecialProjectile = self.makeObject(null); // Tracks active Neutral Special projectile (in case we need to handle any special cases)
+
+var lastDisabledNSpecStatusEffect = self.makeObject(null);
+
+var downSpecialLoopCheckTimer = self.makeInt(-1);
+
+var clutchReversalTimer = self.makeInt(-1); // tracks the latest
+var clutchButtonHeld = self.makeBool(false); // Check if the clutch button is held current frame
+var clutchButtonWasHeld = self.makeBool(false); // Check if the clutch button was held prev. frame
+
+//offset projectile start position
+var NSPEC_PROJ_X_OFFSET = 40;
+var NSPEC_PROJ_Y_OFFSET = -50;
+
+var NEUTRAL_SPECIAL_COOLDOWN = 60;
+
+// start general functions --- 
+
+//Runs on object init
+function initialize(){
+    self.addEventListener(GameObjectEvent.LINK_FRAMES, handleLinkFrames, {persistent:true});
+}
+
+function update(){
+}
+
+// Runs when reading inputs (before determining character state, update, framescript, etc.)
+function inputUpdateHook(pressedControls:ControlsObject, heldControls:ControlsObject) {
+    // This also runs when updating the buffer, below code should only be run on input tick
+	if (self.isFirstInputUpdate()) {
+        clutchButtonWasHeld.set(clutchButtonHeld.get());
+		clutchButtonHeld.set(heldControls.SHIELD2);
+	}
+
+    // This runs when reading the buffer and on input tick -
+	// Disable SHIELD2 input so engine will not see the shield2 input for shield/airdash
+    //
+    // self.getHeldControls().SHIELD2 will be false too
+    // so must use clutchButtonHeld to check for clutch input
+	pressedControls.SHIELD2 = false;
+	heldControls.SHIELD2 = false;
+}
+
+// CState-based handling for LINK_FRAMES
+// needed to ensure important code that would be skipped during the transition is still executed
+function handleLinkFrames(e){
+	if(self.inState(CState.SPECIAL_SIDE)){
+		if(self.getCurrentFrame() >= 14){
+			self.updateAnimationStats({bodyStatus:BodyStatus.NONE});
+		}
+	} else if(self.inState(CState.SPECIAL_DOWN)){
+        specialDown_resetTimer();
+        downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
+    }
+}
+
+function onTeardown() {
+	
+}
+
+// --- end general functions
+
+// Clutch Reversal logic
+
+// Starting to hold button means not held previous frame, but held current frame
+function startedHoldingClutch() {
+    return !clutchButtonWasHeld.get() && clutchButtonHeld.get();
+}
+
+// Allow clutch reversal for the current animation (or until disabled)
+function enableClutchReversal() {
+    // remove any clutch checks if already being done in this animation
+    disableClutchReversal();
+
+    // On frame enabled, check if started holding current frame. If yes, then apply reversal and don't add the timer
+    if (startedHoldingClutch()) {
+        applyClutchReversal();
+        return;
+    }
+
+    // timer that waits until startedHoldingClutch is true, then runs applyClutchReversal
+    var timer = self.addTimer(0, -1, applyClutchReversal, {condition: startedHoldingClutch});
+    clutchReversalTimer.set(timer);
+}
+
+// Disable clutch reversal for the current move 
+function disableClutchReversal() {
+    self.removeTimer(clutchReversalTimer.get());
+    clutchReversalTimer.set(-1);
+}
+
+// Reverse momentum if clutch pressed (and enabled for current move)
+function applyClutchReversal() {
+    self.flip();
+    self.setXVelocity(-1 * self.getXVelocity());
+
+    AudioClip.play(self.getResource().getContent("downspecial"));
+    
+    // disable clutch for the rest of this animation (so no double clutch)
+    disableClutchReversal();
+}
+
+
+//Rapid Jab logic
+function jab3Loop(){
+    if (self.getHeldControls().ATTACK) {
+    	self.playFrame(2);
+        Common.startJabComboCheck(); // responsible for allowing you to mash attack button in addition to holding
+	} else {
+		Common.playFrameIfTrue(2);
+		Common.startJabComboCheck(); // responsible for allowing you to mash attack button in addition to holding
+	}
+}
+//-----------NEUTRAL SPECIAL-----------
+
+//projectile
+function fireNSpecialProjectile(){
+    neutralSpecialProjectile.set(match.createProjectile(self.getResource().getContent("characterTemplateNspecProjectile"), self));
+    neutralSpecialProjectile.get().setX(self.getX() + self.flipX(NSPEC_PROJ_X_OFFSET));
+    neutralSpecialProjectile.get().setY(self.getY() + NSPEC_PROJ_Y_OFFSET);
+}
+
+//cooldown timer
+function startNeutralSpecialCooldown(){
+    disableNeutralSpecial();
+    self.addTimer(NEUTRAL_SPECIAL_COOLDOWN, 1, enableNeutralSpecial, {persistent:true});
+}
+
+function disableNeutralSpecial(){
+    if (lastDisabledNSpecStatusEffect.get() != null) {
+        self.removeStatusEffect(StatusEffectType.DISABLE_ACTION, lastDisabledNSpecStatusEffect.get().id);
+    }
+    lastDisabledNSpecStatusEffect.set(self.addStatusEffect(StatusEffectType.DISABLE_ACTION, CharacterActions.SPECIAL_NEUTRAL));
+}
+
+function enableNeutralSpecial(){
+    if (lastDisabledNSpecStatusEffect.get() != null) {
+        self.removeStatusEffect(StatusEffectType.DISABLE_ACTION, lastDisabledNSpecStatusEffect.get().id);
+        lastDisabledNSpecStatusEffect.set(null);
+    }
+}
+
+//-----------SIDE SPECIAL-----------
+
+//shield hit slowdown 
+function sideSpecialShieldHit(){
+	self.setXSpeed(-4);
+}
+
+//jump cancel hit confirm
+function sideSpecialHit(){
+	self.updateAnimationStats({allowJump: true});
+}
+
+//-----------DOWN SPECIAL-----------
+
+function specialDown_gotoEndlag(){
+    if(self.isOnFloor()){
+        self.playAnimation("special_down_endlag");
+    } else {
+        self.playAnimation("special_down_air_endlag");
+    }
+}
+
+function specialDown_resetTimer(){
+    self.removeTimer(downSpecialLoopCheckTimer.get());
+    downSpecialLoopCheckTimer.set(-1);
+}
+
+function specialDown_checkLoop(){
+    var heldControls:ControlsObject = self.getHeldControls();
+
+    if(!heldControls.SPECIAL){
+        specialDown_resetTimer();
+        specialDown_gotoEndlag();
+    }
+}
+
+function specialDown_gotoLoop(){
+    if(self.isOnFloor()){
+        self.playAnimation("special_down_loop");
+    } else {
+        self.playAnimation("special_down_air_loop");
+    }
+
+    //failsafe
+    specialDown_resetTimer();
+
+    // start checking inputs
+    downSpecialLoopCheckTimer.set(self.addTimer(1, -1, specialDown_checkLoop));    
+}
+
+
+// ── Pacman-specific overrides (ported from SSF2 PacManExt.as) ──
+
+// Overrides the base template initialize()
+// NOTE: base template initialize() sets up LINK_FRAMES listener; preserve that if needed.
+function initialize() {
+
+         // (removed SSF2 debug print)
+         this.fruit = 0;
+         this.dotCount = 0;
+         this.dotArray = new Array();
+         // TODO: setGlobalVariable("hasHydrant", true);
+      
+}
+
+// Overrides the base template update()
+function update() {
+
+         if(this.hydrantCD > 0)
+         {
+            --this.hydrantCD;
+            if(this.hydrantCD <= 0)
+            {
+               self.resetHydrant();
+            }
+         }
+      
+}
+
+function resetHydrant(param1:* = null) {
+
+         // TODO: setGlobalVariable("hasHydrant", true);
+      
+}
+
+function killAllDots() {
+
+         var _local1:Float = 0;
+         while(_local1 < this.dotCount)
+         {
+            if((this.dotArray[_local1] != null && this.dotArray[_local1] != false) && !this.dotArray[_local1].isDisposed())
+            {
+               this.dotArray[_local1].destroy();
+            }
+            _local1++;
+         }
+         this.dotCount = 0;
+      
+}
+
+function removeLocked() {
+
+         this.destroyTimer(this.checkLocked);
+         if(this.attachedMovieClip != null && this.attachedMovieClip.currentFrameLabel != "die" && this.canRemove)
+         {
+            this.attachedMovieClip.gotoAndStop("die");
+         }
+         this.canRemove = false;
+      
+}
+
+function checkLocked() {
+
+         if(self.getMC().currentFrameLabel != this.attachedFrame && this.canAnimRemove || self.getMC().currentFrameLabel == "hurt" && this.canAnimRemove)
+         {
+            self.removeLocked();
+         }
+         else
+         {
+            this.attachedMovieClip.x = self.getX() + this.attachX;
+            this.attachedMovieClip.y = self.getY() + this.attachY;
+         }
+      
+}
+
+function lockEffect(param1:String, param2:Float = 0, param3:Float = 0, param4:Bool = true, param5:Bool = true) {
+
+         this.canAnimRemove = param5;
+         this.destroyTimer(this.checkLocked);
+         this.attachedFrame = self.getMC().currentFrameLabel;
+         this.attachedMovieClip = this.attachEffect(param1,{
+            "x":param2,
+            "y":param3,
+            "flip":param4
+         });
+         this.attachX = param2;
+         this.attachY = param3;
+         self.addTimer(1, -1, this.checkLocked,{"persistent":true});
+         this.canRemove = true;
+         return this.attachedMovieClip;
+      
+}
+
+function jumpToContinue(param1:* = null) {
+
+         self.removeEventListener(SSF2Event.GROUND_TOUCH,this.jumpToContinue);
+         self.updateAttackStats({
+            "allowControl":false,
+            "cancelWhenAirborne":true
+         });
+         self.playFrame("continue");
+      
+}
+
+function applyColourTo(param1:MovieClip) {
+
+         this.colTrans = param1.transform.colorTransform;
+         this.colTrans.color = uint("0x" + getPaletteSwapData().paletteSwap.replacements[1].toString(16).slice(2));
+         param1.transform.colorTransform = this.colTrans;
+      
+}

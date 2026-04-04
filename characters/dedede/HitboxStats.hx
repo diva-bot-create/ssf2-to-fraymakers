@@ -1,0 +1,134 @@
+// HitboxStats for Dedede (converted from SSF2)
+// Source: JPEXS-decompiled dedede.ssf
+//
+// SSF2 → Fraymakers stat mapping:
+//   damage      → damage        (percent dealt)
+//   power       → baseKnockback (base force, weight-independent)
+//   weightKB    → baseKnockback (alt: weight-based base KB)
+//   kbConstant  → knockbackGrowth (scales with damage%)
+//   direction   → angle
+//   hitStun     → hitstop       (frames target is frozen)
+//   selfHitStun → selfHitstop
+//   hitLag      → hitstun       (frames unable to act after knockback)
+{
+
+	//LIGHT ATTACKS  
+	jab1: {  // SSF2: a
+		hitbox0: { damage: 4, angle: 75, baseKnockback: 10, knockbackGrowth: 40, hitstop: 3, selfHitstop: 1, hitstun: -1.1  // SSF2 hitLag multiplier },
+		hitbox1: { damage: 4, angle: 75, baseKnockback: 10, knockbackGrowth: 40, hitstop: 3, selfHitstop: 1, hitstun: -1.1  // SSF2 hitLag multiplier }
+	},
+
+	//TILT ATTACKS  
+	tilt_forward: {  // SSF2: a_forward_tilt
+		hitbox0: { damage: 2, angle: 20, baseKnockback: 70, knockbackGrowth: 0, hitstop: 1, selfHitstop: 1 },
+		hitbox1: { damage: 2, angle: 20, baseKnockback: 45, knockbackGrowth: 0, hitstop: 1, selfHitstop: 1 },
+		hitbox2: { damage: 2, angle: 120, baseKnockback: 30, knockbackGrowth: 0, hitstop: 1, selfHitstop: 1 },
+		hitbox3: { damage: 2, angle: 210, baseKnockback: 30, knockbackGrowth: 0, hitstop: 1, selfHitstop: 1 }
+	},
+	tilt_up: {  // SSF2: a_up_tilt
+		hitbox0: { damage: 12, angle: 96, baseKnockback: 50, knockbackGrowth: 80, hitstop: 6, selfHitstop: 3 },
+		hitbox1: { damage: 10, angle: 96, baseKnockback: 50, knockbackGrowth: 80, hitstop: 6, selfHitstop: 3 },
+		hitbox2: { damage: 10, angle: 96, baseKnockback: 50, knockbackGrowth: 80, hitstop: 6, selfHitstop: 3 }
+	},
+	tilt_down: {  // SSF2: crouch_attack
+		hitbox0: { damage: 10, angle: 45, baseKnockback: 60, knockbackGrowth: 75, hitstop: 3, selfHitstop: 1 }
+	},
+
+	//STRONG ATTACKS  
+	strong_forward_attack: {  // SSF2: a_forwardsmash
+		hitbox0: { damage: 18, angle: 40, baseKnockback: 40, knockbackGrowth: 95, hitstop: 10, selfHitstop: 8 },
+		hitbox1: { damage: 18, angle: 40, baseKnockback: 40, knockbackGrowth: 95, hitstop: 10, selfHitstop: 8 },
+		hitbox2: { damage: 18, angle: 40, baseKnockback: 40, knockbackGrowth: 95, hitstop: 10, selfHitstop: 8 }
+	},
+	strong_up_attack: {  // SSF2: a_up
+		hitbox0: { damage: 14, angle: 80, baseKnockback: 40, knockbackGrowth: 96, hitstop: 8, selfHitstop: 6 },
+		hitbox1: { damage: 14, angle: 80, baseKnockback: 40, knockbackGrowth: 96, hitstop: 8, selfHitstop: 6 },
+		hitbox2: { damage: 14, angle: 80, baseKnockback: 40, knockbackGrowth: 96, hitstop: 8, selfHitstop: 6 },
+		hitbox3: { damage: 9, angle: 80, baseKnockback: 40, knockbackGrowth: 96, hitstop: 8, selfHitstop: 6 }
+	},
+	strong_down_attack: {  // SSF2: a_down
+		hitbox0: { damage: 14, angle: 40, baseKnockback: 60, knockbackGrowth: 80, hitstop: 6, selfHitstop: 4 },
+		hitbox1: { damage: 13, angle: 30, baseKnockback: 60, knockbackGrowth: 80, hitstop: 9, selfHitstop: 7 }
+	},
+
+	//AERIAL ATTACKS  
+	aerial_neutral: {  // SSF2: a_air
+		hitbox0: { damage: 12, angle: 80, baseKnockback: 40, knockbackGrowth: 95, hitstop: 4, selfHitstop: 2, hitstun: -1.15  // SSF2 hitLag multiplier },
+		hitbox1: { damage: 12, angle: 80, baseKnockback: 40, knockbackGrowth: 95, hitstop: 4, selfHitstop: 2, hitstun: -1.15  // SSF2 hitLag multiplier }
+	},
+	aerial_forward: {  // SSF2: a_air_forward
+		hitbox0: { damage: 16, angle: 45, baseKnockback: 30, knockbackGrowth: 100, hitstop: 7, selfHitstop: 6 },
+		hitbox1: { damage: 16, angle: 45, baseKnockback: 30, knockbackGrowth: 100, hitstop: 7, selfHitstop: 6 }
+	},
+	aerial_back: {  // SSF2: a_air_backward
+		hitbox0: { damage: 12, angle: 35, baseKnockback: 35, knockbackGrowth: 95, hitstop: 5, selfHitstop: 4 },
+		hitbox1: { damage: 12, angle: 35, baseKnockback: 35, knockbackGrowth: 95, hitstop: 5, selfHitstop: 4 },
+		hitbox2: { damage: 13, angle: 35, baseKnockback: 35, knockbackGrowth: 95, hitstop: 6, selfHitstop: 5 }
+	},
+	aerial_up: {  // SSF2: a_air_up
+		hitbox0: { damage: 2, angle: 90, baseKnockback: 0 /*TODO*/, knockbackGrowth: 0, hitstop: 0, selfHitstop: 2, hitstun: 10  // SSF2 hitLag multiplier },
+		hitbox1: { damage: 2, angle: 90, baseKnockback: 0 /*TODO*/, knockbackGrowth: 0, hitstop: 0, selfHitstop: 2, hitstun: 10  // SSF2 hitLag multiplier }
+	},
+	aerial_down: {  // SSF2: a_air_down
+		hitbox0: { damage: 15, angle: 270, baseKnockback: 30, knockbackGrowth: 100, hitstop: 6, selfHitstop: 5 },
+		hitbox1: { damage: 15, angle: 270, baseKnockback: 30, knockbackGrowth: 100, hitstop: 6, selfHitstop: 5 }
+	},
+
+	//SPECIAL ATTACKS  
+	special_neutral: {  // SSF2: b
+		hitbox0: { damage: 0, angle: 150, baseKnockback: 60, knockbackGrowth: 9, hitstop: 4, selfHitstop: 0 }
+	},
+	special_neutral_air: {  // SSF2: b_air
+		hitbox0: { damage: 0, angle: 150, baseKnockback: 60, knockbackGrowth: 9, hitstop: 4, selfHitstop: 0 }
+	},
+	special_side: {  // SSF2: b_forward
+		hitbox0: { damage: 9, angle: 40, baseKnockback: 90, knockbackGrowth: 30, hitstop: 2, selfHitstop: 1, hitstun: -1.22  // SSF2 hitLag multiplier }
+	},
+	special_side_air: {  // SSF2: b_forward_air
+		hitbox0: { damage: 9, angle: 40, baseKnockback: 90, knockbackGrowth: 30, hitstop: 2, selfHitstop: 1, hitstun: -1.22  // SSF2 hitLag multiplier }
+	},
+	special_up: {  // SSF2: b_up
+		hitbox0: { damage: 15, angle: 270, baseKnockback: 90, knockbackGrowth: 90, hitstop: 3, selfHitstop: 3, hitstun: -0.8  // SSF2 hitLag multiplier },
+		hitbox1: { damage: 12, angle: 50, baseKnockback: 70, knockbackGrowth: 50, hitstop: 3, selfHitstop: 3, hitstun: -0.8  // SSF2 hitLag multiplier },
+		hitbox2: { damage: 12, angle: 50, baseKnockback: 70, knockbackGrowth: 50, hitstop: 3, selfHitstop: 3, hitstun: -0.8  // SSF2 hitLag multiplier }
+	},
+	special_up_air: {  // SSF2: b_up_air
+		hitbox0: { damage: 15, angle: 270, baseKnockback: 90, knockbackGrowth: 90, hitstop: 3, selfHitstop: 3, hitstun: -0.8  // SSF2 hitLag multiplier },
+		hitbox1: { damage: 12, angle: 50, baseKnockback: 70, knockbackGrowth: 50, hitstop: 3, selfHitstop: 3, hitstun: -0.8  // SSF2 hitLag multiplier },
+		hitbox2: { damage: 12, angle: 50, baseKnockback: 70, knockbackGrowth: 50, hitstop: 3, selfHitstop: 3, hitstun: -0.8  // SSF2 hitLag multiplier }
+	},
+	special_down: {  // SSF2: b_down
+		hitbox0: { damage: 120, angle: 45, baseKnockback: 60, knockbackGrowth: 50, hitstop: 3, selfHitstop: 3 },
+		hitbox1: { damage: 400, angle: 45, baseKnockback: 60, knockbackGrowth: 50, hitstop: 6, selfHitstop: 6 }
+	},
+	special_down_air: {  // SSF2: b_down_air
+		hitbox0: { damage: 110, angle: 45, baseKnockback: 60, knockbackGrowth: 50, hitstop: 2, selfHitstop: 2 },
+		hitbox1: { damage: 320, angle: 45, baseKnockback: 60, knockbackGrowth: 50, hitstop: 5, selfHitstop: 5 }
+	},
+
+	//THROWS  
+	throw_up: {  // SSF2: throw_up
+		hitbox0: { damage: 3, angle: 45, baseKnockback: 60, knockbackGrowth: 100, hitstop: -1, selfHitstop: -1 },
+		hitbox1: { damage: 6, angle: 85, baseKnockback: 60, knockbackGrowth: 80, hitstop: 2, selfHitstop: 1, hitstun: -1  // SSF2 hitLag multiplier }
+	},
+	throw_down: {  // SSF2: throw_down
+		hitbox0: { damage: 6, angle: 80, baseKnockback: 65, knockbackGrowth: 75, hitstop: 4, selfHitstop: 3 }
+	},
+	throw_forward: {  // SSF2: throw_forward
+		hitbox0: { damage: 3, angle: 45, baseKnockback: 60, knockbackGrowth: 100, hitstop: -1, selfHitstop: -1 },
+		hitbox1: { damage: 8, angle: 50, baseKnockback: 75, knockbackGrowth: 85, hitstop: 2, selfHitstop: 1, hitstun: -1.12  // SSF2 hitLag multiplier }
+	},
+	throw_back: {  // SSF2: throw_back
+		hitbox0: { damage: 3, angle: 45, baseKnockback: 40, knockbackGrowth: 90, hitstop: -1, selfHitstop: -1 },
+		hitbox1: { damage: 9, angle: 120, baseKnockback: 40, knockbackGrowth: 80, hitstop: 3, selfHitstop: 2, hitstun: -1  // SSF2 hitLag multiplier }
+	},
+
+	//MISC  
+	getup_attack: {  // SSF2: getup_attack
+		hitbox0: { damage: 6, angle: 25, baseKnockback: 100, knockbackGrowth: 110, hitstop: 3, selfHitstop: 1 }
+	},
+	ledge_attack: {  // SSF2: ledge_attack
+		hitbox0: { damage: 9, angle: 45, baseKnockback: 75, knockbackGrowth: 25, hitstop: 2, selfHitstop: 1 }
+	},
+
+}
