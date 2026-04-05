@@ -9,6 +9,7 @@ use std::path::Path;
 use crate::extractor::{CharacterData, Attack, Hitbox, CharacterStats};
 use crate::entity_gen;
 use crate::fraytools_project;
+use crate::palette_gen;
 
 pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult) -> Result<()> {
     let char_id = char_name.to_lowercase().replace(" ", "");
@@ -47,6 +48,27 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
         meta_count += 1;
     }
     log::info!("Generated {} .meta sidecar files", meta_count);
+
+    // ── Palette / costumes ──────────────────────────────────────────────────
+    match palette_gen::generate_palettes_and_remap(&char_id, char_name, &sprites_dir) {
+        Ok(pal) => {
+            // costumes.palettes + .meta
+            fs::write(char_dir.join("library/costumes.palettes"), &pal.palettes_json)?;
+            fs::write(char_dir.join("library/costumes.palettes.meta"), &pal.palettes_meta_json)?;
+            // palette_preview.png + .meta (reference image for the R/G map shader)
+            fs::write(sprites_dir.join("palette_preview.png"), &pal.preview_png)?;
+            fs::write(sprites_dir.join("palette_preview.png.meta"), &pal.preview_meta_json)?;
+            // Write the entity with the paletteMap filled in
+            let entity_json = entity_gen::generate_entity_with_palette(
+                data, &char_id, sprite_boxes, img_result,
+                &pal.collection_guid, &pal.base_map_id,
+            );
+            fs::write(entities_dir.join("Character.entity"), entity_json)?;
+        }
+        Err(e) => {
+            log::warn!("palette_gen failed (sprites will have no palette): {}", e);
+        }
+    }
 
     // Stats summary for debugging
     let stats_json = serde_json::json!({

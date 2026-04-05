@@ -488,6 +488,24 @@ pub fn generate_entity(
     serde_json::to_string_pretty(&entity).unwrap_or_else(|_| "{}".to_string())
 }
 
+/// Generate entity with paletteMap filled in
+pub fn generate_entity_with_palette(
+    data: &CharacterData,
+    char_id: &str,
+    sprite_boxes: &BTreeMap<String, AnimationBoxData>,
+    img_result: &ImageExtractionResult,
+    palette_collection_guid: &str,
+    palette_map_id: &str,
+) -> String {
+    let json_str = generate_entity(data, char_id, sprite_boxes, img_result);
+    let mut entity: serde_json::Value = serde_json::from_str(&json_str).unwrap_or(serde_json::json!({}));
+    entity["paletteMap"] = serde_json::json!({
+        "paletteCollection": palette_collection_guid,
+        "paletteMap": palette_map_id
+    });
+    serde_json::to_string_pretty(&entity).unwrap_or(json_str)
+}
+
 /// Get image GUIDs for .meta file generation
 pub fn get_image_meta_guids(
     char_id: &str,
