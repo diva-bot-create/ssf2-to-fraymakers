@@ -130,9 +130,7 @@ function removeAllEffects(arg0) {
 	self.effects = new Array();
 	if (self.clearListener) {
 		if (self.hasEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects)) {
-			if (self.hasEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects)) {
-				self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
-			}
+			self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
 			return;
 		}
 	}

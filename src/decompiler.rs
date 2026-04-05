@@ -1470,6 +1470,7 @@ fn decompile_closure(method_idx: u32, abc: &AbcFile) -> Expr {
     let stmts: Vec<Stmt> = stmts.into_iter().filter(|s| {
         !matches!(s, Stmt::VarDecl(0, Expr::This))
     }).collect();
+    let stmts = collapse_duplicate_ifs(stmts);
 
     // Render as Haxe function literal
     let body_str = render_stmts(&stmts, 1);
@@ -1484,6 +1485,33 @@ fn decompile_closure(method_idx: u32, abc: &AbcFile) -> Expr {
         format!("function({}) {{\n{}\t}}", params.join(", "), body_str)
     };
     Expr::Closure(literal)
+}
+
+/// Post-process AST to collapse redundant duplicate-condition if-blocks.
+/// Pattern: If(X, [If(X, body, []), ...tail], []) -> If(X, [body..., tail...], [])
+/// This arises from dup+iftrue carry patterns producing double-guarded blocks.
+fn collapse_duplicate_ifs(stmts: Vec<Stmt>) -> Vec<Stmt> {
+    stmts.into_iter().map(|stmt| match stmt {
+        Stmt::If(cond, mut then_b, else_b) => {
+            // Recurse first
+            then_b = collapse_duplicate_ifs(then_b);
+            let else_b = collapse_duplicate_ifs(else_b);
+            // Check if then_b starts with If(same_cond, inner_body, [])
+            if else_b.is_empty() && !then_b.is_empty() {
+                if let Stmt::If(inner_cond, inner_body, inner_else) = then_b[0].clone() {
+                    if inner_else.is_empty() && inner_cond.render() == cond.render() {
+                        // Collapse: hoist inner_body into then_b, dropping the duplicate guard
+                        let mut new_then = inner_body;
+                        new_then.extend(then_b.into_iter().skip(1));
+                        return Stmt::If(cond, new_then, vec![]);
+                    }
+                }
+            }
+            Stmt::If(cond, then_b, else_b)
+        }
+        Stmt::While(cond, body) => Stmt::While(cond, collapse_duplicate_ifs(body)),
+        other => other,
+    }).collect()
 }
 
 pub fn decompile_method(
@@ -1511,6 +1539,7 @@ pub fn decompile_method(
     let stmts: Vec<Stmt> = stmts.into_iter().filter(|s| {
         !matches!(s, Stmt::VarDecl(0, Expr::This))
     }).collect();
+    let stmts = collapse_duplicate_ifs(stmts);
 
     let param_str = params.join(", ");
     let mut out = format!("function {}({}) {{\n", name, param_str);
