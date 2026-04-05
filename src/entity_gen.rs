@@ -1,14 +1,17 @@
 /// Fraymakers .entity file generator
 ///
-/// Generates the JSON entity file used by FrayTools for sprite animation, layering,
-/// and collision data. Structure based on kung-fu-man reference character.
+/// Generates the JSON entity file compatible with FrayTools.
+/// Format based on the official Fraymakers character template:
+/// https://github.com/Fraymakers/character-template
 ///
-/// Layer order per animation (bottom→top in FrayTools):
-///   1. LABEL         — animation name keyframe
-///   2. FRAME_SCRIPT  — Haxe code per frame
-///   3. COLLISION_BODY — the main body/hurtbox (static per animation)
-///   4. COLLISION_BOX* — per-frame hitboxes/hurtboxes from SSF2 sprites
-///   5. IMAGE          — sprite image reference
+/// Key differences from our previous format:
+/// - IMAGE symbols use `imageAsset` (GUID ref to .meta file) not `path`
+/// - COLLISION_BOX keyframes reference symbol $ids (geometry in symbols)
+/// - COLLISION_BODY keyframes reference symbol $ids
+/// - All keyframes have `tweened`, `tweenType`, `pluginMetadata`
+/// - Layers have `hidden`, `locked`, `pluginMetadata` (with box type metadata)
+/// - Entity top-level has `pluginMetadata`, `plugins`, `version`, etc.
+/// - Each PNG gets a .meta sidecar file with a GUID
 
 use crate::extractor::CharacterData;
 use crate::sprite_parser::{AnimationBoxData, BoxType};
@@ -43,19 +46,47 @@ fn uuid(char_id: &str, context: &str) -> String {
     det_uuid(&format!("{}::{}", char_id, context))
 }
 
-// ─── Box type → Fraymakers color ─────────────────────────────────────────────
+// ─── Box type → Fraymakers metadata type string ──────────────────────────────
+
+fn box_type_to_fm(bt: BoxType) -> &'static str {
+    match bt {
+        BoxType::Hitbox     => "HIT_BOX",
+        BoxType::Hurtbox    => "HURT_BOX",
+        BoxType::GrabBox    => "GRAB_BOX",
+        BoxType::ItemBox    => "HURT_BOX",  // no item box type in FM, treat as hurtbox
+        BoxType::ShieldBox  => "REFLECT_BOX",
+        BoxType::ReflectBox => "REFLECT_BOX",
+        BoxType::AbsorbBox  => "COUNTER_BOX",
+        BoxType::LedgeBox   => "LEDGE_GRAB_BOX",
+    }
+}
 
 fn box_color(bt: BoxType) -> &'static str {
     match bt {
-        BoxType::Hitbox    => "0xFF0000",  // red — active attack
-        BoxType::Hurtbox   => "0x00FF00",  // green — vulnerable
-        BoxType::GrabBox   => "0xFF8800",  // orange — grab range
-        BoxType::ItemBox   => "0xFFFF00",  // yellow — item pickup
-        BoxType::ShieldBox => "0x0088FF",  // blue — shield
-        BoxType::ReflectBox => "0xFF00FF", // magenta — reflector
-        BoxType::AbsorbBox => "0x00FFFF",  // cyan — absorb
-        BoxType::LedgeBox  => "0x884400",  // brown — ledge grab
+        BoxType::Hitbox     => "0xff0000",
+        BoxType::Hurtbox    => "0xfcba03",
+        BoxType::GrabBox    => "0xff00ff",
+        BoxType::ItemBox    => "0xffff00",
+        BoxType::ShieldBox  => "0x48f748",
+        BoxType::ReflectBox => "0x48f748",
+        BoxType::AbsorbBox  => "0x42ecff",
+        BoxType::LedgeBox   => "0xbababa",
     }
+}
+
+// ─── Meta file generation ─────────────────────────────────────────────────────
+
+/// Generate .meta JSON sidecar for a PNG image asset
+pub fn generate_meta(guid: &str) -> String {
+    serde_json::to_string_pretty(&json!({
+        "export": false,
+        "guid": guid,
+        "id": "",
+        "pluginMetadata": {},
+        "plugins": [],
+        "tags": [],
+        "version": 2
+    })).unwrap()
 }
 
 // ─── Main generator ───────────────────────────────────────────────────────────
@@ -68,134 +99,165 @@ pub fn generate_entity(
 ) -> String {
     let mut keyframes: Vec<Value> = Vec::new();
     let mut layers: Vec<Value> = Vec::new();
+    let mut symbols: Vec<Value> = Vec::new();
     let mut animations: Vec<Value> = Vec::new();
 
-    // Build frame script map: fm_anim_name -> code
-    // Frame scripts: SSF2 frame methods are state dispatchers; map them by the xframe value
-    let mut frame_script_map: BTreeMap<String, String> = BTreeMap::new();
-    for script in &data.scripts {
-        if !script.is_ext_method {
-            // script.name is like "frame1"; look up the xframe → SSF2 name → FM name mapping
-            // We stored xframe_map in CharacterData already; the animations BTreeMap uses FM names
-            // For now: emit the full frame script code as a reference comment block
-            frame_script_map.insert(script.name.clone(), script.code.clone());
-        }
+    // ── Build image asset GUID map (symbol_name → meta GUID) ──────────────────
+    // Each image gets a deterministic GUID for its .meta file
+    let mut image_guids: BTreeMap<String, String> = BTreeMap::new();
+    for (_, img) in &img_result.images {
+        let meta_guid = uuid(char_id, &format!("meta_{}", img.symbol_name));
+        image_guids.insert(img.symbol_name.clone(), meta_guid);
     }
 
-    // Collect all unique box instance names across all animations, to build object declarations
-    let mut all_box_instances: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for anim_data in sprite_boxes.values() {
-        for boxes in anim_data.frames.values() {
-            for b in boxes {
-                all_box_instances.insert(b.instance_name.clone());
-            }
-        }
+    // ── Build IMAGE symbols ───────────────────────────────────────────────────
+    for (_, img) in &img_result.images {
+        let sym_id = uuid(char_id, &format!("sym_{}", img.symbol_name));
+        let meta_guid = image_guids.get(&img.symbol_name).cloned().unwrap_or_default();
+        symbols.push(json!({
+            "$id": sym_id,
+            "alpha": 1,
+            "imageAsset": meta_guid,
+            "pivotX": 0,
+            "pivotY": 0,
+            "pluginMetadata": {},
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "type": "IMAGE",
+            "x": 0,
+            "y": 0
+        }));
     }
+
+    // ── Build frame script lookup ─────────────────────────────────────────────
+    let _frame_script_map: BTreeMap<String, String> = data.scripts.iter()
+        .filter(|s| !s.is_ext_method)
+        .map(|s| (s.name.clone(), s.code.clone()))
+        .collect();
 
     for (anim_name, anim_info) in &data.animations {
-        // Prefer frame count from sprite data (actual DefineSprite frames) over AnimationInfo
         let frame_count = sprite_boxes.get(anim_name)
             .map(|sb| sb.total_frames as u32)
             .unwrap_or((anim_info.frames as u32).max(1))
             .max(1);
         let anim_id = uuid(char_id, &format!("anim_{}", anim_name));
-
         let mut anim_layer_ids: Vec<String> = Vec::new();
 
         // ── 1. LABEL layer ────────────────────────────────────────────────────
-        let label_layer_id = uuid(char_id, &format!("layer_label_{}", anim_name));
-        let label_kf_id = uuid(char_id, &format!("kf_label_{}", anim_name));
-        keyframes.push(json!({
-            "$id": label_kf_id,
-            "type": "LABEL",
-            "length": 1,
-            "name": anim_name,
-            "pluginMetadata": {}
-        }));
-        layers.push(json!({
-            "$id": label_layer_id,
-            "name": "Labels",
-            "type": "LABEL",
-            "keyframes": [label_kf_id],
-            "hidden": false,
-            "locked": false,
-            "pluginMetadata": {}
-        }));
-        anim_layer_ids.push(label_layer_id);
+        {
+            let layer_id = uuid(char_id, &format!("layer_label_{}", anim_name));
+            let kf_id = uuid(char_id, &format!("kf_label_{}", anim_name));
+            keyframes.push(json!({
+                "$id": kf_id,
+                "type": "LABEL",
+                "length": 1,
+                "name": anim_name,
+                "pluginMetadata": {}
+            }));
+            layers.push(json!({
+                "$id": layer_id,
+                "name": "Labels",
+                "type": "LABEL",
+                "keyframes": [kf_id],
+                "hidden": false,
+                "locked": false,
+                "pluginMetadata": {}
+            }));
+            anim_layer_ids.push(layer_id);
+        }
 
         // ── 2. FRAME_SCRIPT layer ─────────────────────────────────────────────
-        let script_layer_id = uuid(char_id, &format!("layer_script_{}", anim_name));
-        let script_kf_id = uuid(char_id, &format!("kf_script_{}", anim_name));
-        // Use the ssf2_to_fm_anim reverse map to find the matching frame script
-        let script_code = {
-            // Find the SSF2 name for this FM animation
-            let ssf2_name = data.ssf2_to_fm_anim.iter()
-                .find(|(_, fm)| fm.as_str() == anim_name.as_str())
-                .map(|(ssf2, _)| ssf2.clone());
-            // Find a matching frame script by iterating xframe_map
-            let mut code = String::new();
-            if let Some(ssf2) = ssf2_name {
-                // Look for a frame script whose code contains self.xframe = "<ssf2>"
-                let pattern = format!("xframe = \"{}\"", ssf2);
-                for script in &data.scripts {
-                    if !script.is_ext_method && script.code.contains(&pattern) {
-                        code = script.code.clone();
-                        break;
+        {
+            let layer_id = uuid(char_id, &format!("layer_script_{}", anim_name));
+            let kf_id = uuid(char_id, &format!("kf_script_{}", anim_name));
+            let script_code = {
+                let ssf2_name = data.ssf2_to_fm_anim.iter()
+                    .find(|(_, fm)| fm.as_str() == anim_name.as_str())
+                    .map(|(ssf2, _)| ssf2.clone());
+                let mut code = String::new();
+                if let Some(ssf2) = ssf2_name {
+                    let pattern = format!("xframe = \"{}\"", ssf2);
+                    for script in &data.scripts {
+                        if !script.is_ext_method && script.code.contains(&pattern) {
+                            code = script.code.clone();
+                            break;
+                        }
                     }
                 }
-            }
-            code
-        };
-        keyframes.push(json!({
-            "$id": script_kf_id,
-            "type": "FRAME_SCRIPT",
-            "length": frame_count,
-            "code": script_code,
-            "pluginMetadata": {}
-        }));
-        layers.push(json!({
-            "$id": script_layer_id,
-            "name": "Scripts",
-            "type": "FRAME_SCRIPT",
-            "keyframes": [script_kf_id],
-            "hidden": false,
-            "locked": false,
-            "language": "",
-            "pluginMetadata": {}
-        }));
-        anim_layer_ids.push(script_layer_id);
+                code
+            };
+            keyframes.push(json!({
+                "$id": kf_id,
+                "type": "FRAME_SCRIPT",
+                "length": frame_count,
+                "code": script_code,
+                "pluginMetadata": {}
+            }));
+            layers.push(json!({
+                "$id": layer_id,
+                "name": "Scripts",
+                "type": "FRAME_SCRIPT",
+                "keyframes": [kf_id],
+                "hidden": false,
+                "locked": false,
+                "language": "",
+                "pluginMetadata": {}
+            }));
+            anim_layer_ids.push(layer_id);
+        }
 
-        // ── 3. COLLISION_BODY layer (main body / standing hurtbox) ────────────
-        let body_layer_id = uuid(char_id, &format!("layer_body_{}", anim_name));
-        let body_kf_id = uuid(char_id, &format!("kf_body_{}", anim_name));
-        // Default body size — will be overridden per-character once we have sprite sheet data
-        keyframes.push(json!({
-            "$id": body_kf_id,
-            "type": "COLLISION_BODY",
-            "length": frame_count,
-            "x": -30,
-            "y": -80,
-            "width": 60,
-            "height": 80,
-            "angle": 0,
-            "color": "0x00FF00",
-            "flipX": false,
-            "pluginMetadata": {}
-        }));
-        layers.push(json!({
-            "$id": body_layer_id,
-            "name": "Hurtbox",
-            "type": "COLLISION_BODY",
-            "keyframes": [body_kf_id],
-            "hidden": false,
-            "locked": false,
-            "pluginMetadata": {}
-        }));
-        anim_layer_ids.push(body_layer_id);
+        // ── 3. COLLISION_BODY layer ───────────────────────────────────────────
+        {
+            let layer_id = uuid(char_id, &format!("layer_body_{}", anim_name));
+            let kf_id = uuid(char_id, &format!("kf_body_{}", anim_name));
+            let sym_id = uuid(char_id, &format!("sym_body_{}", anim_name));
 
-        // ── 4. Per-box-type COLLISION_BOX layers from SSF2 sprite data ────────
+            // Create a COLLISION_BODY symbol
+            symbols.push(json!({
+                "$id": sym_id,
+                "alpha": Value::Null,
+                "color": Value::Null,
+                "foot": 0,
+                "head": 86,
+                "hipWidth": 40,
+                "hipXOffset": 0,
+                "hipYOffset": 0,
+                "pluginMetadata": {},
+                "type": "COLLISION_BODY",
+                "x": 0
+            }));
+
+            keyframes.push(json!({
+                "$id": kf_id,
+                "type": "COLLISION_BODY",
+                "length": frame_count,
+                "symbol": sym_id,
+                "tweened": false,
+                "tweenType": "LINEAR",
+                "pluginMetadata": {}
+            }));
+            layers.push(json!({
+                "$id": layer_id,
+                "name": "Body",
+                "type": "COLLISION_BODY",
+                "keyframes": [kf_id],
+                "hidden": false,
+                "locked": false,
+                "defaultAlpha": 0.5,
+                "defaultColor": "0xffa500",
+                "defaultFoot": 0,
+                "defaultHead": 86,
+                "defaultHipWidth": 40,
+                "defaultHipXOffset": 0,
+                "defaultHipYOffset": 0,
+                "pluginMetadata": {}
+            }));
+            anim_layer_ids.push(layer_id);
+        }
+
+        // ── 4. COLLISION_BOX layers ───────────────────────────────────────────
         if let Some(anim_box_data) = sprite_boxes.get(anim_name) {
-            // Group all box instance names that appear in this animation
             let mut instances_in_anim: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
             for boxes in anim_box_data.frames.values() {
                 for b in boxes {
@@ -203,14 +265,12 @@ pub fn generate_entity(
                 }
             }
 
-            // One layer per instance name (e.g. "hitBox", "attackBox", "hitBox2")
-            for inst_name in &instances_in_anim {
-                let box_type = BoxType::from_instance_name(inst_name)
-                    .unwrap_or(BoxType::Hurtbox);
-                let layer_name = format!("{} ({})", inst_name, box_type.as_str());
+            for (box_idx, inst_name) in instances_in_anim.iter().enumerate() {
+                let box_type = BoxType::from_instance_name(inst_name).unwrap_or(BoxType::Hurtbox);
+                let fm_box_type = box_type_to_fm(box_type);
+                let color = box_color(box_type);
                 let layer_id = uuid(char_id, &format!("layer_box_{}_{}", anim_name, inst_name));
 
-                // Build per-frame keyframes for this instance
                 let mut box_kf_ids: Vec<String> = Vec::new();
                 let total = anim_box_data.total_frames as u32;
                 let mut frame_idx: u32 = 0;
@@ -226,13 +286,10 @@ pub fn generate_entity(
 
                 if active_frames.is_empty() { continue; }
 
-                // Build run-length keyframes: consecutive frames with same box = one keyframe
                 let mut i = 0;
                 while i < active_frames.len() {
                     let (start_frame, fb) = active_frames[i];
 
-                    // Find the run length — count consecutive frames where box is present
-                    // (frames without this box between start and next occurrence = implicit gap)
                     let next_frame = active_frames.get(i + 1).map(|(f, _)| *f);
                     let run_len = if let Some(nf) = next_frame {
                         (nf - start_frame) as u32
@@ -240,37 +297,48 @@ pub fn generate_entity(
                         total.saturating_sub(start_frame as u32).max(1)
                     };
 
-                    // If there's a gap before this frame, emit an empty/invisible keyframe
+                    // Gap keyframe (no symbol)
                     if start_frame as u32 > frame_idx {
                         let gap_kf_id = uuid(char_id, &format!("kf_box_gap_{}_{}_{}", anim_name, inst_name, frame_idx));
                         keyframes.push(json!({
                             "$id": gap_kf_id,
                             "type": "COLLISION_BOX",
                             "length": (start_frame as u32) - frame_idx,
-                            "collisionBoxes": [],
+                            "symbol": Value::Null,
+                            "tweened": false,
+                            "tweenType": "LINEAR",
                             "pluginMetadata": {}
                         }));
                         box_kf_ids.push(gap_kf_id);
                         frame_idx = start_frame as u32;
                     }
 
+                    // Create COLLISION_BOX symbol for this keyframe
+                    let sym_id = uuid(char_id, &format!("sym_box_{}_{}_{}", anim_name, inst_name, start_frame));
+                    let fm_y = -fb.y - fb.height;
+                    symbols.push(json!({
+                        "$id": sym_id,
+                        "alpha": 0.5,
+                        "color": color,
+                        "pivotX": round2(fb.width / 2.0),
+                        "pivotY": round2(fb.height / 2.0),
+                        "pluginMetadata": {},
+                        "rotation": 0,
+                        "scaleX": round2(fb.width),
+                        "scaleY": round2(fb.height),
+                        "type": "COLLISION_BOX",
+                        "x": round2(fb.x),
+                        "y": round2(fm_y)
+                    }));
+
                     let kf_id = uuid(char_id, &format!("kf_box_{}_{}_{}", anim_name, inst_name, start_frame));
-                    // SWF Y axis is down; Fraymakers Y axis is up — negate Y
-                    let fm_y = -fb.y - fb.height; // flip: top-left in FM = -(SSF2 top-left + height)
                     keyframes.push(json!({
                         "$id": kf_id,
                         "type": "COLLISION_BOX",
                         "length": run_len,
-                        "collisionBoxes": [{
-                            "x": round2(fb.x),
-                            "y": round2(fm_y),
-                            "width": round2(fb.width),
-                            "height": round2(fb.height),
-                            "angle": 0,
-                            "type": box_type.as_str(),
-                            "color": box_color(box_type),
-                            "flipX": false
-                        }],
+                        "symbol": sym_id,
+                        "tweened": false,
+                        "tweenType": "LINEAR",
                         "pluginMetadata": {}
                     }));
                     box_kf_ids.push(kf_id);
@@ -278,14 +346,16 @@ pub fn generate_entity(
                     i += 1;
                 }
 
-                // Fill any remaining frames with empty keyframe
+                // Tail gap
                 if frame_idx < total {
                     let tail_kf_id = uuid(char_id, &format!("kf_box_tail_{}_{}_{}", anim_name, inst_name, frame_idx));
                     keyframes.push(json!({
                         "$id": tail_kf_id,
                         "type": "COLLISION_BOX",
                         "length": total - frame_idx,
-                        "collisionBoxes": [],
+                        "symbol": Value::Null,
+                        "tweened": false,
+                        "tweenType": "LINEAR",
                         "pluginMetadata": {}
                     }));
                     box_kf_ids.push(tail_kf_id);
@@ -295,93 +365,95 @@ pub fn generate_entity(
 
                 layers.push(json!({
                     "$id": layer_id,
-                    "name": layer_name,
+                    "name": inst_name,
                     "type": "COLLISION_BOX",
                     "keyframes": box_kf_ids,
                     "hidden": false,
                     "locked": false,
-                    "pluginMetadata": {}
+                    "defaultAlpha": 0.5,
+                    "defaultColor": color,
+                    "pluginMetadata": {
+                        "com.fraymakers.FraymakersMetadata": {
+                            "collisionBoxType": fm_box_type,
+                            "index": box_idx
+                        }
+                    }
                 }));
                 anim_layer_ids.push(layer_id);
             }
         }
 
-        // ── 5. IMAGE layer — per-frame sprite references ──────────────────────
-        let img_layer_id = uuid(char_id, &format!("layer_image_{}", anim_name));
-        let mut img_kf_ids: Vec<String> = Vec::new();
+        // ── 5. IMAGE layer ────────────────────────────────────────────────────
+        {
+            let img_layer_id = uuid(char_id, &format!("layer_image_{}", anim_name));
+            let mut img_kf_ids: Vec<String> = Vec::new();
 
-        if let Some(anim_imgs) = img_result.anim_images.get(anim_name) {
-            // Build run-length IMAGE keyframes: consecutive frames with same symbol = one kf
-            let total = frame_count;
-            let mut f: u32 = 0;
-            while f < total {
-                let entry = anim_imgs.frames.get(&(f as u16));
-                let sym_name = entry.map(|(_, s)| s.as_str());
-                let shape_id = entry.map(|(id, _)| *id);
+            if let Some(anim_imgs) = img_result.anim_images.get(anim_name) {
+                let total = frame_count;
+                let mut f: u32 = 0;
+                while f < total {
+                    let entry = anim_imgs.frames.get(&(f as u16));
+                    let sym_name = entry.map(|(_, s)| s.as_str());
+                    let shape_id = entry.map(|(id, _)| *id);
 
-                // Find run length: how many consecutive frames have the same symbol?
-                let mut run = 1u32;
-                while f + run < total {
-                    let next_entry = anim_imgs.frames.get(&((f + run) as u16));
-                    let next_sym = next_entry.map(|(_, s)| s.as_str());
-                    if next_sym == sym_name { run += 1; } else { break; }
-                }
+                    let mut run = 1u32;
+                    while f + run < total {
+                        let next_entry = anim_imgs.frames.get(&((f + run) as u16));
+                        let next_sym = next_entry.map(|(_, s)| s.as_str());
+                        if next_sym == sym_name { run += 1; } else { break; }
+                    }
 
-                let kf_id = uuid(char_id, &format!("kf_image_{}_f{}", anim_name, f));
+                    let kf_id = uuid(char_id, &format!("kf_image_{}_f{}", anim_name, f));
 
-                // Resolve to a symbol ref for the IMAGE keyframe.
-                // Strategy: shape_id → bitmap (via shape_to_bitmap or direct) → symbol $id
-                //           OR symbol_name → matching image symbol
-                let symbol_ref = shape_id.and_then(|sid| {
-                    let bmp_id = img_result.shape_to_bitmap.get(&sid).copied().unwrap_or(sid);
-                    img_result.images.get(&bmp_id)
-                        .map(|img| uuid(char_id, &format!("sym_{}", img.symbol_name)))
-                }).or_else(|| {
-                    // Fallback: look up by symbol name from frames entry
-                    sym_name.and_then(|sn| {
-                        img_result.images.values()
-                            .find(|img| img.symbol_name == sn)
+                    let symbol_ref = shape_id.and_then(|sid| {
+                        let bmp_id = img_result.shape_to_bitmap.get(&sid).copied().unwrap_or(sid);
+                        img_result.images.get(&bmp_id)
                             .map(|img| uuid(char_id, &format!("sym_{}", img.symbol_name)))
-                    })
-                });
+                    }).or_else(|| {
+                        sym_name.and_then(|sn| {
+                            img_result.images.values()
+                                .find(|img| img.symbol_name == sn)
+                                .map(|img| uuid(char_id, &format!("sym_{}", img.symbol_name)))
+                        })
+                    });
 
+                    keyframes.push(json!({
+                        "$id": kf_id,
+                        "type": "IMAGE",
+                        "length": run,
+                        "symbol": symbol_ref.map(|s| Value::String(s)).unwrap_or(Value::Null),
+                        "tweened": false,
+                        "tweenType": "LINEAR",
+                        "pluginMetadata": {}
+                    }));
+                    img_kf_ids.push(kf_id);
+                    f += run;
+                }
+            } else {
+                let kf_id = uuid(char_id, &format!("kf_image_{}_f0", anim_name));
                 keyframes.push(json!({
                     "$id": kf_id,
                     "type": "IMAGE",
-                    "length": run,
-                    "symbol": symbol_ref.map(|s| Value::String(s)).unwrap_or(Value::Null),
+                    "length": frame_count,
+                    "symbol": Value::Null,
                     "tweened": false,
                     "tweenType": "LINEAR",
                     "pluginMetadata": {}
                 }));
                 img_kf_ids.push(kf_id);
-                f += run;
             }
-        } else {
-            // No image data — single null-symbol keyframe
-            let kf_id = uuid(char_id, &format!("kf_image_{}_f0", anim_name));
-            keyframes.push(json!({
-                "$id": kf_id,
+
+            layers.push(json!({
+                "$id": img_layer_id,
+                "name": "Image 0",
                 "type": "IMAGE",
-                "length": frame_count,
-                "symbol": Value::Null,
-                "tweened": false,
-                "tweenType": "LINEAR",
+                "keyframes": img_kf_ids,
+                "hidden": false,
+                "locked": false,
                 "pluginMetadata": {}
             }));
-            img_kf_ids.push(kf_id);
+            anim_layer_ids.push(img_layer_id);
         }
-
-        layers.push(json!({
-            "$id": img_layer_id,
-            "name": "Image",
-            "type": "IMAGE",
-            "keyframes": img_kf_ids,
-            "hidden": false,
-            "locked": false,
-            "pluginMetadata": {}
-        }));
-        anim_layer_ids.push(img_layer_id);
 
         animations.push(json!({
             "$id": anim_id,
@@ -391,45 +463,42 @@ pub fn generate_entity(
         }));
     }
 
-    // ── Object declarations (one per unique instance name found in all animations) ──
-    let mut objects: Vec<Value> = vec![
-        json!({ "$id": uuid(char_id, "obj_body"), "name": "body", "type": "COLLISION_BODY" }),
-    ];
-    for inst_name in &all_box_instances {
-        let bt = BoxType::from_instance_name(inst_name).unwrap_or(BoxType::Hurtbox);
-        objects.push(json!({
-            "$id": uuid(char_id, &format!("obj_{}", inst_name)),
-            "name": inst_name,
-            "type": "COLLISION_BOX",
-            "boxType": bt.as_str(),
-            "color": box_color(bt)
-        }));
-    }
-
-    // ── Symbol declarations for images ───────────────────────────────────────
-    let mut image_symbols: Vec<Value> = Vec::new();
-    for (_, img) in &img_result.images {
-        let sym_id = uuid(char_id, &format!("sym_{}", img.symbol_name));
-        image_symbols.push(json!({
-            "$id": sym_id,
-            "name": img.symbol_name,
-            "type": "IMAGE",
-            "path": img.png_path
-        }));
-    }
-
     let entity = json!({
         "animations": animations,
+        "export": true,
+        "guid": uuid(char_id, "entity_guid"),
+        "id": char_id,
         "keyframes": keyframes,
         "layers": layers,
-        "symbols": image_symbols,
-        "objects": objects,
-        "guid": uuid(char_id, "entity_guid"),
-        "id": "character",
-        "export": true
+        "paletteMap": Value::Null,
+        "pluginMetadata": {
+            "com.fraymakers.FraymakersMetadata": {
+                "objectType": "CHARACTER",
+                "version": "0.4.0"
+            }
+        },
+        "plugins": ["com.fraymakers.FraymakersMetadata"],
+        "symbols": symbols,
+        "tags": [],
+        "terrains": [],
+        "tilesets": [],
+        "version": 14
     });
 
     serde_json::to_string_pretty(&entity).unwrap_or_else(|_| "{}".to_string())
+}
+
+/// Get image GUIDs for .meta file generation
+pub fn get_image_meta_guids(
+    char_id: &str,
+    img_result: &ImageExtractionResult,
+) -> BTreeMap<String, String> {
+    let mut result = BTreeMap::new();
+    for (_, img) in &img_result.images {
+        let meta_guid = uuid(char_id, &format!("meta_{}", img.symbol_name));
+        result.insert(img.png_path.clone(), meta_guid);
+    }
+    result
 }
 
 fn round2(v: f64) -> f64 {

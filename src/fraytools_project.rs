@@ -1,4 +1,6 @@
-{
+/// Generate the .fraytools project file matching the official template format
+pub fn generate_fraytools_project(char_name: &str) -> String {
+    format!(r##"{{
   "autoHurtboxPrefix": null,
   "autoKeyframeOffsetX": 0,
   "autoKeyframeOffsetY": 0,
@@ -11,11 +13,11 @@
   "defaultCollisionBodyLayerHipYOffset": 0,
   "frame_rate": 60,
   "paletteShaderMode": "RG_MAP",
-  "pluginMetadata": {
-    "com.fraymakers.FraymakersMetadata": {
+  "pluginMetadata": {{
+    "com.fraymakers.FraymakersMetadata": {{
       "activeCollisionBoxLayerPreset": null,
       "collisionBodyLayerPresets": [],
-      "collisionBoxLayerPresets": [{
+      "collisionBoxLayerPresets": [{{
         "hitboxAlpha": 0.5,
         "hitboxColor": "#ff0000",
         "hurtboxAlpha": 0.5,
@@ -40,22 +42,23 @@
         "customboxcColor": "#d1d1d1",
         "id": "default-preset",
         "name": "default"
-      }],
+      }}],
       "version": "0.1.0"
-    }
-  },
+    }}
+  }},
   "plugins": [
     "com.fraymakers.ContentExporter",
     "com.fraymakers.FraymakersMetadata",
     "com.fraymakers.FraymakersTypes"
   ],
-  "publishFolders": [{
+  "publishFolders": [{{
     "id": "build0",
     "path": "./build"
-  }],
+  }}],
   "snapToPixel": true,
-  "templateDescription": "mario — converted from Super Smash Flash 2",
-  "templateName": "SSF2 mario Character",
+  "templateDescription": "{name} — converted from Super Smash Flash 2",
+  "templateName": "SSF2 {name} Character",
   "templateVersion": "0.3.0",
   "version": 12
+}}"##, name = char_name)
 }

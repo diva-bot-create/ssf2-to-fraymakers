@@ -8,6 +8,7 @@ use std::fs;
 use std::path::Path;
 use crate::extractor::{CharacterData, Attack, Hitbox, CharacterStats};
 use crate::entity_gen;
+use crate::fraytools_project;
 
 pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult) -> Result<()> {
     let char_id = char_name.to_lowercase().replace(" ", "");
@@ -22,6 +23,9 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
     fs::write(scripts_dir.join("AnimationStats.hx"), generate_animation_stats(data))?;
     fs::write(scripts_dir.join("Script.hx"),         generate_script(data, &char_id))?;
 
+    // .fraytools project file
+    fs::write(char_dir.join(format!("{}.fraytools", char_name)), fraytools_project::generate_fraytools_project(char_name))?;
+
     // manifest.json (based on character-template)
     fs::write(char_dir.join("library/manifest.json"), generate_manifest(&char_id, char_name))?;
 
@@ -29,6 +33,20 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
     let entities_dir = char_dir.join("library/entities");
     fs::create_dir_all(&entities_dir)?;
     fs::write(entities_dir.join("Character.entity"), entity_gen::generate_entity(data, &char_id, sprite_boxes, img_result))?;
+
+    // Generate .meta sidecar files for each sprite PNG
+    let meta_guids = entity_gen::get_image_meta_guids(&char_id, img_result);
+    let sprites_dir = char_dir.join("sprites");
+    let mut meta_count = 0;
+    for (png_rel_path, guid) in &meta_guids {
+        let meta_path = sprites_dir.join(format!("{}.meta", png_rel_path.trim_start_matches("sprites/")));
+        if let Some(parent) = meta_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&meta_path, entity_gen::generate_meta(guid))?;
+        meta_count += 1;
+    }
+    log::info!("Generated {} .meta sidecar files", meta_count);
 
     // Stats summary for debugging
     let stats_json = serde_json::json!({
