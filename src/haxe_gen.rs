@@ -7,6 +7,7 @@ use anyhow::Result;
 use std::fs;
 use std::path::Path;
 use crate::extractor::{CharacterData, Attack, Hitbox, CharacterStats};
+use crate::entity_gen;
 
 pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData) -> Result<()> {
     let char_id = char_name.to_lowercase().replace(" ", "");
@@ -23,6 +24,11 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData) -> Res
 
     // manifest.json (based on character-template)
     fs::write(char_dir.join("library/manifest.json"), generate_manifest(&char_id, char_name))?;
+
+    // Character.entity
+    let entities_dir = char_dir.join("library/entities");
+    fs::create_dir_all(&entities_dir)?;
+    fs::write(entities_dir.join("Character.entity"), entity_gen::generate_entity(data, &char_id))?;
 
     // Stats summary for debugging
     let stats_json = serde_json::json!({

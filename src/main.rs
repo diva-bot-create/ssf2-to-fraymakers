@@ -3,6 +3,7 @@ mod swf_parser;
 mod abc_parser;
 mod decompiler;
 mod extractor;
+mod entity_gen;
 mod haxe_gen;
 
 use clap::Parser;
