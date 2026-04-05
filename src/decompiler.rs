@@ -1528,6 +1528,94 @@ fn decompile_closure(method_idx: u32, abc: &AbcFile) -> Expr {
     Expr::Closure(params, stmts)
 }
 
+/// Rename loop-counter locals (_vN initialized to 0 before a While) to i/j/k.
+fn rename_loop_counters(stmts: Vec<Stmt>) -> Vec<Stmt> {
+    use std::collections::HashMap;
+    let mut counter_map: HashMap<u32, String> = HashMap::new();
+    let counter_names = ["i", "j", "k", "l"];
+    let mut name_idx = 0usize;
+    for i in 0..stmts.len() {
+        if let Stmt::VarDecl(n, Expr::Num(v)) = &stmts[i] {
+            if *v == 0.0 {
+                let followed_by_while = stmts.get(i + 1).map_or(false, |s| matches!(s, Stmt::While(..)));
+                if followed_by_while && name_idx < counter_names.len() {
+                    counter_map.insert(*n, counter_names[name_idx].to_string());
+                    name_idx += 1;
+                }
+            }
+        }
+    }
+    if counter_map.is_empty() { return stmts; }
+    // Walk statements: initializer VarDecl → NamedAssign("i", 0) with var
+    // All other VarDecl(n) for counter n → plain assignment expression
+    stmts.into_iter().map(|stmt| {
+        // Top-level initializer: VarDecl(n, 0) followed by While → declare with var
+        if let Stmt::VarDecl(n, Expr::Num(v)) = &stmt {
+            if *v == 0.0 {
+                if let Some(name) = counter_map.get(n) {
+                    return Stmt::NamedAssign(name.clone(), Expr::Num(0.0));
+                }
+            }
+        }
+        rename_locals_in_stmt(stmt, &counter_map)
+    }).collect()
+}
+
+fn rename_locals_in_stmts(stmts: Vec<Stmt>, map: &std::collections::HashMap<u32, String>) -> Vec<Stmt> {
+    stmts.into_iter().map(|s| rename_locals_in_stmt(s, map)).collect()
+}
+
+fn rename_locals_in_stmt(stmt: Stmt, map: &std::collections::HashMap<u32, String>) -> Stmt {
+    match stmt {
+        Stmt::VarDecl(n, e) => {
+            let e2 = rename_locals_in_expr(e, map);
+            if let Some(name) = map.get(&n) {
+                // Use Expr statement: "name = value" (no var keyword — already declared)
+                Stmt::Expr(Expr::GetLex(format!("{} = {}", name, e2.render())))
+            } else {
+                Stmt::VarDecl(n, e2)
+            }
+        }
+        Stmt::NamedAssign(name, e) => Stmt::NamedAssign(name, rename_locals_in_expr(e, map)),
+        Stmt::SetProp(obj, name, val) => Stmt::SetProp(
+            rename_locals_in_expr(obj, map), name, rename_locals_in_expr(val, map)),
+        Stmt::Expr(e) => Stmt::Expr(rename_locals_in_expr(e, map)),
+        Stmt::Return(e) => Stmt::Return(e.map(|e| rename_locals_in_expr(e, map))),
+        Stmt::If(cond, then_b, else_b) => Stmt::If(
+            rename_locals_in_expr(cond, map),
+            rename_locals_in_stmts(then_b, map),
+            rename_locals_in_stmts(else_b, map)),
+        Stmt::While(cond, body) => Stmt::While(
+            rename_locals_in_expr(cond, map),
+            rename_locals_in_stmts(body, map)),
+        other => other,
+    }
+}
+
+fn rename_locals_in_expr(expr: Expr, map: &std::collections::HashMap<u32, String>) -> Expr {
+    match expr {
+        Expr::Local(n) => {
+            if let Some(name) = map.get(&n) {
+                Expr::GetLex(name.clone())
+            } else {
+                Expr::Local(n)
+            }
+        }
+        Expr::GetProperty(obj, name) => Expr::GetProperty(Box::new(rename_locals_in_expr(*obj, map)), name),
+        Expr::Call(obj, method, args) => Expr::Call(
+            Box::new(rename_locals_in_expr(*obj, map)), method,
+            args.into_iter().map(|a| rename_locals_in_expr(a, map)).collect()),
+        Expr::BinOp(op, l, r) => Expr::BinOp(op,
+            Box::new(rename_locals_in_expr(*l, map)),
+            Box::new(rename_locals_in_expr(*r, map))),
+        Expr::UnOp(op, e) => Expr::UnOp(op, Box::new(rename_locals_in_expr(*e, map))),
+        Expr::Array(items) => Expr::Array(items.into_iter().map(|i| rename_locals_in_expr(i, map)).collect()),
+        Expr::Object(pairs) => Expr::Object(pairs.into_iter().map(|(k,v)| (k, rename_locals_in_expr(v, map))).collect()),
+        Expr::Closure(params, stmts) => Expr::Closure(params, rename_locals_in_stmts(stmts, map)),
+        other => other,
+    }
+}
+
 /// Post-process AST to collapse redundant duplicate-condition if-blocks.
 /// Pattern: If(X, [If(X, body, []), ...tail], []) -> If(X, [body..., tail...], [])
 /// This arises from dup+iftrue carry patterns producing double-guarded blocks.
@@ -1585,6 +1673,7 @@ pub fn decompile_method(
         !matches!(s, Stmt::VarDecl(0, Expr::This))
     }).collect();
     let stmts = collapse_duplicate_ifs(stmts);
+    let stmts = rename_loop_counters(stmts);
 
     let param_str = params.join(", ");
     let mut out = format!("function {}({}) {{\n", name, param_str);

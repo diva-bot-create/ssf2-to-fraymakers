@@ -116,14 +116,14 @@ function pushEffectBehind(arg0) {
 
 
 function removeAllEffects(arg0) {
-	_v2 = 0;
-	while (_v2 < self.effects.length) {
-		if (self.effects[_v2] == null) {
-			_v2 = _v2 + 1;
+	var i = 0;
+	while (i < self.effects.length) {
+		if (self.effects[i] == null) {
+			i = i + 1;
 		} else {
-			if (self.effects[_v2].parent == null) {
+			if (self.effects[i].parent == null) {
 			} else {
-				self.effects[_v2].parent.removeChild(self.effects[_v2]);
+				self.effects[i].parent.removeChild(self.effects[i]);
 			}
 		}
 	}
