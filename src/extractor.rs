@@ -116,6 +116,7 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
                     scripts.push(ScriptInfo { name: method_name.clone(), code, is_ext_method: false });
                 }
 
+
                 // Extract animation info from symbol names
                 for (id, sym_name) in &swf.symbols {
                     if let Some(anim_name) = extract_animation_name(sym_name, char_name) {
@@ -199,20 +200,10 @@ fn convert_stats(vals: &BTreeMap<String, f64>) -> CharacterStats {
     }
 }
 
-fn render_frame_script(method_name: &str, actions: &[crate::abc_parser::FrameAction]) -> String {
-    let mut out = format!("// {}\nfunction {}_framescript(frame:Int) {{\n\tswitch (frame) {{\n", method_name, method_name);
-    let mut current_frame = u32::MAX;
-    for action in actions {
-        if action.frame != current_frame {
-            if current_frame != u32::MAX { out.push_str("\t\t}\n"); }
-            out.push_str(&format!("\t\tcase {}:\n", action.frame));
-            current_frame = action.frame;
-        }
-        out.push_str(&format!("\t\t\t// SSF2: {}({})\n", action.action, action.args.join(", ")));
-    }
-    if current_frame != u32::MAX { out.push_str("\t\t}\n"); }
-    out.push_str("\t}\n}\n");
-    out
+fn render_frame_script(_method_name: &str, actions: &[crate::abc_parser::FrameAction]) -> String {
+    // Actions now contain decompiled Haxe code in action.action (frame=0 sentinel)
+    // Just concatenate the decompiled bodies
+    actions.iter().map(|a| a.action.as_str()).collect::<Vec<_>>().join("\n")
 }
 
 /// Extract a clean animation name from a symbol like "mario_fla.NAir_40"

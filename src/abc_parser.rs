@@ -594,10 +594,17 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
                     attacks.extend(extracted);
                 }
                 name if name.starts_with("frame") => {
-                    let actions = extract_frame_actions(&body.bytecode, abc);
-                    if !actions.is_empty() {
-                        frame_scripts.insert(name.to_string(), actions);
-                    }
+                    // Use decompiler for full Haxe output (same path as ext methods)
+                    let params: Vec<String> = if let Some(method) = abc.methods.get(body.method_idx as usize) {
+                        (0..method.param_count).map(|i| format!("arg{}", i)).collect()
+                    } else { vec![] };
+                    let code = decompiler::decompile_method(body, abc, name, &params);
+                    // Store as a single FrameAction with the full code so render_frame_script emits it
+                    frame_scripts.insert(name.to_string(), vec![FrameAction {
+                        frame: 0,
+                        action: code,
+                        args: vec![],
+                    }]);
                 }
                 // Decompile all other Ext methods for Script.hx
                 // Skip slot/const traits (kind 0/6) — those are variable declarations, not methods
@@ -627,10 +634,15 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
         for t in &mc.instance_methods {
             if !t.name.starts_with("frame") { continue; }
             let Some(body) = body_by_method.get(&t.method_idx) else { continue };
-            let actions = extract_frame_actions(&body.bytecode, abc);
-            if !actions.is_empty() {
-                frame_scripts.insert(t.name.clone(), actions);
-            }
+            let params: Vec<String> = if let Some(method) = abc.methods.get(body.method_idx as usize) {
+                (0..method.param_count).map(|i| format!("arg{}", i)).collect()
+            } else { vec![] };
+            let code = decompiler::decompile_method(body, abc, &t.name, &params);
+            frame_scripts.insert(t.name.clone(), vec![FrameAction {
+                frame: 0,
+                action: code,
+                args: vec![],
+            }]);
         }
     }
 

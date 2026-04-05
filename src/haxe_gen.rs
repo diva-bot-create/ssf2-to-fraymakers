@@ -500,16 +500,19 @@ fn generate_script(data: &CharacterData, char_id: &str) -> String {
         }
     }
 
-    // Frame scripts note
+    // Frame scripts — emit as decompiled functions for reference / manual assignment
     let frame_scripts: Vec<_> = data.scripts.iter().filter(|s| !s.is_ext_method).collect();
     if !frame_scripts.is_empty() {
         out.push_str(&format!(
             "// ── Frame scripts ({} methods) ──────────────────────────────────────────────\n",
             frame_scripts.len()
         ));
-        out.push_str("// NOTE: Frame scripts belong in the .entity file, not here.\n");
-        out.push_str("// They are stored as FRAME_SCRIPT keyframes in each animation layer.\n");
-        out.push_str("// See conversion_stats.json for the full list of extracted frame methods.\n\n");
+        out.push_str("// NOTE: These are SSF2 timeline frame methods, named by global frame number.\n");
+        out.push_str("// They need to be manually assigned to animation FRAME_SCRIPT layers in FrayTools.\n\n");
+        for script in &frame_scripts {
+            out.push_str(&script.code);
+            out.push('\n');
+        }
     }
 
     out
