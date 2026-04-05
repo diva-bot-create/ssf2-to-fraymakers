@@ -5,6 +5,7 @@ mod decompiler;
 mod extractor;
 mod entity_gen;
 mod haxe_gen;
+mod sprite_parser;
 
 use clap::Parser;
 use anyhow::Result;
@@ -69,12 +70,21 @@ fn main() -> Result<()> {
     });
     log::info!("Character: {}", char_name);
 
-    // Extract character data
+    // Extract character data (ABC: attacks, stats, frame scripts, xframe map)
     let char_data = extractor::extract(&swf, &char_name)?;
-    log::info!("Extracted: {} attacks, stats, animation data", char_data.attacks.len());
+    log::info!("Extracted: {} attacks, {} animations, {} ssf2→fm mappings",
+        char_data.attacks.len(), char_data.animations.len(), char_data.ssf2_to_fm_anim.len());
+
+    // Extract per-frame collision box geometry from DefineSprite tags
+    let sprite_boxes = sprite_parser::parse_sprite_boxes(&swf_data, &char_name, &char_data.ssf2_to_fm_anim)
+        .unwrap_or_else(|e| {
+            log::warn!("sprite_parser failed: {}", e);
+            Default::default()
+        });
+    log::info!("Sprite boxes: {} animations with geometry", sprite_boxes.len());
 
     // Generate Fraymakers files
-    haxe_gen::generate(&args.output, &char_name, &char_data)?;
+    haxe_gen::generate(&args.output, &char_name, &char_data, &sprite_boxes)?;
     log::info!("Generated Fraymakers files in {}", args.output.display());
 
     Ok(())

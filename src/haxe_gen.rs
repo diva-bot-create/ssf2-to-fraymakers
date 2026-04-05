@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::extractor::{CharacterData, Attack, Hitbox, CharacterStats};
 use crate::entity_gen;
 
-pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData) -> Result<()> {
+pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>) -> Result<()> {
     let char_id = char_name.to_lowercase().replace(" ", "");
     let char_dir = output_dir.join(&char_id);
     let scripts_dir = char_dir.join("library/scripts/Character");
@@ -28,7 +28,7 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData) -> Res
     // Character.entity
     let entities_dir = char_dir.join("library/entities");
     fs::create_dir_all(&entities_dir)?;
-    fs::write(entities_dir.join("Character.entity"), entity_gen::generate_entity(data, &char_id))?;
+    fs::write(entities_dir.join("Character.entity"), entity_gen::generate_entity(data, &char_id, sprite_boxes))?;
 
     // Stats summary for debugging
     let stats_json = serde_json::json!({
