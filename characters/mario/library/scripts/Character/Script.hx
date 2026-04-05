@@ -29,42 +29,46 @@ function onTeardown() {
 // ── Decompiled from SSF2 XxxExt.as ─────────────────────────────────────────
 
 function addEffectToList(arg0) {
-	if (/* ? */ == self) {
+	if (arg0 == null) {
 		SSF2API.print("Tried to add a NULL effect to list!");
 		return null;
 	} else {
-		self.effects.push(_v1);
-		return _v1;
+		self.effects.push(arg0);
+		return arg0;
 	}
 }
 
 
 function clearEffectsOnStateChange(arg0) {
-	self.clearListener = _v1;
+	self.clearListener = arg0;
 	self.addEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
 	return;
 }
 
 
 function flipX(arg0) {
-	if (!self.isFacingRight()) {
-		return _v1;
-	} else {
-		return _v1 * -1;
+	if (self.isFacingRight()) {
+		return arg0;
 	}
+	return arg0 * -1;
 }
 
 
 function followUser(arg0, arg1, arg2) {
-	_v4 = self;
-	if (!/* ? */) {
+	var _s7 = /* closure method_3297 */;
+	var _s4 = arg1.x - self.getX();
+	var _s5 = arg1.y - self.getY();
+	var _s6 = { hitStunPause: false };
+	if (arg2) {
+		var _s6 = { persistent: true, hitStunPause: false };
+		if (arg0) {
+			self.createTimer(1, 0, _s7, _s6);
+		} else {
+			self.destroyTimer(_s7);
+		}
+		return;
 	}
-	if (!/* ? */) {
-		/* ? */.createTimer(/* ? */, self, 1, 0);
-	} else {
-		/* ? */.destroyTimer(self);
-	}
-	return;
+	var _s6 = { persistent: false, hitStunPause: false };
 }
 
 
@@ -83,56 +87,64 @@ function jumpToContinue(arg0) {
 
 
 function loopEffect(arg0, arg1, arg2) {
-	_v4 = self;
-	if (!/* ? */) {
+	var _s5 = /* closure method_3299 */;
+	var _s4 = { hitStunPause: false };
+	if (arg2) {
+		var _s4 = { persistent: true, hitStunPause: false };
+		if (arg0) {
+			self.createTimer(1, 0, _s5, { hitStunPause: false });
+		} else {
+			self.destroyTimer(_s5);
+		}
+		return;
 	}
-	if (!/* ? */) {
-		/* ? */.createTimer(self, 1, 0, { hitStunPause: false });
-	}
-	/* ? */.destroyTimer(self);
-	return;
+	var _s4 = { persistent: false, hitStunPause: false };
 }
 
 
 function pushEffectBehind(arg0) {
-	SSF2API.getStage().getMidground().swapChildren(self.getMC(), _v1);
-	return _v1;
+	SSF2API.getStage().getMidground().swapChildren(self.getMC(), arg0);
+	return arg0;
 }
 
 
 function removeAllEffects(arg0) {
 	_v2 = 0;
-	while (/* ? */ < /* ? */) {
-		self.effects = new Array();
-		if (!self.clearListener) {
-			self.hasEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
-			if (/* ? */) {
-				if (!/* ? */) {
-					self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
-				}
-				return;
+	while (_v2 < self.effects.length) {
+		if (self.effects[_v2] == null) {
+			_v2 = _v2 + 1;
+		} else {
+			if (self.effects[_v2].parent == null) {
 			} else {
-				!_v1 == null;
+				self.effects[_v2].parent.removeChild(self.effects[_v2]);
 			}
 		}
+	}
+	self.effects = new Array();
+	if (self.clearListener) {
+	}
+	if (/* ? */) {
+		if (/* ? */) {
+			self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
+		}
+		return;
 	}
 }
 
 
 function setLandingLag(arg0) {
-	if (!_v1) {
+	if (arg0) {
 		self.removeEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
 		self.addEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
-		if (!self.isOnFloor()) {
+		if (self.isOnFloor()) {
 			self.jumpToContinue();
-			return;
 		}
-	} else {
-		self.removeEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
-		self.addEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
-		if (!self.isOnFloor()) {
-			self.toLand();
-		}
+		return;
+	}
+	self.removeEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
+	self.addEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
+	if (self.isOnFloor()) {
+		self.toLand();
 	}
 }
 

@@ -162,6 +162,10 @@ impl Expr {
             }
             Expr::Call(obj, method, args) => {
                 let arg_str = args.iter().map(|a| a.render()).collect::<Vec<_>>().join(", ");
+                // Array index access
+                if method == "[" {
+                    return format!("{}[{}]", obj.render(), arg_str);
+                }
                 // Check if obj is self and method is an API call
                 let obj_str = obj.render();
                 if obj_str == "self" || obj_str == "this" {
@@ -208,6 +212,7 @@ impl Expr {
 #[derive(Debug, Clone)]
 pub enum Stmt {
     VarDecl(u32, Expr),
+    NamedAssign(String, Expr), // named variable assignment (for activation slots)
     SetProp(Expr, String, Expr),
     Expr(Expr),
     Return(Option<Expr>),
@@ -221,10 +226,20 @@ fn render_stmts(stmts: &[Stmt], depth: usize) -> String {
     let tab = "\t".repeat(depth);
     for s in stmts {
         match s {
+            Stmt::NamedAssign(name, v) => out.push_str(&format!("{}var {} = {};\n", tab, name, v.render())),
             Stmt::Comment(c)   => out.push_str(&format!("{}// {}\n", tab, c)),
             Stmt::Return(None) => out.push_str(&format!("{}return;\n", tab)),
             Stmt::Return(Some(e)) => out.push_str(&format!("{}return {};\n", tab, e.render())),
-            Stmt::VarDecl(n, v) => out.push_str(&format!("{}_v{} = {};\n", tab, n, v.render())),
+            Stmt::VarDecl(n, v) => {
+                let var_name = if *n == 0 {
+                    "self".to_string()
+                } else {
+                    format!("_v{}", n)
+                };
+                // Skip trivial self = self assignments
+                if var_name == "self" && matches!(v, Expr::This) { continue; }
+                out.push_str(&format!("{}{} = {};\n", tab, var_name, v.render()));
+            }
             Stmt::SetProp(obj, name, val) => {
                 out.push_str(&format!("{}{}.{} = {};\n", tab, obj.render(), name, val.render()));
             }
@@ -421,11 +436,15 @@ fn instr_size(bc: &[u8], pos: usize) -> usize {
         | OP_INCLOCAL | OP_DECLOCAL | OP_INCLOCAL_I | OP_DECLOCAL_I
         | OP_DEBUGLINE | OP_DEBUGFILE | OP_BKPTLINE
             => 1 + u30_len(bc, pos + 1),
-        // two u30 operands
+        // one u30 operand (not in the multi-u30 group)
+        OP_NEWOBJECT | OP_NEWARRAY
+            => 1 + u30_len(bc, pos + 1),
+        // single u30 (argc only)
+        OP_CONSTRUCT | OP_CONSTRUCTSUPER
+            => 1 + u30_len(bc, pos + 1),
+        // two u30 operands (multiname idx + argc)
         OP_CALLPROPERTY | OP_CALLPROPVOID | OP_CALLPROPLEX | OP_CONSTRUCTPROP
         | OP_CALLMETHOD | OP_CALLSTATIC | OP_CALLSUPER | OP_CALL
-        | OP_CONSTRUCT | OP_CONSTRUCTSUPER
-        | OP_NEWOBJECT | OP_NEWARRAY
             => 1 + u30_len(bc, pos + 1) + u30_len(bc, pos + 1 + u30_len(bc, pos + 1)),
         // Debug: 1 byte + u30 + u30 + u30
         OP_DEBUG => {
@@ -596,17 +615,32 @@ struct BlockDecoder<'a> {
     stack: Vec<Expr>,
     stmts: Vec<Stmt>,
     locals: BTreeMap<u32, Option<Expr>>,
+    activation_slots: BTreeMap<u32, String>,
+    param_locals: BTreeMap<u32, String>,
+    has_activation: bool,
 }
 
 impl<'a> BlockDecoder<'a> {
     fn new(bc: &'a [u8], abc: &'a AbcFile) -> Self {
         let mut locals = BTreeMap::new();
         locals.insert(0, Some(Expr::This));
-        Self { bc, abc, stack: Vec::new(), stmts: Vec::new(), locals }
+        Self { bc, abc, stack: Vec::new(), stmts: Vec::new(), locals,
+               activation_slots: BTreeMap::new(), param_locals: BTreeMap::new(),
+               has_activation: false }
     }
 
     fn pop(&mut self) -> Expr {
         self.stack.pop().unwrap_or(Expr::Unknown)
+    }
+
+    /// After a unary branch (iftrue/iffalse), if the previous instruction was dup,
+    /// there may be an identical residue on the stack — pop it.
+    fn clear_dup_residue(&mut self) {
+        // If top of stack is the same expression as the one we just branched on,
+        // it's a dup artifact. Pop it silently.
+        // We detect by checking if top == second-from-top before we popped.
+        // Simpler heuristic: if next instr is pop, let pop handle it.
+        // For now, just flush obviously duplicated expressions.
     }
 
     fn string(&self, idx: u32) -> String {
@@ -618,10 +652,17 @@ impl<'a> BlockDecoder<'a> {
     }
 
     fn get_local(&self, n: u32) -> Expr {
+        if n == 0 { return Expr::This; }
+        // Check if it's a named param
+        if let Some(name) = self.param_locals.get(&n) {
+            return Expr::GetLex(name.clone());
+        }
         self.locals.get(&n).and_then(|v| v.clone()).unwrap_or(Expr::Local(n))
     }
 
     fn set_local(&mut self, n: u32, v: Expr) {
+        // Skip activation object assignments (newactivation, dup, setlocal N pattern)
+        if matches!(&v, Expr::GetLex(s) if s == "_act") { return; }
         self.locals.insert(n, Some(v.clone()));
         self.stmts.push(Stmt::VarDecl(n, v));
     }
@@ -632,7 +673,14 @@ impl<'a> BlockDecoder<'a> {
             let op = self.bc[pos];
             pos += 1;
             match op {
-                OP_NOP | OP_LABEL | OP_PUSHSCOPE | OP_NEWACTIVATION | OP_GETGLOBALSCOPE => {}
+                OP_NOP | OP_LABEL | OP_GETGLOBALSCOPE => {}
+                OP_PUSHSCOPE => { self.stack.pop(); }
+                OP_NEWACTIVATION => {
+                    // Creates a closure activation object for capturing variables.
+                    // We push a sentinel so subsequent dup/pushscope work correctly.
+                    self.has_activation = true;
+                    self.stack.push(Expr::GetLex("_act".into()));
+                }
                 OP_DEBUGLINE | OP_DEBUGFILE | OP_BKPTLINE => { read_u30_at(self.bc, &mut pos); }
                 OP_DEBUG => {
                     pos += 1; // first byte
@@ -640,7 +688,18 @@ impl<'a> BlockDecoder<'a> {
                     read_u30_at(self.bc, &mut pos);
                     read_u30_at(self.bc, &mut pos);
                 }
-                OP_GETSCOPEOBJECT | OP_GETOUTERSCOPE | OP_NEWCATCH => { pos += 1; }
+                OP_GETSCOPEOBJECT => {
+                    let n = self.bc[pos]; pos += 1;
+                    // When we have an activation, getscopeobject 1 = the activation record
+                    // We don't push it explicitly — setslot/getslot will be resolved by name
+                    // Push _act as a transparent marker that setslot/getslot will consume
+                    if self.has_activation && n >= 1 {
+                        self.stack.push(Expr::GetLex("_act".into()));
+                    } else {
+                        self.stack.push(Expr::This); // scope 0 = global/this
+                    }
+                }
+                OP_GETOUTERSCOPE | OP_NEWCATCH => { pos += 1; self.stack.push(Expr::Unknown); }
                 OP_KILL => { let _n = pos; pos += 1; }
 
                 OP_PUSHSTRING => { let idx = read_u30_at(self.bc, &mut pos); self.stack.push(Expr::Str(self.string(idx))); }
@@ -652,9 +711,17 @@ impl<'a> BlockDecoder<'a> {
                 OP_PUSHTRUE   => self.stack.push(Expr::Bool(true)),
                 OP_PUSHFALSE  => self.stack.push(Expr::Bool(false)),
                 OP_PUSHNULL | OP_PUSHNAN => self.stack.push(Expr::Null),
+                0x21 => self.stack.push(Expr::Null), // OP_PUSHUNDEFINED (haXe/tamarin extension)
 
                 OP_GETLEX => { let idx = read_u30_at(self.bc, &mut pos); self.stack.push(Expr::GetLex(self.multiname(idx))); }
-                OP_FINDPROPSTRICT | OP_FINDPROP | OP_FINDDEF => { let idx = read_u30_at(self.bc, &mut pos); self.stack.push(Expr::GetLex(self.multiname(idx))); }
+                OP_FINDPROPSTRICT | OP_FINDPROP | OP_FINDDEF => {
+                    let idx = read_u30_at(self.bc, &mut pos);
+                    let name = self.multiname(idx);
+                    // findpropstrict pushes the scope object that owns `name`.
+                    // For self-methods, that scope object IS self — mark with a special sentinel
+                    // so callproperty on it renders as self.name().
+                    self.stack.push(Expr::GetProperty(Box::new(Expr::This), name));
+                }
 
                 OP_GETLOCAL0 => self.stack.push(self.get_local(0)),
                 OP_GETLOCAL1 => self.stack.push(self.get_local(1)),
@@ -671,7 +738,24 @@ impl<'a> BlockDecoder<'a> {
                 OP_INCLOCAL | OP_INCLOCAL_I => { let n = read_u30_at(self.bc, &mut pos); let cur = self.get_local(n); self.stmts.push(Stmt::VarDecl(n, Expr::BinOp("+", Box::new(cur), Box::new(Expr::Num(1.0))))); }
                 OP_DECLOCAL | OP_DECLOCAL_I => { let n = read_u30_at(self.bc, &mut pos); let cur = self.get_local(n); self.stmts.push(Stmt::VarDecl(n, Expr::BinOp("-", Box::new(cur), Box::new(Expr::Num(1.0))))); }
 
-                OP_GETPROPERTY => { let idx = read_u30_at(self.bc, &mut pos); let name = self.multiname(idx); let obj = self.pop(); self.stack.push(Expr::GetProperty(Box::new(obj), name)); }
+                OP_GETPROPERTY => {
+                    let idx = read_u30_at(self.bc, &mut pos);
+                    let name = self.multiname(idx);
+                    let obj = self.pop();
+                    if name.is_empty() {
+                        // MultinameL (runtime name): stack before = [..., receiver, name]
+                        // We popped name first (obj=name above), now pop receiver.
+                        let receiver = self.pop();
+                        // Emit as receiver[name]
+                        self.stack.push(Expr::Call(
+                            Box::new(receiver),
+                            "[".into(),
+                            vec![obj]  // obj is actually the index/name here
+                        ));
+                    } else {
+                        self.stack.push(Expr::GetProperty(Box::new(obj), name));
+                    }
+                }
                 OP_SETPROPERTY | OP_INITPROPERTY => {
                     let idx = read_u30_at(self.bc, &mut pos);
                     let name = self.multiname(idx);
@@ -679,8 +763,42 @@ impl<'a> BlockDecoder<'a> {
                     self.stmts.push(Stmt::SetProp(obj, name, val));
                 }
                 OP_DELETEPROPERTY => { read_u30_at(self.bc, &mut pos); self.pop(); self.stack.push(Expr::Bool(true)); }
-                OP_GETSLOT => { read_u30_at(self.bc, &mut pos); /* keep obj on stack */ }
-                OP_SETSLOT => { read_u30_at(self.bc, &mut pos); self.pop(); self.pop(); }
+                OP_GETSLOT => {
+                    let slot = read_u30_at(self.bc, &mut pos);
+                    let obj = self.pop();
+                    // If reading from activation object, map to named variable
+                    let slot_name = self.activation_slots.get(&slot)
+                        .cloned()
+                        .unwrap_or_else(|| format!("_s{}", slot));
+                    let is_act = matches!(&obj, Expr::GetLex(n) if n == "_act");
+                    if is_act {
+                        self.stack.push(Expr::GetLex(slot_name));
+                    } else {
+                        self.stack.push(Expr::GetProperty(Box::new(obj), slot_name));
+                    }
+                }
+                OP_SETSLOT => {
+                    let slot = read_u30_at(self.bc, &mut pos);
+                    let val = self.pop();
+                    let obj = self.pop();
+                    let slot_name = self.activation_slots.get(&slot)
+                        .cloned()
+                        .unwrap_or_else(|| format!("_s{}", slot));
+                    let is_act = matches!(&obj, Expr::GetLex(n) if n == "_act")
+                        || matches!(&obj, Expr::This);
+                    if is_act {
+                        let is_trivial = matches!(&val, Expr::Null)
+                            || matches!(&val, Expr::GetLex(n) if n == "_act" || n.starts_with("_scope"))
+                            // skip "var x = x" (param captured into same-named slot)
+                            || matches!(&val, Expr::GetLex(vn) if *vn == slot_name);
+                        if !is_trivial {
+                            self.stmts.push(Stmt::NamedAssign(slot_name.clone(), val));
+                        }
+                        self.activation_slots.insert(slot, slot_name);
+                    } else {
+                        self.stmts.push(Stmt::SetProp(obj, slot_name, val));
+                    }
+                }
 
                 OP_CALLPROPERTY | OP_CALLPROPLEX => {
                     let mn_idx = read_u30_at(self.bc, &mut pos);
@@ -689,6 +807,8 @@ impl<'a> BlockDecoder<'a> {
                     let mut args: Vec<Expr> = (0..argc).map(|_| self.pop()).collect();
                     args.reverse();
                     let obj = self.pop();
+                    // Collapse findpropstrict + callproperty with same name → self.name()
+                    let obj = collapse_findprop(obj, &name);
                     self.stack.push(Expr::Call(Box::new(obj), name, args));
                 }
                 OP_CALLPROPVOID => {
@@ -698,6 +818,7 @@ impl<'a> BlockDecoder<'a> {
                     let mut args: Vec<Expr> = (0..argc).map(|_| self.pop()).collect();
                     args.reverse();
                     let obj = self.pop();
+                    let obj = collapse_findprop(obj, &name);
                     let call = Expr::Call(Box::new(obj), name, args);
                     self.stmts.push(Stmt::Expr(call));
                 }
@@ -769,18 +890,37 @@ impl<'a> BlockDecoder<'a> {
                     items.reverse();
                     self.stack.push(Expr::Array(items));
                 }
-                OP_NEWFUNCTION => { read_u30_at(self.bc, &mut pos); self.stack.push(Expr::GetLex("/* function */".into())); }
+                OP_NEWFUNCTION => {
+                    let fn_idx = read_u30_at(self.bc, &mut pos);
+                    // newfunction creates a closure. Emit as a comment reference.
+                    self.stack.push(Expr::GetLex(format!("/* closure method_{} */", fn_idx)));
+                }
                 OP_NEWCLASS    => { read_u30_at(self.bc, &mut pos); self.stack.push(Expr::GetLex("/* class */".into())); }
 
                 OP_COERCE | OP_ASTYPE | OP_ISTYPE => { read_u30_at(self.bc, &mut pos); }
                 OP_COERCE_A | OP_COERCE_B | OP_COERCE_I | OP_COERCE_D | OP_COERCE_S | OP_COERCE_U | OP_COERCE_O => {}
                 OP_ASTYPELATE  => { self.pop(); self.pop(); self.stack.push(Expr::Unknown); }
-                OP_CONVERT_S | OP_CONVERT_I | OP_CONVERT_U | OP_CONVERT_D | OP_CONVERT_B | OP_CONVERT_O | OP_CHECKFILTER => {}
+                // convert_b is a boolean cast — keep value on stack unchanged
+                OP_CONVERT_B => {}
+                OP_CONVERT_S | OP_CONVERT_I | OP_CONVERT_U | OP_CONVERT_D | OP_CONVERT_O | OP_CHECKFILTER => {}
                 OP_ESC_XELEM | OP_ESC_XATTR => {}
                 OP_TYPEOF => { let e = self.pop(); self.stack.push(Expr::Call(Box::new(Expr::GetLex("typeof".into())), "".into(), vec![e])); }
 
-                OP_POP  => { let e = self.pop(); if !matches!(e, Expr::Unknown) { self.stmts.push(Stmt::Expr(e)); } }
-                OP_DUP  => { let top = self.stack.last().cloned().unwrap_or(Expr::Unknown); self.stack.push(top); }
+                OP_POP  => {
+                    let e = self.pop();
+                    // Skip bare variable refs (dup residues) and unknown
+                    let skip = matches!(&e, Expr::Unknown | Expr::This | Expr::Null | Expr::Bool(_))
+                        || matches!(&e, Expr::GetLex(_) | Expr::GetProperty(_, _) | Expr::Local(_));
+                    if !skip { self.stmts.push(Stmt::Expr(e)); }
+                }
+                OP_DUP  => {
+                    let top = self.stack.last().cloned().unwrap_or(Expr::Unknown);
+                    // Peek ahead: if next op is a branch (iftrue/iffalse),
+                    // the dup is for the "pop the remaining copy in the other branch" pattern.
+                    // We'll push normally; the branch handler pops one copy.
+                    // The other copy stays and will be drained or picked up by next block.
+                    self.stack.push(top);
+                }
                 OP_SWAP => { let len = self.stack.len(); if len >= 2 { self.stack.swap(len-1, len-2); } }
 
                 OP_NEGATE | OP_NEGATE_I => { let e = self.pop(); self.stack.push(Expr::UnOp("-", Box::new(e))); }
@@ -813,33 +953,26 @@ impl<'a> BlockDecoder<'a> {
                 OP_RETURNVOID  => { self.stmts.push(Stmt::Return(None)); return None; }
                 OP_RETURNVALUE => { let v = self.pop(); self.stmts.push(Stmt::Return(Some(v))); return None; }
 
-                // Branch instructions — return the condition for CFG reconstruction
-                OP_IFTRUE => {
-                    read_u30_at(self.bc, &mut pos); // skip in range decode, handled by block
-                    let e = self.pop();
-                    return Some(e);
+                // Branch instructions — consume s24 offset and return condition expr
+                OP_IFTRUE | OP_IFFALSE | OP_IFEQ | OP_IFNE | OP_IFSTRICTEQ | OP_IFSTRICTNE
+                | OP_IFLT | OP_IFLE | OP_IFGT | OP_IFGE => {
+                    if pos + 3 <= self.bc.len() { pos += 3; }
+                    // Return the RAW condition (not inverted).
+                    // The Branch { cond_inv } flag controls the then/else swap in StructuredDecoder.
+                    // For iffalse: cond_inv=true means the condition is inverted — we DON'T negate here.
+                    let cond = match op {
+                        OP_IFTRUE | OP_IFFALSE => { let v = self.pop(); self.clear_dup_residue(); v }
+                        OP_IFEQ | OP_IFSTRICTEQ => { let r = self.pop(); let l = self.pop(); Expr::BinOp("==", Box::new(l), Box::new(r)) }
+                        OP_IFNE | OP_IFSTRICTNE  => { let r = self.pop(); let l = self.pop(); Expr::BinOp("!=", Box::new(l), Box::new(r)) }
+                        OP_IFLT => { let r = self.pop(); let l = self.pop(); Expr::BinOp("<",  Box::new(l), Box::new(r)) }
+                        OP_IFLE => { let r = self.pop(); let l = self.pop(); Expr::BinOp("<=", Box::new(l), Box::new(r)) }
+                        OP_IFGT => { let r = self.pop(); let l = self.pop(); Expr::BinOp(">",  Box::new(l), Box::new(r)) }
+                        OP_IFGE => { let r = self.pop(); let l = self.pop(); Expr::BinOp(">=", Box::new(l), Box::new(r)) }
+                        _ => Expr::Unknown,
+                    };
+                    return Some(cond);
                 }
-                OP_IFFALSE => {
-                    read_u30_at(self.bc, &mut pos);
-                    let e = self.pop();
-                    return Some(Expr::UnOp("!", Box::new(e)));
-                }
-                OP_IFEQ | OP_IFSTRICTEQ => {
-                    read_u30_at(self.bc, &mut pos); // skip offset, handled by block
-                    // but we need 3 bytes (s24), so let's just note
-                    let r = self.pop(); let l = self.pop();
-                    return Some(Expr::BinOp("==", Box::new(l), Box::new(r)));
-                }
-                OP_IFNE | OP_IFSTRICTNE => {
-                    // s24 already accounted for in instr_size
-                    let r = self.pop(); let l = self.pop();
-                    return Some(Expr::BinOp("!=", Box::new(l), Box::new(r)));
-                }
-                OP_IFLT => { let r = self.pop(); let l = self.pop(); return Some(Expr::BinOp("<",  Box::new(l), Box::new(r))); }
-                OP_IFLE => { let r = self.pop(); let l = self.pop(); return Some(Expr::BinOp("<=", Box::new(l), Box::new(r))); }
-                OP_IFGT => { let r = self.pop(); let l = self.pop(); return Some(Expr::BinOp(">",  Box::new(l), Box::new(r))); }
-                OP_IFGE => { let r = self.pop(); let l = self.pop(); return Some(Expr::BinOp(">=", Box::new(l), Box::new(r))); }
-                OP_JUMP => { return None; }
+                OP_JUMP => { if pos + 3 <= self.bc.len() { pos += 3; } return None; }
 
                 _ => {
                     // unknown — try to skip operands using instr_size
@@ -848,12 +981,7 @@ impl<'a> BlockDecoder<'a> {
             }
             if self.stack.len() > 64 { self.stack.drain(0..32); }
         }
-        // drain any leftover expression on the stack as statements
-        while let Some(e) = self.stack.pop() {
-            if !matches!(e, Expr::Unknown | Expr::This | Expr::Null) {
-                self.stmts.push(Stmt::Expr(e));
-            }
-        }
+        // Don't drain — caller (StructuredDecoder) may pass leftover stack to next block
         None
     }
 }
@@ -864,13 +992,21 @@ struct StructuredDecoder<'a> {
     blocks: Vec<Block>,
     bc: &'a [u8],
     abc: &'a AbcFile,
-    visited: BTreeSet<usize>, // block start offsets already emitted
+    visited: BTreeSet<usize>,
+    activation_slots: BTreeMap<u32, String>,
+    param_locals: BTreeMap<u32, String>, // local_idx -> param name
 }
 
 impl<'a> StructuredDecoder<'a> {
     fn new(bc: &'a [u8], abc: &'a AbcFile) -> Self {
         let blocks = build_blocks(bc);
-        Self { blocks, bc, abc, visited: BTreeSet::new() }
+        Self { blocks, bc, abc, visited: BTreeSet::new(),
+               activation_slots: BTreeMap::new(), param_locals: BTreeMap::new() }
+    }
+    fn new_with_slots(bc: &'a [u8], abc: &'a AbcFile, slots: BTreeMap<u32, String>) -> Self {
+        let blocks = build_blocks(bc);
+        Self { blocks, bc, abc, visited: BTreeSet::new(),
+               activation_slots: slots, param_locals: BTreeMap::new() }
     }
 
     fn block_at(&self, offset: usize) -> Option<&Block> {
@@ -878,8 +1014,13 @@ impl<'a> StructuredDecoder<'a> {
     }
 
     fn decode_from(&mut self, start: usize, stop_at: Option<usize>) -> Vec<Stmt> {
+        self.decode_from_with_stack(start, stop_at, Vec::new())
+    }
+
+    fn decode_from_with_stack(&mut self, start: usize, stop_at: Option<usize>, initial_stack: Vec<Expr>) -> Vec<Stmt> {
         let mut result = Vec::new();
         let mut cur = start;
+        let mut carry_stack: Vec<Expr> = initial_stack;
 
         loop {
             if Some(cur) == stop_at { break; }
@@ -895,9 +1036,16 @@ impl<'a> StructuredDecoder<'a> {
 
             // Decode the block body
             let mut dec = BlockDecoder::new(self.bc, self.abc);
-            // Share locals from parent? For now fresh per block
+            dec.activation_slots = self.activation_slots.clone();
+            dec.param_locals = self.param_locals.clone();
+            dec.has_activation = !dec.activation_slots.is_empty();
+            // Pre-seed stack from previous block (for dup-across-blocks patterns)
+            dec.stack = carry_stack.drain(..).collect();
             let cond_expr = dec.decode_range(block.start, block.end);
             let mut stmts = dec.stmts;
+            // Save leftover stack for next block (Fall/Jump only)
+            carry_stack = dec.stack.clone();
+            for (k, v) in dec.activation_slots { self.activation_slots.insert(k, v); }
 
             match &block.term {
                 Terminator::Return | Terminator::Throw => {
@@ -907,7 +1055,7 @@ impl<'a> StructuredDecoder<'a> {
                 Terminator::Fall(next) | Terminator::Jump(next) => {
                     let next = *next;
                     result.extend(stmts);
-                    // Check for backward jump (loop) — handled by visited check above
+                    // carry_stack propagates naturally for fall-through/jump
                     cur = next;
                 }
                 Terminator::Branch { cond_inv, target, fallthrough } => {
@@ -915,7 +1063,7 @@ impl<'a> StructuredDecoder<'a> {
                     let fallthrough = *fallthrough;
                     let inv = *cond_inv;
 
-                    let raw_cond = cond_expr.unwrap_or(Expr::Unknown);
+                    let raw_cond = cond_expr.unwrap_or_else(|| dec.stack.pop().unwrap_or(Expr::Unknown));
                     // If cond_inv, the branch fires when condition is FALSE
                     // Standard AVM2: iftrue → branch if true; iffalse → branch if false
                     // Our Block stores: iftrue → Branch { cond_inv: false, target }
@@ -924,11 +1072,11 @@ impl<'a> StructuredDecoder<'a> {
                     // fallthrough = else branch
 
                     // Detect backward jump (while loop): target < block.start
-                    if target < block.start && target <= start {
-                        // while loop: condition is inverted (loop while raw_cond is true,
-                        // but iftrue branches to loop header)
+                    if target < block.start {
+                        // Back-edge: the condition block (this block) is at the BOTTOM of the loop.
+                        // target = loop body start; fallthrough = after-loop
                         result.extend(stmts);
-                        let body = self.decode_from(fallthrough, Some(target));
+                        let body = self.decode_from(target, Some(block.start));
                         let cond = if inv { Expr::UnOp("!", Box::new(raw_cond)) } else { raw_cond };
                         result.push(Stmt::While(cond, body));
                         cur = fallthrough;
@@ -942,8 +1090,6 @@ impl<'a> StructuredDecoder<'a> {
                         // Simple heuristic: the merge point is the minimum of:
                         //   - the next block after the target (if target ends with Jump)
                         //   - the next block after the fallthrough
-                        let merge = self.find_merge(target, fallthrough);
-
                         let (then_start, else_start) = if inv {
                             // iffalse: cond false → jump to target (else); true → fallthrough (then)
                             (fallthrough, target)
@@ -952,32 +1098,40 @@ impl<'a> StructuredDecoder<'a> {
                             (target, fallthrough)
                         };
 
-                        let then_b = self.decode_from(then_start, merge);
+                        let merge = self.find_merge(then_start, else_start);
+
+                        // Note: residual carry_stack from this block is the branch condition
+                        // (already consumed above). Clear it before sub-decoding.
+                        let saved_carry = carry_stack.clone();
+                        carry_stack.clear();
+
+                        let then_b = self.decode_from_with_stack(then_start, merge, saved_carry.clone());
                         let else_b = if else_start != merge.unwrap_or(usize::MAX) {
-                            self.decode_from(else_start, merge)
+                            self.decode_from_with_stack(else_start, merge, vec![])
                         } else {
                             vec![]
                         };
 
                         let cond = raw_cond;
                         result.push(Stmt::If(cond, then_b, else_b));
+                        carry_stack.clear();
                         cur = merge.unwrap_or(usize::MAX);
                     }
                 }
                 Terminator::BranchCmp { op, target, fallthrough } => {
                     let target = *target;
                     let fallthrough = *fallthrough;
-                    let op = *op;
-
-                    let r = dec.stack.pop().unwrap_or(Expr::Unknown);
-                    let l = dec.stack.pop().unwrap_or(Expr::Unknown);
-                    let cond = Expr::BinOp(op, Box::new(l), Box::new(r));
+                    let cond = cond_expr.unwrap_or_else(|| {
+                        let r = dec.stack.pop().unwrap_or(Expr::Unknown);
+                        let l = dec.stack.pop().unwrap_or(Expr::Unknown);
+                        Expr::BinOp(op, Box::new(l), Box::new(r))
+                    });
 
                     result.extend(stmts);
 
                     if target < block.start {
-                        // loop
-                        let body = self.decode_from(fallthrough, Some(target));
+                        // Back edge: while loop. Body = from target to this block.
+                        let body = self.decode_from(target, Some(block.start));
                         result.push(Stmt::While(cond, body));
                         cur = fallthrough;
                     } else {
@@ -995,22 +1149,43 @@ impl<'a> StructuredDecoder<'a> {
         result
     }
 
-    /// Find the merge point after an if/else by looking at where both branches jump.
+    /// Find the merge point after an if/else.
+    /// Handles nested ifs by following the then-branch to its final exit.
     fn find_merge(&self, then_start: usize, else_start: usize) -> Option<usize> {
-        // Find where then-block exits and where else-block exits
-        let then_exit = self.block_exit_target(then_start);
+        let then_exit = self.deep_exit(then_start, else_start);
         let else_exit = self.block_exit_target(else_start);
 
         match (then_exit, else_exit) {
             (Some(a), Some(b)) if a == b => Some(a),
             (Some(a), None) => Some(a),
             (None, Some(b)) => Some(b),
-            // If then jumps to else's continuation, merge is else_start
             _ => {
-                // fallback: use else_start as the merge (i.e. empty else block)
                 if else_start > then_start { Some(else_start) } else { None }
             }
         }
+    }
+
+    /// Follow a block chain (Fall/Jump only, up to 8 hops) to find its final exit target.
+    /// Stops at `stop_before` to avoid cycles.
+    fn deep_exit(&self, start: usize, stop_before: usize) -> Option<usize> {
+        let mut cur = start;
+        for _ in 0..8 {
+            if cur == stop_before { return Some(cur); }
+            let block = self.block_at(cur)?;
+            match &block.term {
+                Terminator::Fall(next) | Terminator::Jump(next) => {
+                    let next = *next;
+                    if next == stop_before { return Some(next); }
+                    cur = next;
+                }
+                Terminator::Return | Terminator::Throw => return None,
+                Terminator::Branch { fallthrough, .. } | Terminator::BranchCmp { fallthrough, .. } => {
+                    // For branches, the "then" exit is the fallthrough
+                    return Some(*fallthrough);
+                }
+            }
+        }
+        None
     }
 
     /// Get the first unconditional jump target of a block (its exit).
@@ -1028,6 +1203,69 @@ impl<'a> StructuredDecoder<'a> {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+/// Collapse `findpropstrict 'X' + callproperty 'X'` pattern.
+/// findpropstrict pushes `This.X` (a GetProperty sentinel);
+/// if callproperty name matches that property, collapse to just `This`.
+fn collapse_findprop(obj: Expr, call_name: &str) -> Expr {
+    match &obj {
+        Expr::GetProperty(inner, prop_name) if prop_name == call_name => {
+            // The object was pushed by findpropstrict — the real receiver is the inner object
+            *inner.clone()
+        }
+        _ => obj,
+    }
+}
+
+/// Pre-scan bytecode to map activation slot indices to parameter names.
+/// Pattern: getscopeobject 1 → getlocal_N → setslot M  means slot M = param N.
+fn infer_activation_slots(bc: &[u8], params: &[String]) -> BTreeMap<u32, String> {
+    let mut slots: BTreeMap<u32, String> = BTreeMap::new();
+    let mut i = 0;
+    while i < bc.len() {
+        let op = bc[i]; i += 1;
+        match op {
+            // getscopeobject 1, getlocal_N, setslot M → slot M = param N-1
+            0x65 if i < bc.len() && bc[i] == 1 => {
+                i += 1; // consume the operand
+                if i < bc.len() {
+                    let next_op = bc[i]; i += 1;
+                    let local_n = match next_op {
+                        0xD0 => Some(0u32),
+                        0xD1 => Some(1),
+                        0xD2 => Some(2),
+                        0xD3 => Some(3),
+                        0x62 => {
+                            let n = read_u30_at(bc, &mut i);
+                            Some(n)
+                        }
+                        _ => { i -= 1; None }
+                    };
+                    if let Some(n) = local_n {
+                        if i < bc.len() {
+                            let set_op = bc[i]; i += 1;
+                            if set_op == 0x6D { // setslot
+                                let slot = read_u30_at(bc, &mut i);
+                                let name = if n == 0 {
+                                    "self".to_string()
+                                } else if (n as usize) <= params.len() {
+                                    params[n as usize - 1].clone()
+                                } else {
+                                    format!("_v{}", n)
+                                };
+                                slots.insert(slot, name);
+                            } else {
+                                i -= 1;
+                            }
+                        }
+                    }
+                }
+            }
+            _ => { i += instr_size(bc, i - 1) - 1; }
+        }
+    }
+    slots
+}
+
 /// Decompile an ABC method body to a Fraymakers Haxe function string.
 pub fn decompile_method(
     body: &crate::abc_parser::MethodBody,
@@ -1039,7 +1277,15 @@ pub fn decompile_method(
         return format!("function {}({}) {{\n}}\n\n", name, params.join(", "));
     }
 
-    let mut decoder = StructuredDecoder::new(&body.bytecode, abc);
+    // Pre-scan for activation slot naming
+    let activation_slots = infer_activation_slots(&body.bytecode, params);
+
+    let mut decoder = StructuredDecoder::new_with_slots(&body.bytecode, abc, activation_slots);
+    // Map param locals: local_0 = this, local_1 = param0, local_2 = param1, etc.
+    for (i, param) in params.iter().enumerate() {
+        let local_idx = (i + 1) as u32;
+        decoder.param_locals.insert(local_idx, param.clone());
+    }
     let stmts = decoder.decode_from(0, None);
 
     // Remove redundant local0 (= this) assignments
