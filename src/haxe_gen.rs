@@ -36,10 +36,10 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
 
     // Generate .meta sidecar files for each sprite PNG
     let meta_guids = entity_gen::get_image_meta_guids(&char_id, img_result);
-    let sprites_dir = char_dir.join("sprites");
+    let sprites_dir = char_dir.join("library/sprites");
     let mut meta_count = 0;
     for (png_rel_path, guid) in &meta_guids {
-        let meta_path = sprites_dir.join(format!("{}.meta", png_rel_path.trim_start_matches("sprites/")));
+        let meta_path = sprites_dir.join(format!("{}.meta", png_rel_path.trim_start_matches("library/sprites/")));
         if let Some(parent) = meta_path.parent() {
             fs::create_dir_all(parent)?;
         }

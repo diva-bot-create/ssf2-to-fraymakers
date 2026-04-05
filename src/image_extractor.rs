@@ -81,7 +81,7 @@ pub fn extract_images(
     log::info!("Shape→bitmap mappings: {}", shape_to_bitmap.len());
 
     // 2. Extract all bitmaps to PNGs
-    let sprites_dir = output_dir.join("sprites");
+    let sprites_dir = output_dir.join("library/sprites");
     fs::create_dir_all(&sprites_dir)?;
 
     let mut images: BTreeMap<u16, ExtractedImage> = BTreeMap::new();
@@ -109,7 +109,7 @@ pub fn extract_images(
                             symbol_name: sym,
                             width: w,
                             height: h,
-                            png_path: format!("sprites/{}", filename),
+                            png_path: format!("library/sprites/{}", filename),
                         });
                     }
                     Err(e) => {
@@ -134,7 +134,7 @@ pub fn extract_images(
                             symbol_name: sym,
                             width: w,
                             height: h,
-                            png_path: format!("sprites/{}", filename),
+                            png_path: format!("library/sprites/{}", filename),
                         });
                     }
                     Err(e) => {
