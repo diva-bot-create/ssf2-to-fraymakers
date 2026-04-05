@@ -121,16 +121,9 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
                 }
 
 
-                // Extract animation info from symbol names
-                for (id, sym_name) in &swf.symbols {
-                    if let Some(anim_name) = extract_animation_name(sym_name, char_name) {
-                        animations.entry(anim_name.clone()).or_insert(AnimationInfo {
-                            name: anim_name,
-                            frames: 0,
-                            speed: 1.0,
-                        });
-                    }
-                }
+                // Note: we no longer seed animations from raw symbol names here.
+                // The xframe_map seeding below produces FM-named entries which avoids
+                // duplicates like "bair" + "aerial_back".
 
                 // Merge xframe_map (frame method → SSF2 anim name)
                 xframe_map.extend(extracted.xframe_map.clone());
@@ -169,6 +162,26 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
             speed: 1.0,
         });
     }
+
+    // Deduplicate: remove raw SSF2/symbol names that have a known FM equivalent.
+    // e.g. if both "bair" and "aerial_back" exist, drop "bair".
+    // Also drop internal/helper symbols that aren't real character animations.
+    let ssf2_names: std::collections::BTreeSet<String> = ssf2_to_fm_anim.keys().cloned().collect();
+    let fm_names: std::collections::BTreeSet<String> = ssf2_to_fm_anim.values().cloned().collect();
+    let internal_prefixes = ["groundref", "itemplaceholder", "collisonbox", "chargespark", "fireball", "mariocut", "finalsmash"];
+    animations.retain(|key, _| {
+        // Keep if it's a known FM name
+        if fm_names.contains(key) { return true; }
+        // Drop if it's a raw SSF2 name that maps to a different FM name
+        if let Some(fm) = ssf2_to_fm_anim.get(key) {
+            if fm != key { return false; }
+        }
+        // Drop internal/helper symbols
+        let lower = key.to_lowercase();
+        if internal_prefixes.iter().any(|p| lower.starts_with(p)) { return false; }
+        // Keep anything else (unmapped names stay as-is)
+        true
+    });
 
     log::info!("Total: {} attacks, {} animations, {} ssf2→fm mappings extracted",
         attacks.len(), animations.len(), ssf2_to_fm_anim.len());

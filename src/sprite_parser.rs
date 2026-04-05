@@ -195,13 +195,75 @@ pub fn parse_sprite_boxes(
         }
     }
 
-    log::info!("sprite_parser: extracted box data for {}/{} animations",
+    log::info!("sprite_parser: extracted box data for {}/{} animations before fallbacks",
+        result.len(), ssf2_to_fm.len());
+
+    // Apply fallbacks: for animations with no sprite data, clone from the closest related state.
+    // These are procedural states in SSF2 that reuse another animation's pose.
+    apply_fallbacks(&mut result);
+
+    log::info!("sprite_parser: {}/{} animations have box data after fallbacks",
         result.len(), ssf2_to_fm.len());
 
     Ok(result)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/// For animations with no extracted sprite data, clone box data from the most
+/// appropriate related animation. The cloned data keeps the same box shapes but
+/// marks the animation name correctly so it lands in the right entity layer.
+fn apply_fallbacks(result: &mut BTreeMap<String, AnimationBoxData>) {
+    // Table: missing FM anim name → best donor FM anim name
+    let fallbacks: &[(&str, &str)] = &[
+        // Damage / launched states
+        ("stunned",           "hurt"),
+        ("star_ko",           "hurt"),
+        ("starko",            "hurt"),
+        ("screenko",          "hurt"),
+        ("buried",            "crouch"),
+        // Airborne/misc states
+        ("fly",               "jump_aerial"),
+        ("swim",              "fall"),
+        ("ladder",            "idle"),
+        ("wall_stick",        "fall"),
+        ("special",           "idle"),
+        ("carry",             "grab"),
+        // Landing variants
+        ("land_heavy",        "land"),
+        ("ledge_lean",        "ledge_hang"),
+        // Win/lose/respawn
+        ("victory",           "taunt"),
+        ("defeat",            "hurt"),
+        ("respawn",           "idle"),
+        // Special air variants
+        ("special_down_air",  "special_down"),
+        ("special_neutral_air", "special_neutral"),
+        ("special_side_air",  "special_side"),
+        ("special_up_air",    "special_up"),
+        // Item variants
+        ("item_float",        "idle"),
+        ("item_screw",        "special_up"),
+    ];
+
+    let mut to_insert: Vec<AnimationBoxData> = Vec::new();
+
+    for (missing, donor) in fallbacks {
+        if result.contains_key(*missing) { continue; }
+        if let Some(donor_data) = result.get(*donor) {
+            log::debug!("Fallback: '{}' ← '{}' ({} frames)", missing, donor, donor_data.total_frames);
+            let mut cloned = donor_data.clone();
+            cloned.fm_name = missing.to_string();
+            to_insert.push(cloned);
+        } else {
+            log::debug!("Fallback: '{}' ← '{}' (donor also missing)", missing, donor);
+        }
+    }
+
+    for data in to_insert {
+        result.insert(data.fm_name.clone(), data);
+    }
+}
 
 /// Find the pixel size of one side of the CollisionBox base shape.
 /// SSF2 uses a square shape; we want the width (= height for square).
