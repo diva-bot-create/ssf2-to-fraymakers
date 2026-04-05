@@ -55,23 +55,23 @@ function flipX(arg0) {
 
 
 function followUser(arg0, arg1, arg2) {
-	var _s7 = function() {
-	effectMC.x = self.getX() + xOffset;
-	effectMC.y = self.getY() + yOffset;
-	return;
+	var updatePos = function() {
+		effectMC.x = self.getX() + xOffset;
+		effectMC.y = self.getY() + yOffset;
+		return;
 	};
-	var _s4 = arg1.x - self.getX();
-	var _s5 = arg1.y - self.getY();
-	var _s6 = { hitStunPause: false };
+	var xOffset = arg1.x - self.getX();
+	var yOffset = arg1.y - self.getY();
+	var options = { hitStunPause: false };
 	if (arg2) {
-		var _s6 = { persistent: true, hitStunPause: false };
+		var options = { persistent: true, hitStunPause: false };
 		if (arg0) {
-			self.createTimer(1, 0, _s7, _s6);
+			self.createTimer(1, 0, updatePos, options);
 			return;
 		}
-		self.destroyTimer(_s7);
+		self.destroyTimer(updatePos);
 	} else {
-		var _s6 = { persistent: false, hitStunPause: false };
+		var options = { persistent: false, hitStunPause: false };
 	}
 }
 
@@ -91,20 +91,20 @@ function jumpToContinue(arg0) {
 
 
 function loopEffect(arg0, arg1, arg2) {
-	var _s5 = function() {
-	effectMC.gotoAndStop(1);
-	return;
+	var doLoop = function() {
+		effectMC.gotoAndStop(1);
+		return;
 	};
-	var _s4 = { hitStunPause: false };
+	var options = { hitStunPause: false };
 	if (arg2) {
-		var _s4 = { persistent: true, hitStunPause: false };
+		var options = { persistent: true, hitStunPause: false };
 		if (arg0) {
-			self.createTimer(1, 0, _s5, { hitStunPause: false });
+			self.createTimer(1, 0, doLoop, { hitStunPause: false });
 			return;
 		}
-		self.destroyTimer(_s5);
+		self.destroyTimer(doLoop);
 	} else {
-		var _s4 = { persistent: false, hitStunPause: false };
+		var options = { persistent: false, hitStunPause: false };
 	}
 }
 

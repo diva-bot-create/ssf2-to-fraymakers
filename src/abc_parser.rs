@@ -132,6 +132,7 @@ pub struct MethodBody {
     pub max_stack: u32,
     pub local_count: u32,
     pub bytecode: Vec<u8>,
+    pub activation_traits: Vec<Trait>,  // named slots from newactivation
 }
 
 // ─── Extracted character data ─────────────────────────────────────────────────
@@ -473,13 +474,17 @@ pub fn parse(data: &[u8]) -> Result<AbcFile> {
             r.read_u30().ok(); // var_name
         }
 
-        // Skip method body traits
+        // Parse method body traits (activation slot names)
         let trait_count = r.read_u30().unwrap_or(0) as usize;
+        let mut activation_traits = Vec::new();
         for _ in 0..trait_count {
-            if parse_trait(&mut r, &strings, &multinames).is_err() { break; }
+            match parse_trait(&mut r, &strings, &multinames) {
+                Ok(t) => activation_traits.push(t),
+                Err(_) => break,
+            }
         }
 
-        method_bodies.push(MethodBody { method_idx, max_stack, local_count, bytecode });
+        method_bodies.push(MethodBody { method_idx, max_stack, local_count, bytecode, activation_traits });
     }
 
     log::info!("ABC: {} methods, {} classes, {} method bodies", methods.len(), classes.len(), method_bodies.len());

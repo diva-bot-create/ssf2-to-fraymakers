@@ -140,7 +140,7 @@ pub enum Expr {
     BinOp(&'static str, Box<Expr>, Box<Expr>),
     UnOp(&'static str, Box<Expr>),
     GetLex(String),
-    Closure(String),  // inline function literal, body already rendered
+    Closure(Vec<String>, Vec<Stmt>),  // params + body stmts, rendered depth-aware
     Unknown,
 }
 
@@ -156,9 +156,9 @@ impl Expr {
             Expr::Null      => "null".to_string(),
             Expr::This      => "self".to_string(),
             Expr::Local(n)  => format!("_v{}", n),
-            Expr::GetLex(n)    => n.clone(),
-            Expr::Closure(body) => body.clone(),
-            Expr::Unknown       => "/* ? */".to_string(),
+            Expr::GetLex(n)              => n.clone(),
+            Expr::Closure(params, stmts)  => render_closure(params, stmts, 0),
+            Expr::Unknown                 => "/* ? */".to_string(),
             Expr::GetProperty(obj, name) => {
                 format!("{}.{}", obj.render(), name)
             }
@@ -233,12 +233,33 @@ pub enum Stmt {
     Comment(String),
 }
 
+fn render_closure(params: &[String], stmts: &[Stmt], depth: usize) -> String {
+    let param_str = params.join(", ");
+    if stmts.is_empty() {
+        return format!("function({}) {{}}", param_str);
+    }
+    // Single return expression: inline
+    if stmts.len() == 1 {
+        if let Stmt::Return(Some(e)) = &stmts[0] {
+            return format!("function({}) {{ return {}; }}", param_str, e.render());
+        }
+    }
+    let tab = "\t".repeat(depth);
+    let body = render_stmts(stmts, depth + 1);
+    format!("function({}) {{\n{}{}}}", param_str, body, tab)
+}
+
 fn render_stmts(stmts: &[Stmt], depth: usize) -> String {
     let mut out = String::new();
     let tab = "\t".repeat(depth);
     for s in stmts {
         match s {
-            Stmt::NamedAssign(name, v) => out.push_str(&format!("{}var {} = {};\n", tab, name, v.render())),
+            Stmt::NamedAssign(name, v) => {
+                let val_str = if let Expr::Closure(params, stmts) = v {
+                    render_closure(params, stmts, depth)
+                } else { v.render() };
+                out.push_str(&format!("{}var {} = {};\n", tab, name, val_str));
+            }
             Stmt::Comment(c)   => out.push_str(&format!("{}// {}\n", tab, c)),
             Stmt::Return(None) => out.push_str(&format!("{}return;\n", tab)),
             Stmt::Return(Some(e)) => out.push_str(&format!("{}return {};\n", tab, e.render())),
@@ -248,9 +269,11 @@ fn render_stmts(stmts: &[Stmt], depth: usize) -> String {
                 } else {
                     format!("_v{}", n)
                 };
-                // Skip trivial self = self assignments
                 if var_name == "self" && matches!(v, Expr::This) { continue; }
-                out.push_str(&format!("{}{} = {};\n", tab, var_name, v.render()));
+                let val_str = if let Expr::Closure(params, stmts) = v {
+                    render_closure(params, stmts, depth)
+                } else { v.render() };
+                out.push_str(&format!("{}{} = {};\n", tab, var_name, val_str));
             }
             Stmt::SetProp(obj, name, val) => {
                 out.push_str(&format!("{}{}.{} = {};\n", tab, obj.render(), name, val.render()));
@@ -1405,8 +1428,23 @@ fn collapse_findprop(obj: Expr, call_name: &str) -> Expr {
     }
 }
 
+/// Build activation slot name map from method body traits.
+/// Slot trait kind=0 (Var) has slot_idx → name mapping.
+fn slots_from_traits(traits: &[crate::abc_parser::Trait]) -> BTreeMap<u32, String> {
+    let mut slots = BTreeMap::new();
+    for t in traits {
+        if t.kind == 0 || t.kind == 6 {  // Slot or Const
+            if t.slot_idx > 0 && !t.name.is_empty() {
+                slots.insert(t.slot_idx, t.name.clone());
+            }
+        }
+    }
+    slots
+}
+
 /// Pre-scan bytecode to map activation slot indices to parameter names.
 /// Pattern: getscopeobject 1 → getlocal_N → setslot M  means slot M = param N.
+/// Falls back to trait names if available.
 fn infer_activation_slots(bc: &[u8], params: &[String]) -> BTreeMap<u32, String> {
     let mut slots: BTreeMap<u32, String> = BTreeMap::new();
     let mut i = 0;
@@ -1473,10 +1511,13 @@ fn decompile_closure(method_idx: u32, abc: &AbcFile) -> Expr {
     let params: Vec<String> = (0..param_count).map(|i| format!("arg{}", i)).collect();
 
     if body.bytecode.is_empty() {
-        return Expr::Closure(format!("function({}) {{}}", params.join(", ")));
+        return Expr::Closure(params, vec![]);
     }
 
-    let activation_slots = infer_activation_slots(&body.bytecode, &params);
+    let mut activation_slots = infer_activation_slots(&body.bytecode, &params);
+    for (slot, name) in slots_from_traits(&body.activation_traits) {
+        activation_slots.entry(slot).or_insert(name);
+    }
     let mut decoder = StructuredDecoder::new_with_slots(&body.bytecode, abc, activation_slots);
     for (i, param) in params.iter().enumerate() {
         decoder.param_locals.insert((i + 1) as u32, param.clone());
@@ -1486,20 +1527,7 @@ fn decompile_closure(method_idx: u32, abc: &AbcFile) -> Expr {
         !matches!(s, Stmt::VarDecl(0, Expr::This))
     }).collect();
     let stmts = collapse_duplicate_ifs(stmts);
-
-    // Render as Haxe function literal
-    let body_str = render_stmts(&stmts, 1);
-    // Check if single return-value expression (simplify to arrow-style if possible)
-    let literal = if stmts.len() == 1 {
-        if let Stmt::Return(Some(e)) = &stmts[0] {
-            format!("function({}) {{ return {}; }}", params.join(", "), e.render())
-        } else {
-            format!("function({}) {{\n{}\t}}", params.join(", "), body_str)
-        }
-    } else {
-        format!("function({}) {{\n{}\t}}", params.join(", "), body_str)
-    };
-    Expr::Closure(literal)
+    Expr::Closure(params, stmts)
 }
 
 /// Post-process AST to collapse redundant duplicate-condition if-blocks.
@@ -1539,8 +1567,12 @@ pub fn decompile_method(
         return format!("function {}({}) {{\n}}\n\n", name, params.join(", "));
     }
 
-    // Pre-scan for activation slot naming
-    let activation_slots = infer_activation_slots(&body.bytecode, params);
+    // Build activation slot names: start from bytecode inference, then overlay trait names
+    let mut activation_slots = infer_activation_slots(&body.bytecode, params);
+    for (slot, name) in slots_from_traits(&body.activation_traits) {
+        // Trait names win unless the slot is already mapped to a param name
+        activation_slots.entry(slot).or_insert(name);
+    }
 
     let mut decoder = StructuredDecoder::new_with_slots(&body.bytecode, abc, activation_slots);
     // Map param locals: local_0 = this, local_1 = param0, local_2 = param1, etc.
