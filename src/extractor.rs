@@ -153,21 +153,41 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
     // Build SSF2 anim name → Fraymakers anim name map
     let ssf2_to_fm_anim = build_ssf2_to_fm_anim(&xframe_map);
 
-    // Also seed animations from xframe_map so every known SSF2 anim appears
+    // Also seed animations from xframe_map so every known SSF2 anim appears.
+    // For animations that get split into sub-anims (jab→1/2/3, taunt→side/up/down),
+    // expand them here so the final animation list is correct.
     for ssf2_name in xframe_map.values() {
         let fm_name = ssf2_to_fm_anim.get(ssf2_name).cloned().unwrap_or_else(|| ssf2_name.clone());
-        animations.entry(fm_name.clone()).or_insert(AnimationInfo {
-            name: fm_name,
-            frames: 0,
-            speed: 1.0,
-        });
+        // Expand split animations
+        let sub_names = expand_split_anim(&fm_name);
+        if sub_names.is_empty() {
+            animations.entry(fm_name.clone()).or_insert(AnimationInfo {
+                name: fm_name,
+                frames: 0,
+                speed: 1.0,
+            });
+        } else {
+            for sub in sub_names {
+                animations.entry(sub.clone()).or_insert(AnimationInfo {
+                    name: sub,
+                    frames: 0,
+                    speed: 1.0,
+                });
+            }
+        }
     }
 
     // Deduplicate: remove raw SSF2/symbol names that have a known FM equivalent.
     // e.g. if both "bair" and "aerial_back" exist, drop "bair".
     // Also drop internal/helper symbols that aren't real character animations.
-    let ssf2_names: std::collections::BTreeSet<String> = ssf2_to_fm_anim.keys().cloned().collect();
-    let fm_names: std::collections::BTreeSet<String> = ssf2_to_fm_anim.values().cloned().collect();
+    let _ssf2_names: std::collections::BTreeSet<String> = ssf2_to_fm_anim.keys().cloned().collect();
+    // Include sub-anim names (jab1/jab2/jab3 etc) produced by split expansion
+    let mut fm_names: std::collections::BTreeSet<String> = ssf2_to_fm_anim.values().cloned().collect();
+    for base_fm in ssf2_to_fm_anim.values() {
+        for sub in expand_split_anim(base_fm) {
+            fm_names.insert(sub);
+        }
+    }
     let internal_prefixes = ["groundref", "itemplaceholder", "collisonbox", "chargespark", "fireball", "mariocut", "finalsmash"];
     animations.retain(|key, _| {
         // Keep if it's a known FM name
@@ -197,6 +217,22 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
 }
 
 // ─── SSF2 → Fraymakers animation name table ───────────────────────────────────
+
+/// For SSF2 animations that map to a single FM name but get split into sub-animations
+/// at the sprite level (e.g. jab → jab1/jab2/jab3), return the full list of sub-anim names.
+/// Returns empty vec for animations that are NOT split.
+pub fn expand_split_anim(fm_name: &str) -> Vec<String> {
+    match fm_name {
+        "jab"   => vec!["jab1".into(), "jab2".into(), "jab3".into()],
+        "taunt" => vec!["taunt".into(), "taunt_up".into(), "taunt_down".into()],
+        _ => vec![],
+    }
+}
+
+/// Returns true if this FM animation name is a sub-animation produced by splitting.
+pub fn is_split_sub_anim(fm_name: &str) -> bool {
+    matches!(fm_name, "jab1" | "jab2" | "jab3" | "taunt_up" | "taunt_down")
+}
 
 fn build_ssf2_to_fm_anim(xframe_map: &XframeMap) -> BTreeMap<String, String> {
     // Static SSF2 animation name → Fraymakers animation name mapping

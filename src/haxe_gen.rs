@@ -562,7 +562,57 @@ fn generate_script(data: &CharacterData, char_id: &str) -> String {
         }
     }
 
+    // Jab chain transition logic
+    out.push_str(&generate_jab_scripts());
+
     out
+}
+
+// ─── Jab chain scripts ─────────────────────────────────────────────────────
+
+/// Generate jab1/jab2/jab3 chain transition frame scripts.
+///
+/// In SSF2, the single 'Jab_21' sprite has three sub-animations separated by
+/// internal frame labels (begin → hit2 → hit3). SSF2 code calls `gotoAndPlay("hit2")`
+/// to chain into the next hit on button press, and `gotoAndPlay("begin")` to loop jab1.
+///
+/// In Fraymakers, each is a separate animation. The chain logic lives in framescripts:
+///   - jab1: on last frame, if attack pressed → enter jab2; else idle
+///   - jab2: on last frame, if attack pressed → enter jab3; else idle
+///   - jab3: on last frame → idle
+fn generate_jab_scripts() -> String {
+    r#"
+// ── Jab chain — SSF2 Jab_21 sub-animations (begin / hit2 / hit3) ─────────────────
+// SSF2 uses gotoAndPlay("hit2") / gotoAndPlay("hit3") to chain jabs on button press.
+// In Fraymakers, jab1/jab2/jab3 are separate animations chained via CState transitions.
+
+// Called from AnimationStats.jab1 last-frame handler (link in FrayTools):
+function jab1_end() {
+	if (entity.checkInput(ControlsObject.ATTACK)) {
+		// Player pressed attack again — chain to jab2
+		entity.setAnimation("jab2");
+		entity.playCState(CState.JAB2);
+	} else {
+		// No input — return to idle
+		entity.playCState(CState.IDLE);
+	}
+}
+
+// Called from AnimationStats.jab2 last-frame handler:
+function jab2_end() {
+	if (entity.checkInput(ControlsObject.ATTACK)) {
+		entity.setAnimation("jab3");
+		entity.playCState(CState.JAB3);
+	} else {
+		entity.playCState(CState.IDLE);
+	}
+}
+
+// Called from AnimationStats.jab3 last-frame handler:
+function jab3_end() {
+	entity.playCState(CState.IDLE);
+}
+"#.to_string()
 }
 
 // ─── manifest.json ───────────────────────────────────────────────────────────

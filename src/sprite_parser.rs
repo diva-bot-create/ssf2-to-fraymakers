@@ -118,10 +118,12 @@ pub struct AnimationBoxData {
     pub ssf2_name: String,
     /// Fraymakers animation name (e.g. "aerial_neutral", "idle")
     pub fm_name: String,
-    /// Total frames in this animation
+    /// Total frames in this animation (after sub-anim slicing if applicable)
     pub total_frames: u16,
-    /// per-frame boxes: frame_index → list of boxes active on that frame
+    /// per-frame boxes: frame_index (0-based within this sub-anim) → list of boxes active on that frame
     pub frames: BTreeMap<u16, Vec<FrameBox>>,
+    /// Frame offset into the original SSF2 sprite where this sub-anim starts
+    pub sprite_frame_offset: u16,
 }
 
 // ─── Main entry point ────────────────────────────────────────────────────────
@@ -178,20 +180,49 @@ pub fn parse_sprite_boxes(
 
             let fm_name = ssf2_to_fm.get(&ssf2_name).cloned().unwrap_or_else(|| ssf2_name.clone());
 
+            // Collect internal frame labels (for sub-animation splitting)
+            let frame_labels = extract_frame_labels(sprite);
+
             let frames = extract_frame_boxes(sprite, &sym_names, box_base_size);
-            if frames.is_empty() {
-                continue;
+
+            log::debug!("Sprite '{}' → ssf2='{}' fm='{}': {} frames with boxes, {} labels",
+                sym, ssf2_name, fm_name, frames.len(), frame_labels.len());
+
+            // Check if this animation should be split into sub-animations
+            let sub_splits = sub_anim_splits(&fm_name, &frame_labels, sprite.num_frames);
+
+            if sub_splits.is_empty() {
+                // Single animation — insert as-is
+                if frames.is_empty() { continue; }
+                result.insert(fm_name.clone(), AnimationBoxData {
+                    ssf2_name,
+                    fm_name,
+                    total_frames: sprite.num_frames,
+                    frames,
+                    sprite_frame_offset: 0,
+                });
+            } else {
+                // Split into multiple FM animations
+                for (sub_fm_name, start_frame, end_frame) in sub_splits {
+                    let slice_len = end_frame.saturating_sub(start_frame);
+                    // Remap frame indices: subtract start_frame so they are 0-based within sub-anim
+                    let sliced_frames: BTreeMap<u16, Vec<FrameBox>> = frames.iter()
+                        .filter(|(&f, _)| f >= start_frame && f < end_frame)
+                        .map(|(&f, boxes)| (f - start_frame, boxes.clone()))
+                        .collect();
+
+                    log::debug!("  sub-anim '{}': frames {}..{} ({} frames with boxes)",
+                        sub_fm_name, start_frame, end_frame, sliced_frames.len());
+
+                    result.insert(sub_fm_name.clone(), AnimationBoxData {
+                        ssf2_name: ssf2_name.clone(),
+                        fm_name: sub_fm_name,
+                        total_frames: slice_len,
+                        frames: sliced_frames,
+                        sprite_frame_offset: start_frame,
+                    });
+                }
             }
-
-            log::debug!("Sprite '{}' → ssf2='{}' fm='{}': {} frames with boxes",
-                sym, ssf2_name, fm_name, frames.len());
-
-            result.insert(fm_name.clone(), AnimationBoxData {
-                ssf2_name,
-                fm_name,
-                total_frames: sprite.num_frames,
-                frames,
-            });
         }
     }
 
@@ -209,6 +240,84 @@ pub fn parse_sprite_boxes(
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+// ─── Sub-animation splitting ─────────────────────────────────────────────────
+
+/// Extract all FrameLabel tags from a DefineSprite, returning (label, frame_number) pairs
+/// sorted by frame number.
+fn extract_frame_labels(sprite: &swf::Sprite) -> Vec<(String, u16)> {
+    let mut frame_num: u16 = 0;
+    let mut labels: Vec<(String, u16)> = Vec::new();
+    for tag in &sprite.tags {
+        match tag {
+            swf::Tag::ShowFrame => { frame_num += 1; }
+            swf::Tag::FrameLabel(fl) => {
+                let label = fl.label.to_str_lossy(encoding_rs::WINDOWS_1252).to_string();
+                labels.push((label, frame_num));
+            }
+            _ => {}
+        }
+    }
+    labels.sort_by_key(|(_, f)| *f);
+    labels
+}
+
+/// Public alias for sub_anim_splits — used by image_extractor to apply the same split.
+pub fn sub_anim_image_splits(
+    fm_name: &str,
+    frame_labels: &[(String, u16)],
+    total_frames: u16,
+) -> Vec<(String, u16, u16)> {
+    sub_anim_splits(fm_name, frame_labels, total_frames)
+}
+
+/// Given an FM animation name and the internal frame labels of its SSF2 sprite,
+/// return a list of (fm_sub_anim_name, start_frame_inclusive, end_frame_exclusive).
+/// Returns empty vec if no splitting is needed (animation maps 1:1).
+fn sub_anim_splits(
+    fm_name: &str,
+    frame_labels: &[(String, u16)],
+    total_frames: u16,
+) -> Vec<(String, u16, u16)> {
+    // Table: fm_anim → (required labels in order, fm sub-anim names in order)
+    // The SSF2 label marks the START of that sub-animation's first active frame.
+    let split_table: &[(&str, &[&str], &[&str])] = &[
+        // Jab: begin=1, hit2=8, hit3=18  (frame 0 is pre-roll, ignore it)
+        ("jab",  &["begin", "hit2", "hit3"],  &["jab1", "jab2", "jab3"]),
+
+        // Taunts: taunt_side=0, taunt_neutral=42, taunt_updown=115
+        // Map to FM: taunt (side), taunt_up, taunt_down  (FM has 3 taunt slots)
+        ("taunt", &["taunt_side", "taunt_neutral", "taunt_updown"], &["taunt", "taunt_up", "taunt_down"]),
+    ];
+
+    for &(anim, required_labels, sub_names) in split_table {
+        if fm_name != anim { continue; }
+
+        // Check that all required labels are present
+        let label_map: std::collections::HashMap<&str, u16> = frame_labels.iter()
+            .map(|(l, f)| (l.as_str(), *f))
+            .collect();
+
+        if required_labels.iter().any(|l| !label_map.contains_key(l)) {
+            // Labels not found — don't split this character's version
+            log::debug!("sub_anim_splits: '{}' missing some labels {:?}, skipping split", fm_name, required_labels);
+            return vec![];
+        }
+
+        // Build (start, end) ranges from the label positions
+        let starts: Vec<u16> = required_labels.iter().map(|l| *label_map.get(l).unwrap()).collect();
+        let mut splits = Vec::new();
+        for (i, (&start, &sub_name)) in starts.iter().zip(sub_names.iter()).enumerate() {
+            let end = if i + 1 < starts.len() { starts[i + 1] } else { total_frames };
+            splits.push((sub_name.to_string(), start, end));
+        }
+        return splits;
+    }
+
+    vec![]
+}
+
+// ─── Fallbacks ────────────────────────────────────────────────────────────────
 
 /// For animations with no extracted sprite data, clone box data from the most
 /// appropriate related animation. The cloned data keeps the same box shapes but
