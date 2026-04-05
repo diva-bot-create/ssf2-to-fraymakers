@@ -1,0 +1,217 @@
+{
+  "_meta": {
+    "description": "SSF2 API method → Fraymakers equivalent. Used by the decompiler for Script.hx generation.",
+    "sources": [
+      "https://ssf2-modding.readthedocs.io/en/latest/reference/API.html",
+      "https://ajewelofrarity.github.io/FraymakersDocs/docs/classes/",
+      "src/decompiler.rs lookup_api()"
+    ],
+    "status_values": ["mapped", "partial", "no_equivalent", "todo"]
+  },
+
+  "position": {
+    "getX":              { "fm": "self.getX()",             "status": "mapped" },
+    "getY":              { "fm": "self.getY()",             "status": "mapped" },
+    "setX":              { "fm": "self.setX",               "status": "mapped" },
+    "setY":              { "fm": "self.setY",               "status": "mapped" },
+    "move":              { "fm": "self.move",               "status": "mapped" },
+    "moveAbsolute":      { "fm": "self.moveAbsolute",       "status": "mapped" }
+  },
+
+  "velocity": {
+    "getXSpeed":         { "fm": "self.getXVelocity()",     "status": "mapped" },
+    "getYSpeed":         { "fm": "self.getYVelocity()",     "status": "mapped" },
+    "setXSpeed":         { "fm": "self.setXVelocity",       "status": "mapped" },
+    "setYSpeed":         { "fm": "self.setYVelocity",       "status": "mapped" },
+    "getNetXSpeed":      { "fm": "self.getNetXVelocity()",  "status": "mapped" },
+    "getNetYSpeed":      { "fm": "self.getNetYVelocity()",  "status": "mapped" },
+    "setXSpeedScaled":   { "fm": "self.setXVelocityScaled", "status": "mapped" },
+    "setYSpeedScaled":   { "fm": "self.setYVelocityScaled", "status": "mapped" },
+    "resetMomentum":     { "fm": "self.resetMomentum()",    "status": "mapped" },
+    "getKnockback":      { "fm": "self.getKnockback()",     "status": "mapped" },
+    "setKnockback":      { "fm": "self.setKnockback",       "status": "mapped" }
+  },
+
+  "facing": {
+    "faceLeft":          { "fm": "self.faceLeft()",         "status": "mapped" },
+    "faceRight":         { "fm": "self.faceRight()",        "status": "mapped" },
+    "flip":              { "fm": "self.flip()",             "status": "mapped" },
+    "isFacingLeft":      { "fm": "self.isFacingLeft()",     "status": "mapped" },
+    "isFacingRight":     { "fm": "self.isFacingRight()",    "status": "mapped" }
+  },
+
+  "gravity": {
+    "toggleGravity":     { "fm": "self.toggleGravity",      "status": "mapped" },
+    "isOnGround":        { "fm": "self.isOnFloor()",        "status": "mapped" },
+    "isOnFloor":         { "fm": "self.isOnFloor()",        "status": "mapped" }
+  },
+
+  "state": {
+    "getState":          { "fm": "self.getState()",         "status": "mapped" },
+    "setState":          { "fm": "self.toState",            "status": "partial", "note": "prefer self.toState(CState.X) over setState" },
+    "toState":           { "fm": "self.toState",            "status": "mapped" },
+    "inState":           { "fm": "self.inState",            "status": "mapped" },
+    "inStateGroup":      { "fm": "self.inStateGroup",       "status": "mapped" },
+    "getPreviousState":  { "fm": "self.getPreviousState()", "status": "mapped" },
+    "toFlying":          { "fm": "self.toState(CState.FALL_SPECIAL)", "status": "partial", "note": "SSF2 toFlying() → Fraymakers FALL_SPECIAL state" },
+    "toLanding":         { "fm": "self.preLand()",          "status": "partial", "note": "SSF2 toLanding() → preLand() then toState(CState.LAND)" },
+    "toFalling":         { "fm": "self.toState(CState.FALL)", "status": "mapped" }
+  },
+
+  "animation": {
+    "playAnimation":     { "fm": "self.playAnimation",      "status": "mapped" },
+    "playFrame":         { "fm": "self.playFrame",          "status": "mapped" },
+    "playFrameLabel":    { "fm": "self.playFrameLabel",     "status": "mapped" },
+    "getCurrentFrame":   { "fm": "self.getCurrentFrame()",  "status": "mapped" },
+    "getTotalFrames":    { "fm": "self.getTotalFrames()",   "status": "mapped" },
+    "finalFramePlayed":  { "fm": "self.finalFramePlayed()", "status": "mapped" },
+    "getAnimation":      { "fm": "self.getAnimation()",     "status": "mapped" },
+    "hasAnimation":      { "fm": "self.hasAnimation",       "status": "mapped" },
+    "endAnimation":      { "fm": "self.endAnimation()",     "status": "mapped" }
+  },
+
+  "stats": {
+    "updateAnimationStats":    { "fm": "self.updateAnimationStats",    "status": "mapped" },
+    "updateHitboxStats":       { "fm": "self.updateHitboxStats",       "status": "mapped" },
+    "updateCharacterStats":    { "fm": "self.updateCharacterStats",    "status": "mapped" },
+    "replaceAttackStats":      { "fm": "self.updateAnimationStats",    "status": "partial", "note": "SSF2 replaceAttackStats → updateAnimationStats" },
+    "replaceAttackBoxStats":   { "fm": "self.updateHitboxStats",       "status": "partial", "note": "SSF2 replaceAttackBoxStats → updateHitboxStats" },
+    "getCharacterStat":        { "fm": "self.getCharacterStat",        "status": "mapped" },
+    "getAnimationStat":        { "fm": "self.getAnimationStat",        "status": "mapped" }
+  },
+
+  "timers_events": {
+    "addTimer":              { "fm": "self.addTimer",              "status": "mapped" },
+    "removeTimer":           { "fm": "self.removeTimer",           "status": "mapped" },
+    "addEventListener":      { "fm": "self.addEventListener",      "status": "mapped" },
+    "removeEventListener":   { "fm": "self.removeEventListener",   "status": "mapped" },
+    "hasEventListener":      { "fm": "self.hasEventListener",      "status": "mapped" },
+    "getElapsedFrames":      { "fm": "Engine.getFrameCount()",     "status": "partial", "note": "SSF2 global; FM scoped to Engine" }
+  },
+
+  "combat": {
+    "getDamage":             { "fm": "self.getDamage()",           "status": "mapped" },
+    "setDamage":             { "fm": "self.setDamage",             "status": "mapped" },
+    "addDamage":             { "fm": "self.addDamage",             "status": "mapped" },
+    "getPercent":            { "fm": "self.getDamage()",           "status": "mapped", "note": "SSF2 getPercent == FM getDamage()" },
+    "addPercent":            { "fm": "self.addDamage",             "status": "mapped" },
+    "getHitstop":            { "fm": "self.getHitstop()",          "status": "mapped" },
+    "getHitstun":            { "fm": "self.getHitstun()",          "status": "mapped" },
+    "startHitstop":          { "fm": "self.startHitstop",          "status": "mapped" },
+    "forceStartHitstop":     { "fm": "self.forceStartHitstop",     "status": "mapped" },
+    "refreshAttackID":       { "fm": "self.reactivateHitboxes()",  "status": "mapped" },
+    "reactivateHitboxes":    { "fm": "self.reactivateHitboxes()",  "status": "mapped" },
+    "attemptHit":            { "fm": "self.attemptHit",            "status": "mapped" },
+    "attemptGrab":           { "fm": "self.attemptGrab",           "status": "mapped" },
+    "releaseCharacter":      { "fm": "self.releaseCharacter",      "status": "mapped" },
+    "releaseAllCharacters":  { "fm": "self.releaseAllCharacters",  "status": "mapped" },
+    "getGrabbedFoe":         { "fm": "self.getGrabbedFoe()",       "status": "mapped" },
+    "getAllGrabbedFoes":      { "fm": "self.getAllGrabbedFoes()",   "status": "mapped" },
+    "hitboxTest":            { "fm": "/* manual */",               "status": "no_equivalent", "note": "SSF2 hitboxTest has no direct FM equivalent; use collision events" },
+    "calculateKnockback":    { "fm": "/* manual */",               "status": "no_equivalent", "note": "FM calculates knockback internally from HitboxStats" },
+    "calculateKnockbackVelocity": { "fm": "/* manual */",         "status": "no_equivalent" },
+    "calculateChargeDamage": { "fm": "/* manual */",               "status": "no_equivalent" },
+    "isHurt":                { "fm": "self.inHurtState()",         "status": "mapped" },
+    "isInHitstun":           { "fm": "self.getHitstun() > 0",      "status": "partial" }
+  },
+
+  "match_objects": {
+    "getPlayer":             { "fm": "match.getCharacter",         "status": "partial", "note": "SSF2 uses player_id; FM uses index" },
+    "getPlayers":            { "fm": "match.getCharacters()",      "status": "mapped" },
+    "getCharacter":          { "fm": "match.getCharacter",         "status": "mapped" },
+    "getCharacters":         { "fm": "match.getCharacters()",      "status": "mapped" },
+    "getProjectile":         { "fm": "match.getProjectile",        "status": "mapped" },
+    "getProjectiles":        { "fm": "match.getProjectiles()",     "status": "mapped" },
+    "getItem":               { "fm": "match.getItem",              "status": "mapped" },
+    "getItems":              { "fm": "match.getItems()",           "status": "mapped" },
+    "getStage":              { "fm": "match.getStage()",           "status": "mapped" },
+    "getTarget":             { "fm": "/* no FM equivalent */",     "status": "no_equivalent" },
+    "getEnemy":              { "fm": "/* no FM equivalent */",     "status": "no_equivalent" },
+    "getFoes":               { "fm": "self.getFoes()",             "status": "mapped" },
+    "getOwner":              { "fm": "self.getOwner()",            "status": "mapped" },
+    "setOwner":              { "fm": "self.setOwner",              "status": "mapped" },
+    "getUID":                { "fm": "/* deprecated */",           "status": "no_equivalent" }
+  },
+
+  "spawning": {
+    "createProjectile":      { "fm": "match.createProjectile",     "status": "mapped" },
+    "spawnProjectile":       { "fm": "match.createProjectile",     "status": "mapped" },
+    "attachEffect":          { "fm": "Vfx.create",                 "status": "partial", "note": "SSF2 attachEffect → Vfx.create; positioning differs" },
+    "attachEffectOverlay":   { "fm": "Vfx.create",                 "status": "partial" },
+    "generateItem":          { "fm": "/* manual */",               "status": "todo" },
+    "spawnAssist":           { "fm": "/* no FM equivalent */",     "status": "no_equivalent" },
+    "spawnEnemy":            { "fm": "/* no FM equivalent */",     "status": "no_equivalent" },
+    "spawnCollisionBoundary": { "fm": "/* no FM equivalent */",    "status": "no_equivalent" }
+  },
+
+  "audio": {
+    "playSound":             { "fm": "AudioClip.play",             "status": "partial", "note": "FM uses content ids not SWF asset ids" },
+    "stopSound":             { "fm": "AudioClip.stop",             "status": "partial" },
+    "playMusic":             { "fm": "/* manual */",               "status": "no_equivalent" },
+    "stopMusic":             { "fm": "/* manual */",               "status": "no_equivalent" }
+  },
+
+  "display": {
+    "getScaleX":             { "fm": "self.getScaleX()",           "status": "mapped" },
+    "getScaleY":             { "fm": "self.getScaleY()",           "status": "mapped" },
+    "setScaleX":             { "fm": "self.setScaleX",             "status": "mapped" },
+    "setScaleY":             { "fm": "self.setScaleY",             "status": "mapped" },
+    "getRotation":           { "fm": "self.getRotation()",         "status": "mapped" },
+    "setRotation":           { "fm": "self.setRotation",           "status": "mapped" },
+    "getAlpha":              { "fm": "self.getAlpha()",            "status": "mapped" },
+    "setAlpha":              { "fm": "self.setAlpha",              "status": "mapped" },
+    "getVisible":            { "fm": "self.getVisible()",          "status": "mapped" },
+    "setVisible":            { "fm": "self.setVisible",            "status": "mapped" },
+    "getTopLayer":           { "fm": "self.getTopLayer()",         "status": "mapped" },
+    "getBottomLayer":        { "fm": "self.getBottomLayer()",      "status": "mapped" },
+    "getViewRootContainer":  { "fm": "self.getViewRootContainer()", "status": "mapped" },
+    "getDamageCounterContainer": { "fm": "self.getDamageCounterContainer()", "status": "mapped" },
+    "getSprite":             { "fm": "self.getSprite()",           "status": "mapped" },
+    "bringInFront":          { "fm": "self.getTopLayer().addChild(...)", "status": "partial" },
+    "bringBehind":           { "fm": "self.getBottomLayer().addChild(...)", "status": "partial" },
+    "shakeCamera":           { "fm": "Camera.shake",              "status": "partial" },
+    "lightFlash":            { "fm": "/* no direct FM equivalent */", "status": "no_equivalent" }
+  },
+
+  "status": {
+    "addStatusEffect":       { "fm": "self.addStatusEffect",       "status": "mapped" },
+    "removeStatusEffect":    { "fm": "self.removeStatusEffect",    "status": "mapped" },
+    "getStatusEffectByType": { "fm": "self.getStatusEffectByType", "status": "mapped" },
+    "hasBodyStatus":         { "fm": "self.hasBodyStatus",         "status": "mapped" },
+    "applyGlobalBodyStatus": { "fm": "self.applyGlobalBodyStatus", "status": "mapped" }
+  },
+
+  "resource": {
+    "getResource":           { "fm": "self.getResource()",         "status": "mapped" },
+    "getProp":               { "fm": "/* SSF2 asset system only */", "status": "no_equivalent" },
+    "kill":                  { "fm": "self.kill()",                "status": "mapped" }
+  },
+
+  "utility": {
+    "random":                { "fm": "Random.float()",             "status": "mapped" },
+    "randomInteger":         { "fm": "Random.int",                 "status": "mapped" },
+    "safeRandom":            { "fm": "Random.float()",             "status": "partial", "note": "FM Random is always deterministic/safe in rollback context" },
+    "safeRandomInteger":     { "fm": "Random.int",                 "status": "partial" },
+    "print":                 { "fm": "trace",                      "status": "mapped" },
+    "isDebug":               { "fm": "Engine.isDebug()",           "status": "partial" },
+    "getTimestamp":          { "fm": "/* no FM equivalent */",     "status": "no_equivalent" },
+    "isHazardsOn":           { "fm": "/* manual */",               "status": "no_equivalent" },
+    "isReady":               { "fm": "/* no FM equivalent */",     "status": "no_equivalent" }
+  },
+
+  "platform_collision": {
+    "hitTestGround":         { "fm": "/* manual: use Entity.isOnFloor() or stage collision */", "status": "todo" },
+    "getPlatforms":          { "fm": "match.getStage().getPlatforms()", "status": "partial" },
+    "getPlatform":           { "fm": "match.getStage().getPlatform", "status": "partial" },
+    "getCollisionBoundary":  { "fm": "/* no FM equivalent */",     "status": "no_equivalent" },
+    "getCamBounds":          { "fm": "Camera.getBounds()",         "status": "partial" },
+    "getDeathBounds":        { "fm": "match.getStage().getBlastZone()", "status": "partial" }
+  },
+
+  "camera": {
+    "setCamStageFocus":      { "fm": "Camera.setFocus",            "status": "partial" },
+    "removeCamStageFocus":   { "fm": "Camera.removeFocus()",       "status": "partial" },
+    "addTimedCameraTarget":  { "fm": "Camera.addTarget",           "status": "partial" },
+    "removeTimedCameraTarget": { "fm": "Camera.removeTarget",      "status": "partial" }
+  }
+}

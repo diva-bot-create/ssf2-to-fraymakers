@@ -1,0 +1,125 @@
+{
+  "_meta": {
+    "description": "SSF2 animation/xframe name → Fraymakers CState + animation name mapping.",
+    "sources": [
+      "https://ajewelofrarity.github.io/FraymakersDocs/docs/classes/CState.html",
+      "Extracted from mario.ssf xframe mappings (abc_parser.rs)"
+    ],
+    "notes": [
+      "SSF2 uses xframe labels (e.g. 'a' = stand, 'b' = walk) set by self.xframe = '...'",
+      "Fraymakers uses named animations that match CState names (lowercase_with_underscores)",
+      "Some SSF2 animations have no FM equivalent and must be mapped to closest state"
+    ]
+  },
+
+  "ground_movement": {
+    "a":            { "fm_anim": "stand",          "fm_cstate": "CState.STAND",       "status": "mapped" },
+    "a_walk":       { "fm_anim": "walk_loop",       "fm_cstate": "CState.WALK_LOOP",   "status": "mapped" },
+    "a_walk_in":    { "fm_anim": "walk_in",         "fm_cstate": "CState.WALK_IN",     "status": "mapped" },
+    "a_walk_out":   { "fm_anim": "walk_out",        "fm_cstate": "CState.WALK_OUT",    "status": "mapped" },
+    "a_run":        { "fm_anim": "run",             "fm_cstate": "CState.RUN",         "status": "mapped" },
+    "a_dash":       { "fm_anim": "dash",            "fm_cstate": "CState.DASH",        "status": "mapped" },
+    "a_dash_turn":  { "fm_anim": "dash_pivot",      "fm_cstate": "CState.DASH_PIVOT",  "status": "mapped" },
+    "a_run_turn":   { "fm_anim": "run_turn",        "fm_cstate": "CState.RUN_TURN",    "status": "mapped" },
+    "a_crouch":     { "fm_anim": "crouch_loop",     "fm_cstate": "CState.CROUCH_LOOP", "status": "mapped" },
+    "a_crouch_in":  { "fm_anim": "crouch_in",       "fm_cstate": "CState.CROUCH_IN",   "status": "mapped" },
+    "a_crouch_out": { "fm_anim": "crouch_out",      "fm_cstate": "CState.CROUCH_OUT",  "status": "mapped" },
+    "a_turn":       { "fm_anim": "stand_turn",      "fm_cstate": "CState.STAND_TURN",  "status": "mapped" },
+    "a_skid":       { "fm_anim": "skid",            "fm_cstate": "CState.SKID",        "status": "mapped" }
+  },
+
+  "aerial": {
+    "a_air":        { "fm_anim": "fall",            "fm_cstate": "CState.FALL",        "status": "mapped" },
+    "a_jump":       { "fm_anim": "jump_loop",       "fm_cstate": "CState.JUMP_LOOP",   "status": "mapped" },
+    "a_jump_in":    { "fm_anim": "jump_in",         "fm_cstate": "CState.JUMP_IN",     "status": "mapped" },
+    "a_jump_squat": { "fm_anim": "jump_squat",      "fm_cstate": "CState.JUMP_SQUAT",  "status": "mapped" },
+    "a_jump_out":   { "fm_anim": "jump_out",        "fm_cstate": "CState.JUMP_OUT",    "status": "mapped" },
+    "a_jump2":      { "fm_anim": "jump_midair",     "fm_cstate": "CState.JUMP_MIDAIR", "status": "mapped" },
+    "a_land":       { "fm_anim": "land",            "fm_cstate": "CState.LAND",        "status": "mapped" },
+    "a_fall_spec":  { "fm_anim": "fall_special",    "fm_cstate": "CState.FALL_SPECIAL","status": "mapped" }
+  },
+
+  "attacks": {
+    "a_jab1":       { "fm_anim": "jab",             "fm_cstate": "CState.JAB",         "status": "mapped" },
+    "a_dash_atk":   { "fm_anim": "dash_attack",     "fm_cstate": "CState.DASH_ATTACK", "status": "mapped" },
+    "a_ftilt":      { "fm_anim": "tilt_forward",    "fm_cstate": "CState.TILT_FORWARD","status": "mapped" },
+    "a_utilt":      { "fm_anim": "tilt_up",         "fm_cstate": "CState.TILT_UP",     "status": "mapped" },
+    "a_dtilt":      { "fm_anim": "tilt_down",       "fm_cstate": "CState.TILT_DOWN",   "status": "mapped" },
+    "a_fsmash":     { "fm_anim": "strong_forward_attack", "fm_cstate": "CState.STRONG_FORWARD_ATTACK", "status": "mapped" },
+    "a_fsmash_c":   { "fm_anim": "strong_forward_charge", "fm_cstate": "CState.STRONG_FORWARD_CHARGE", "status": "mapped" },
+    "a_fsmash_in":  { "fm_anim": "strong_forward_in",    "fm_cstate": "CState.STRONG_FORWARD_IN",     "status": "mapped" },
+    "a_usmash":     { "fm_anim": "strong_up_attack",     "fm_cstate": "CState.STRONG_UP_ATTACK",      "status": "mapped" },
+    "a_usmash_c":   { "fm_anim": "strong_up_charge",     "fm_cstate": "CState.STRONG_UP_CHARGE",      "status": "mapped" },
+    "a_usmash_in":  { "fm_anim": "strong_up_in",         "fm_cstate": "CState.STRONG_UP_IN",          "status": "mapped" },
+    "a_dsmash":     { "fm_anim": "strong_down_attack",   "fm_cstate": "CState.STRONG_DOWN_ATTACK",    "status": "mapped" },
+    "a_dsmash_c":   { "fm_anim": "strong_down_charge",   "fm_cstate": "CState.STRONG_DOWN_CHARGE",    "status": "mapped" },
+    "a_dsmash_in":  { "fm_anim": "strong_down_in",       "fm_cstate": "CState.STRONG_DOWN_IN",        "status": "mapped" },
+    "a_nair":       { "fm_anim": "aerial_neutral",       "fm_cstate": "CState.AERIAL_NEUTRAL",        "status": "mapped" },
+    "a_fair":       { "fm_anim": "aerial_forward",       "fm_cstate": "CState.AERIAL_FORWARD",        "status": "mapped" },
+    "a_bair":       { "fm_anim": "aerial_back",          "fm_cstate": "CState.AERIAL_BACK",           "status": "mapped" },
+    "a_uair":       { "fm_anim": "aerial_up",            "fm_cstate": "CState.AERIAL_UP",             "status": "mapped" },
+    "a_dair":       { "fm_anim": "aerial_down",          "fm_cstate": "CState.AERIAL_DOWN",           "status": "mapped" },
+    "a_nspec":      { "fm_anim": "special_neutral",      "fm_cstate": "CState.SPECIAL_NEUTRAL",       "status": "mapped" },
+    "a_sspec":      { "fm_anim": "special_side",         "fm_cstate": "CState.SPECIAL_SIDE",          "status": "mapped" },
+    "a_uspec":      { "fm_anim": "special_up",           "fm_cstate": "CState.SPECIAL_UP",            "status": "mapped" },
+    "a_dspec":      { "fm_anim": "special_down",         "fm_cstate": "CState.SPECIAL_DOWN",          "status": "mapped" }
+  },
+
+  "grab_throw": {
+    "a_grab":       { "fm_anim": "grab",            "fm_cstate": "CState.GRAB",        "status": "mapped" },
+    "a_grab_hold":  { "fm_anim": "grab_hold",       "fm_cstate": "CState.GRAB_HOLD",   "status": "mapped" },
+    "a_grab_pummel":{ "fm_anim": "grab_pummel",     "fm_cstate": "CState.GRAB_PUMMEL", "status": "mapped" },
+    "a_fthrow":     { "fm_anim": "throw_forward",   "fm_cstate": "CState.THROW_FORWARD","status": "mapped" },
+    "a_bthrow":     { "fm_anim": "throw_back",      "fm_cstate": "CState.THROW_BACK",  "status": "mapped" },
+    "a_uthrow":     { "fm_anim": "throw_up",        "fm_cstate": "CState.THROW_UP",    "status": "mapped" },
+    "a_dthrow":     { "fm_anim": "throw_down",      "fm_cstate": "CState.THROW_DOWN",  "status": "mapped" }
+  },
+
+  "shield_dodge": {
+    "a_shield":     { "fm_anim": "shield_loop",     "fm_cstate": "CState.SHIELD_LOOP", "status": "mapped" },
+    "a_shield_in":  { "fm_anim": "shield_in",       "fm_cstate": "CState.SHIELD_IN",   "status": "mapped" },
+    "a_shield_out": { "fm_anim": "shield_out",      "fm_cstate": "CState.SHIELD_OUT",  "status": "mapped" },
+    "a_airdodge":   { "fm_anim": "shield_air",      "fm_cstate": "CState.SHIELD_AIR",  "status": "mapped" },
+    "a_spotdodge":  { "fm_anim": "spot_dodge",      "fm_cstate": "CState.SPOT_DODGE",  "status": "mapped" },
+    "a_roll_f":     { "fm_anim": "roll",            "fm_cstate": "CState.ROLL",        "status": "partial", "note": "SSF2 has forward/back roll; FM has single roll state" },
+    "a_roll_b":     { "fm_anim": "roll",            "fm_cstate": "CState.ROLL",        "status": "partial" }
+  },
+
+  "hurt_ko": {
+    "a_hurt_l":     { "fm_anim": "hurt_light",      "fm_cstate": "CState.HURT_LIGHT",  "status": "mapped" },
+    "a_hurt_m":     { "fm_anim": "hurt_medium",     "fm_cstate": "CState.HURT_MEDIUM", "status": "mapped" },
+    "a_hurt_h":     { "fm_anim": "hurt_heavy",      "fm_cstate": "CState.HURT_HEAVY",  "status": "mapped" },
+    "a_tumble":     { "fm_anim": "tumble",          "fm_cstate": "CState.TUMBLE",      "status": "mapped" },
+    "a_ko":         { "fm_anim": "ko",              "fm_cstate": "CState.KO",          "status": "mapped" },
+    "a_crash":      { "fm_anim": "crash_loop",      "fm_cstate": "CState.CRASH_LOOP",  "status": "mapped" },
+    "a_crash_bounce":{ "fm_anim": "crash_bounce",   "fm_cstate": "CState.CRASH_BOUNCE","status": "mapped" },
+    "a_crash_getup":{ "fm_anim": "crash_get_up",    "fm_cstate": "CState.CRASH_GET_UP","status": "mapped" },
+    "a_crash_roll": { "fm_anim": "crash_roll",      "fm_cstate": "CState.CRASH_ROLL",  "status": "mapped" },
+    "a_crash_atk":  { "fm_anim": "crash_attack",    "fm_cstate": "CState.CRASH_ATTACK","status": "mapped" }
+  },
+
+  "ledge": {
+    "a_ledge":      { "fm_anim": "ledge_loop",      "fm_cstate": "CState.LEDGE_LOOP",  "status": "mapped" },
+    "a_ledge_in":   { "fm_anim": "ledge_in",        "fm_cstate": "CState.LEDGE_IN",    "status": "mapped" },
+    "a_ledge_climb":{ "fm_anim": "ledge_climb",     "fm_cstate": "CState.LEDGE_CLIMB", "status": "mapped" },
+    "a_ledge_jump": { "fm_anim": "ledge_jump",      "fm_cstate": "CState.LEDGE_JUMP",  "status": "mapped" },
+    "a_ledge_roll": { "fm_anim": "ledge_roll",      "fm_cstate": "CState.LEDGE_ROLL",  "status": "mapped" },
+    "a_ledge_atk":  { "fm_anim": "ledge_attack",    "fm_cstate": "CState.LEDGE_ATTACK","status": "mapped" }
+  },
+
+  "misc": {
+    "a_tech":       { "fm_anim": "tech",            "fm_cstate": "CState.TECH",        "status": "mapped" },
+    "a_tech_roll":  { "fm_anim": "tech_roll",       "fm_cstate": "CState.TECH_ROLL",   "status": "mapped" },
+    "a_intro":      { "fm_anim": "intro",           "fm_cstate": "CState.INTRO",       "status": "mapped" },
+    "a_taunt":      { "fm_anim": "emote",           "fm_cstate": "CState.EMOTE",       "status": "partial", "note": "SSF2 taunt → FM emote" },
+    "a_parry_in":   { "fm_anim": "parry_in",        "fm_cstate": "CState.PARRY_IN",    "status": "mapped" },
+    "a_parry_win":  { "fm_anim": "parry_success",   "fm_cstate": "CState.PARRY_SUCCESS","status": "mapped" },
+    "a_parry_fail": { "fm_anim": "parry_fail",      "fm_cstate": "CState.PARRY_FAIL",  "status": "mapped" }
+  },
+
+  "ssf2_only_no_fm_equivalent": {
+    "a_finalsmash":   "No FM equivalent — final smash mechanic",
+    "a_fs_end":       "No FM equivalent",
+    "a_smashball":    "No FM equivalent — smash ball grab animation"
+  }
+}

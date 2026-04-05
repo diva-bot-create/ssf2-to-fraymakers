@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "description": "SSF2 AttackData / hitbox fields → Fraymakers HitboxStats fields.",
+    "sources": [
+      "https://ssf2-modding.readthedocs.io/en/latest/reference/engine.html#AttackData",
+      "https://ajewelofrarity.github.io/FraymakersDocs/docs/classes/HitboxStats.html"
+    ]
+  },
+
+  "fields": {
+    "damage":             { "fm": "damage",              "status": "mapped",   "note": "Direct 1:1" },
+    "direction":          { "fm": "angle",               "status": "mapped",   "note": "SSF2 direction (degrees) → FM angle (0–360)" },
+    "power":              { "fm": "baseKnockback",       "status": "mapped",   "note": "SSF2 base power → FM baseKnockback" },
+    "weightKB":           { "fm": "baseKnockback",       "status": "partial",  "note": "SSF2 splits power+weightKB; FM uses baseKnockback as combined base" },
+    "kbConstant":         { "fm": "knockbackGrowth",     "status": "mapped",   "note": "SSF2 kbConstant (scales with %) → FM knockbackGrowth" },
+    "hitStun":            { "fm": "hitstop",             "status": "partial",  "note": "SSF2 hitStun = frames frozen on hit; FM hitstop is same concept; hitstun (frames can't act) is separate" },
+    "selfHitStun":        { "fm": "selfHitstop",         "status": "mapped" },
+    "hitLag":             { "fm": "hitstun",             "status": "partial",  "note": "SSF2 hitLag = post-hitstop immobility; FM hitstun = frames victim can't act" },
+    "angle":              { "fm": "angle",               "status": "mapped" },
+    "shieldDamage":       { "fm": "shieldDamageMultiplier", "status": "partial", "note": "SSF2 absolute; FM is a multiplier" },
+    "shieldable":         { "fm": "shieldable",          "status": "mapped" },
+    "reflectable":        { "fm": "reflectable",         "status": "mapped" },
+    "absorbable":         { "fm": "absorbable",          "status": "mapped" },
+    "flinch":             { "fm": "flinch",              "status": "mapped" },
+    "disabled":           { "fm": "disabled",            "status": "mapped" },
+    "reverse":            { "fm": "reverse",             "status": "mapped" },
+    "attackId":           { "fm": "attackId",            "status": "mapped" },
+    "knockbackCap":       { "fm": "knockbackCap",        "status": "mapped" },
+    "attackRatio":        { "fm": "attackRatio",         "status": "mapped" },
+    "hitstopMultiplier":  { "fm": "hitstopMultiplier",   "status": "mapped" },
+    "tumble":             { "fm": "tumbleType",          "status": "partial",  "note": "SSF2 bool; FM uses TumbleType enum" },
+    "spike":              { "fm": "angle=270",           "status": "partial",  "note": "SSF2 spike flag; FM uses angle in spike threshold (270±15°)" },
+    "element":            { "fm": "element",             "status": "mapped",   "note": "Use AttackElement constants" },
+    "attackStrength":     { "fm": "attackStrength",      "status": "mapped",   "note": "Use AttackStrength constants" },
+    "limb":               { "fm": "limb",                "status": "mapped",   "note": "Use AttackLimb constants" },
+    "directionalInfluence": { "fm": "directionalInfluence", "status": "mapped" },
+    "reversibleAngle":    { "fm": "reversibleAngle",     "status": "mapped" },
+    "hitEffectOverride":  { "fm": "hitEffectOverride",   "status": "partial",  "note": "SSF2 uses SWF asset; FM uses content id string" },
+    "hitSoundOverride":   { "fm": "hitSoundOverride",    "status": "partial" },
+    "metadata":           { "fm": "metadata",            "status": "mapped" }
+  },
+
+  "ssf2_only": {
+    "refreshRate":        "SSF2 attack refresh; FM uses reactivateHitboxes()",
+    "attackDelay":        "Handled via animation frame timing in FM",
+    "cancelConditions":   "FM handles cancels via CState transitions in Script.hx",
+    "invincibility":      "FM uses BodyStatus/StatusEffect system",
+    "armor":              "FM uses jabResetType / applyGlobalBodyStatus",
+    "movementProperties": "Handled per-frame in Script.hx via setXVelocity/setYVelocity",
+    "soundEffects":       "FM audio handled via AudioClip.play with content ids"
+  },
+
+  "angle_conventions": {
+    "note": "Both SSF2 and FM use degrees 0–360. 0=right, 90=up, 180=left, 270=down (spike).",
+    "SSF2_special_angles": {
+      "361": "Sakurai angle (low launch, away from attacker)",
+      "362": "AutoLink (moves target with attacker)",
+      "363": "Spine spike (straight down)"
+    },
+    "FM_special_angles": {
+      "SpecialAngle.SAKURAI_ANGLE": "equivalent to SSF2 361",
+      "SpecialAngle.AUTO_LINK":    "equivalent to SSF2 362"
+    }
+  }
+}

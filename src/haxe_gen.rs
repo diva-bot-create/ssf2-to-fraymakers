@@ -562,31 +562,48 @@ fn generate_script(data: &CharacterData, char_id: &str) -> String {
 // ─── manifest.json ───────────────────────────────────────────────────────────
 
 fn generate_manifest(char_id: &str, display_name: &str) -> String {
+    let ai_id   = format!("{}Ai", char_id);
+    let ai_script_id = format!("{}AiScript", char_id);
     serde_json::json!({
         "resourceId": char_id,
-        "content": [{
+        "content": [
+          {
             "id": char_id,
             "name": display_name,
             "description": format!("{} — converted from Super Smash Flash 2", display_name),
             "type": "character",
-            "objectStatsId": format!("{}CharacterStats", char_id),
+            "objectStatsId":    format!("{}CharacterStats", char_id),
             "animationStatsId": format!("{}AnimationStats", char_id),
-            "hitboxStatsId": format!("{}HitboxStats", char_id),
-            "scriptId": format!("{}Script", char_id),
-            "costumesId": format!("{}Costumes", char_id),
-            "aiId": format!("{}Ai", char_id),
+            "hitboxStatsId":    format!("{}HitboxStats", char_id),
+            "scriptId":         format!("{}Script", char_id),
+            "costumesId":       format!("{}Costumes", char_id),
+            "aiId":             ai_id,
             "metadata": {
                 "ui": {
                     "entityId": "menu",
                     "render": {
-                        "animation": "full",
-                        "animation_icon": "icon",
-                        "x_offset": 0,
-                        "y_offset": 38
+                        "animation":               "full",
+                        "animation_icon":          "icon",
+                        "animation_icon_no_palette": "icon_no_palette",
+                        "x_offset":       0,
+                        "y_offset":       38,
+                        "x_offset_door":  0,
+                        "y_offset_door":  0,
+                        "x_offset_door_ffa": 0,
+                        "y_offset_door_ffa": 0
                     },
                     "hud": {
-                        "animation": "hud",
-                        "animation_front": "hud_front"
+                        "animation":              "hud",
+                        "animation_front":        "hud_front",
+                        "animation_happy":        "hud_happy",
+                        "animation_happy_front":  "hud_happy_front",
+                        "animation_sad":          "hud_sad",
+                        "animation_sad_front":    "hud_sad_front",
+                        "animation_angry":        "hud_angry",
+                        "animation_angry_front":  "hud_angry_front",
+                        "animation_hurt":         "hud_hurt",
+                        "animation_hurt_front":   "hud_hurt_front",
+                        "animation_stock_icon":   "stock"
                     },
                     "css": {
                         "animation": "css",
@@ -597,6 +614,12 @@ fn generate_manifest(char_id: &str, display_name: &str) -> String {
                     }
                 }
             }
-        }]
+          },
+          {
+            "id":       ai_id,
+            "type":     "characterAi",
+            "scriptId": ai_script_id
+          }
+        ]
     }).to_string()
 }
