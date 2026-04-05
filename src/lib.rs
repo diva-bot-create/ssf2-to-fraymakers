@@ -10,3 +10,4 @@ pub mod haxe_gen;
 pub mod palette_gen;
 pub mod sprite_parser;
 pub mod image_extractor;
+pub mod sound_extractor;

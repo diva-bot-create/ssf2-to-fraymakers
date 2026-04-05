@@ -1,4 +1,5 @@
 use ssf2_converter::*;
+use ssf2_converter::sound_extractor;
 
 use clap::Parser;
 use anyhow::Result;
@@ -94,8 +95,15 @@ fn main() -> Result<()> {
         });
     log::info!("Extracted {} sprite images, {} anim image maps", img_result.images.len(), img_result.anim_images.len());
 
+    // Extract sounds
+    let sounds_dir = char_output_dir.join("library/sounds");
+    let sounds = match sound_extractor::extract_all_sounds(&swf_data, &sounds_dir, &char_name) {
+        Ok(s) => s,
+        Err(e) => { log::warn!("sound_extractor failed: {}", e); vec![] }
+    };
+
     // Generate Fraymakers files
-    haxe_gen::generate(&args.output, &char_name, &char_data, &sprite_boxes, &img_result, args.costumes.as_deref())?;
+    haxe_gen::generate(&args.output, &char_name, &char_data, &sprite_boxes, &img_result, args.costumes.as_deref(), &sounds)?;
     log::info!("Generated Fraymakers files in {}", args.output.display());
 
     Ok(())

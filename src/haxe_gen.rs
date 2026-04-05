@@ -11,7 +11,7 @@ use crate::entity_gen;
 use crate::fraytools_project;
 use crate::palette_gen;
 
-pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult, costumes_json: Option<&Path>) -> Result<()> {
+pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult, costumes_json: Option<&Path>, sounds: &[crate::sound_extractor::SoundEntry]) -> Result<()> {
     let char_id = char_name.to_lowercase().replace(" ", "");
     let char_dir = output_dir.join(&char_id);
     let scripts_dir = char_dir.join("library/scripts/Character");
@@ -81,6 +81,12 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
         "ssf2_to_fm_anim": data.ssf2_to_fm_anim,
     });
     fs::write(char_dir.join("conversion_stats.json"), serde_json::to_string_pretty(&stats_json)?)?;
+
+    // ── Sound content entries ─────────────────────────────────────────────────────────────────
+    if !sounds.is_empty() {
+        generate_sound_entries(&char_dir, char_name, sounds)?;
+        log::info!("Generated sound entries for {} sounds", sounds.len());
+    }
 
     log::info!("Generated: {} attacks, {} animations, {} frame scripts",
         data.attacks.len(), data.animations.len(), data.scripts.len());
@@ -622,4 +628,69 @@ fn generate_manifest(char_id: &str, display_name: &str) -> String {
           }
         ]
     }).to_string()
+}
+
+// ─── Sound content entries ────────────────────────────────────────────────────
+
+/// Generate manifest content entries + .meta sidecar files for extracted sounds.
+/// Sounds live in library/sounds/*.ogg and are referenced by content id
+/// "{char_name}::{sound_name}" so Script.hx can call AudioClip.play("mario::mario_jumpsfx").
+fn generate_sound_entries(
+    char_dir: &Path,
+    char_name: &str,
+    sounds: &[crate::sound_extractor::SoundEntry],
+) -> Result<()> {
+    let sounds_dir = char_dir.join("library/sounds");
+    fs::create_dir_all(&sounds_dir)?;
+
+    // Build a sounds manifest listing all audio content ids
+    let sound_entries: Vec<serde_json::Value> = sounds.iter().map(|s| {
+        let safe_name: String = s.name.chars()
+            .map(|c| if c.is_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .collect();
+        let content_id = format!("{}::{}", char_name, safe_name);
+        let ogg_path   = format!("sounds/{}.ogg", safe_name);
+        serde_json::json!({
+            "id":      content_id,
+            "type":    "audio",
+            "path":    ogg_path,
+            "metadata": {
+                "originalName": s.name,
+                "sampleRate":   s.sample_rate,
+                "sampleCount":  s.sample_count,
+                "durationSecs": s.duration_secs(),
+            }
+        })
+    }).collect();
+
+    // Write sounds_manifest.json alongside the main manifest
+    let sounds_manifest = serde_json::json!({
+        "sounds": sound_entries,
+        "_note": "Content ids for use in Script.hx: AudioClip.play(\"<id>\")"
+    });
+    fs::write(
+        char_dir.join("library/sounds_manifest.json"),
+        serde_json::to_string_pretty(&sounds_manifest)?,
+    )?;
+
+    // Write a .meta sidecar for each OGG file that exists
+    for s in sounds {
+        let safe_name: String = s.name.chars()
+            .map(|c| if c.is_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .collect();
+        let ogg_path = sounds_dir.join(format!("{}.ogg", safe_name));
+        if !ogg_path.exists() { continue; }
+
+        let content_id = format!("{}::{}", char_name, safe_name);
+        let meta = serde_json::json!({
+            "id":   content_id,
+            "type": "audio"
+        });
+        fs::write(
+            sounds_dir.join(format!("{}.ogg.meta", safe_name)),
+            serde_json::to_string_pretty(&meta)?,
+        )?;
+    }
+
+    Ok(())
 }
