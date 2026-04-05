@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use crate::swf_parser::SwfFile;
-use crate::abc_parser::{self, AttackData as AbcAttack, CharStats as AbcStats};
+use crate::abc_parser::{self, XframeMap};
 
 // ─── Output types for haxe_gen ───────────────────────────────────────────────
 
@@ -13,6 +13,9 @@ pub struct CharacterData {
     pub stats: CharacterStats,
     pub animations: BTreeMap<String, AnimationInfo>,
     pub scripts: Vec<ScriptInfo>,
+    /// SSF2 animation name → Fraymakers animation name
+    /// Built from xframe_map + SSF2→Fraymakers name table
+    pub ssf2_to_fm_anim: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +84,7 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
     let mut char_stats = CharacterStats::default();
     let mut animations: BTreeMap<String, AnimationInfo> = BTreeMap::new();
     let mut scripts: Vec<ScriptInfo> = Vec::new();
+    let mut xframe_map: XframeMap = BTreeMap::new();
 
     // Parse each ABC block (usually just one)
     for (block_idx, abc_data) in swf.abc_blocks.iter().enumerate() {
@@ -128,11 +132,15 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
                     }
                 }
 
-                log::info!("ABC block {}: {} attacks, stats={}, {} frame scripts, {} symbols→animations",
+                // Merge xframe_map (frame method → SSF2 anim name)
+                xframe_map.extend(extracted.xframe_map.clone());
+
+                log::info!("ABC block {}: {} attacks, stats={}, {} frame scripts, {} xframe mappings, {} symbols→animations",
                     block_idx,
                     extracted.attacks.len(),
                     extracted.stats.is_some(),
                     extracted.frame_scripts.len(),
+                    extracted.xframe_map.len(),
                     animations.len(),
                 );
             }
@@ -149,7 +157,21 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
         hitboxes,
     }).collect();
 
-    log::info!("Total: {} attacks, {} animations extracted", attacks.len(), animations.len());
+    // Build SSF2 anim name → Fraymakers anim name map
+    let ssf2_to_fm_anim = build_ssf2_to_fm_anim(&xframe_map);
+
+    // Also seed animations from xframe_map so every known SSF2 anim appears
+    for ssf2_name in xframe_map.values() {
+        let fm_name = ssf2_to_fm_anim.get(ssf2_name).cloned().unwrap_or_else(|| ssf2_name.clone());
+        animations.entry(fm_name.clone()).or_insert(AnimationInfo {
+            name: fm_name,
+            frames: 0,
+            speed: 1.0,
+        });
+    }
+
+    log::info!("Total: {} attacks, {} animations, {} ssf2→fm mappings extracted",
+        attacks.len(), animations.len(), ssf2_to_fm_anim.len());
 
     Ok(CharacterData {
         name: char_name.to_string(),
@@ -157,10 +179,121 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
         stats: char_stats,
         animations,
         scripts,
+        ssf2_to_fm_anim,
     })
 }
 
-// ─── Conversion helpers ───────────────────────────────────────────────────────
+// ─── SSF2 → Fraymakers animation name table ───────────────────────────────────
+
+fn build_ssf2_to_fm_anim(xframe_map: &XframeMap) -> BTreeMap<String, String> {
+    // Static SSF2 animation name → Fraymakers animation name mapping
+    // Source: SSF2_TO_FRAYMAKERS_API.md + Fraymakers entity spec
+    let table: &[(&str, &str)] = &[
+        ("stand",           "idle"),
+        ("walk",            "walk"),
+        ("run",             "run"),
+        ("jump",            "jump"),
+        ("jump_midair",     "jump_aerial"),
+        ("fall",            "fall"),
+        ("land",            "land"),
+        ("heavyland",       "land_heavy"),
+        ("skid",            "skid"),
+        ("crouch",          "crouch"),
+        ("entrance",        "entry"),
+        ("revival",         "respawn"),
+        ("win",             "victory"),
+        ("lose",            "defeat"),
+        // Attacks
+        ("a",               "jab"),
+        ("a_forward",       "dash_attack"),
+        ("a_forward_tilt",  "tilt_forward"),
+        ("a_up_tilt",       "tilt_up"),
+        ("a_down",          "tilt_down"),
+        ("crouch_attack",   "tilt_down"),
+        ("a_forwardsmash",  "strong_forward"),
+        ("a_up",            "strong_up"),
+        ("a_air",           "aerial_neutral"),
+        ("a_air_forward",   "aerial_forward"),
+        ("a_air_backward",  "aerial_back"),
+        ("a_air_up",        "aerial_up"),
+        ("a_air_down",      "aerial_down"),
+        ("b",               "special_neutral"),
+        ("b_air",           "special_neutral_air"),
+        ("b_forward",       "special_side"),
+        ("b_forward_air",   "special_side_air"),
+        ("b_up",            "special_up"),
+        ("b_up_air",        "special_up_air"),
+        ("b_down",          "special_down"),
+        ("b_down_air",      "special_down_air"),
+        ("throw_forward",   "throw_forward"),
+        ("throw_back",      "throw_back"),
+        ("throw_up",        "throw_up"),
+        ("throw_down",      "throw_down"),
+        ("ledge_attack",    "ledge_attack"),
+        ("getup_attack",    "getup_attack"),
+        // Defense / movement
+        ("defend",          "shield"),
+        ("dodgeroll",       "roll"),
+        ("airdodge",        "airdodge"),
+        ("sidestep",        "sidestep"),
+        ("grab",            "grab"),
+        ("carry",           "carry"),
+        // Damage
+        ("hurt",            "hurt"),
+        ("stunned",         "stunned"),
+        ("dizzy",           "dizzy"),
+        ("sleep",           "sleep"),
+        ("falling",         "tumble"),
+        ("crash",           "knockdown"),
+        ("frozen",          "frozen"),
+        ("egg",             "egg"),
+        ("star",            "star_ko"),
+        ("pitfall",         "buried"),
+        // Edge / climb
+        ("hang",            "ledge_hang"),
+        ("climbup",         "ledge_climb"),
+        ("edgelean",        "ledge_lean"),
+        ("rollup",          "ledge_roll"),
+        ("wallstick",       "wall_stick"),
+        // Misc
+        ("taunt",           "taunt"),
+        ("swim",            "swim"),
+        ("ladder",          "ladder"),
+        ("flying",          "fly"),
+        ("special",         "special"),
+        ("tech_ground",     "tech"),
+        ("tech_roll",       "tech_roll"),
+        ("toss",            "item_throw"),
+        ("toss_air",        "item_throw_air"),
+        // Items
+        ("item_pickup",     "item_pickup"),
+        ("item_jab",        "item_jab"),
+        ("item_dash",       "item_dash_attack"),
+        ("item_tilt",       "item_tilt"),
+        ("item_smash",      "item_smash"),
+        ("item_homerun",    "item_homerun"),
+        ("item_fan",        "item_fan"),
+        ("item_shoot",      "item_shoot"),
+        ("item_raise",      "item_raise"),
+        ("item_float",      "item_float"),
+        ("item_screw",      "item_screw"),
+    ];
+
+    let lookup: BTreeMap<&str, &str> = table.iter().cloned().collect();
+    let mut result = BTreeMap::new();
+
+    // Map every unique SSF2 anim name from xframe_map through the table
+    for ssf2_name in xframe_map.values() {
+        let fm_name = lookup.get(ssf2_name.as_str())
+            .copied()
+            .unwrap_or(ssf2_name.as_str()); // fallback: keep as-is
+        result.insert(ssf2_name.clone(), fm_name.to_string());
+    }
+
+    result
+}
+
+// ─── Conversion helpers ─────────────────────────────────────────────────────────
 
 fn convert_hitboxes(raw: &[BTreeMap<String, f64>]) -> Vec<Hitbox> {
     raw.iter().map(|obj| {

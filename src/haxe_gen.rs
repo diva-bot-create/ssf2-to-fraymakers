@@ -38,6 +38,7 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData) -> Res
         "stats_extracted": data.stats.weight != 0.0,
         "animations": data.animations.len(),
         "frame_scripts": data.scripts.len(),
+        "ssf2_to_fm_anim": data.ssf2_to_fm_anim,
     });
     fs::write(char_dir.join("conversion_stats.json"), serde_json::to_string_pretty(&stats_json)?)?;
 

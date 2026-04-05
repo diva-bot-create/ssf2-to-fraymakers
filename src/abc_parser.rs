@@ -137,7 +137,10 @@ pub struct MethodBody {
 
 // ─── Extracted character data ─────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Maps SSF2 frame method name → SSF2 animation name (from self.xframe = "...").
+/// e.g. "frame14" → "a", "frame29" → "a_air"
+pub type XframeMap = BTreeMap<String, String>;
+
 pub struct ExtractedCharacter {
     pub name: String,
     pub attacks: BTreeMap<String, AttackData>,
@@ -145,6 +148,8 @@ pub struct ExtractedCharacter {
     pub frame_scripts: BTreeMap<String, Vec<FrameAction>>,
     /// Decompiled Ext class methods translated to Fraymakers Haxe
     pub ext_methods: BTreeMap<String, String>,
+    /// frame method name → SSF2 animation name (from self.xframe = "...")
+    pub xframe_map: XframeMap,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -532,12 +537,49 @@ fn parse_trait(r: &mut Reader, strings: &[String], multinames: &[Multiname]) -> 
 
 // ─── Character data extraction ────────────────────────────────────────────────
 
+/// Extract the SSF2 animation name set by self.xframe from a frame* method's bytecode.
+/// Scans for the first PUSHSTRING instruction whose value looks like an animation name.
+fn extract_xframe_name(bytecode: &[u8], abc: &AbcFile) -> Option<String> {
+    let mut i = 0;
+    while i < bytecode.len() {
+        let op = bytecode[i];
+        i += 1;
+        match op {
+            OP_PUSHSTRING => {
+                if let Some(idx) = read_u30_at(bytecode, &mut i) {
+                    if let Some(s) = abc.strings.get(idx as usize) {
+                        // xframe values are short snake_case strings, not bytecode artifacts
+                        if !s.is_empty() && s.len() < 40 && s.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                            return Some(s.clone());
+                        }
+                    }
+                }
+            }
+            OP_PUSHBYTE => { i += 1; }
+            OP_PUSHSHORT | OP_PUSHINT | OP_PUSHUINT | OP_PUSHDOUBLE => { read_u30_at(bytecode, &mut i); }
+            OP_GETLEX | OP_FINDPROPSTRICT | OP_FINDPROP | OP_GETPROPERTY |
+            OP_SETPROPERTY | OP_INITPROPERTY | OP_COERCE | OP_CALLPROPVOID |
+            OP_CALLPROPERTY | OP_GETLOCAL | OP_SETLOCAL | OP_NEWARRAY | OP_NEWOBJECT => {
+                read_u30_at(bytecode, &mut i);
+            }
+            OP_CONSTRUCTPROP => { read_u30_at(bytecode, &mut i); read_u30_at(bytecode, &mut i); }
+            OP_JUMP | OP_IFTRUE | OP_IFFALSE | OP_IFEQ | OP_IFNE | OP_IFLT |
+            OP_IFLE | OP_IFGT | OP_IFGE | OP_IFSTRICTEQ | OP_IFSTRICTNE => {
+                if i + 3 <= bytecode.len() { i += 3; }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Extract character data by analyzing ABC bytecode
 pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedCharacter> {
     let mut attacks: BTreeMap<String, AttackData> = BTreeMap::new();
     let mut stats: Option<CharStats> = None;
     let mut frame_scripts: BTreeMap<String, Vec<FrameAction>> = BTreeMap::new();
     let mut ext_methods: BTreeMap<String, String> = BTreeMap::new();
+    let mut xframe_map: XframeMap = BTreeMap::new();
 
     // Build method name lookup: method_idx → name
     let mut method_names: BTreeMap<u32, String> = BTreeMap::new();
@@ -594,12 +636,15 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
                     attacks.extend(extracted);
                 }
                 name if name.starts_with("frame") => {
-                    // Use decompiler for full Haxe output (same path as ext methods)
+                    // Extract xframe animation name first
+                    if let Some(anim_name) = extract_xframe_name(&body.bytecode, abc) {
+                        xframe_map.insert(name.to_string(), anim_name);
+                    }
+                    // Use decompiler for full Haxe output
                     let params: Vec<String> = if let Some(method) = abc.methods.get(body.method_idx as usize) {
                         (0..method.param_count).map(|i| format!("arg{}", i)).collect()
                     } else { vec![] };
                     let code = decompiler::decompile_method(body, abc, name, &params);
-                    // Store as a single FrameAction with the full code so render_frame_script emits it
                     frame_scripts.insert(name.to_string(), vec![FrameAction {
                         frame: 0,
                         action: code,
@@ -634,6 +679,10 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
         for t in &mc.instance_methods {
             if !t.name.starts_with("frame") { continue; }
             let Some(body) = body_by_method.get(&t.method_idx) else { continue };
+            // Extract xframe name
+            if let Some(anim_name) = extract_xframe_name(&body.bytecode, abc) {
+                xframe_map.insert(t.name.clone(), anim_name);
+            }
             let params: Vec<String> = if let Some(method) = abc.methods.get(body.method_idx as usize) {
                 (0..method.param_count).map(|i| format!("arg{}", i)).collect()
             } else { vec![] };
@@ -665,8 +714,8 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
         }
     }
 
-    log::info!("Extracted {} attacks, {} frame scripts, {} ext methods, stats={}",
-        attacks.len(), frame_scripts.len(), ext_methods.len(), stats.is_some());
+    log::info!("Extracted {} attacks, {} frame scripts, {} ext methods, {} xframe mappings, stats={}",
+        attacks.len(), frame_scripts.len(), ext_methods.len(), xframe_map.len(), stats.is_some());
 
     Ok(ExtractedCharacter {
         name: char_name.to_string(),
@@ -674,6 +723,7 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
         stats,
         frame_scripts,
         ext_methods,
+        xframe_map,
     })
 }
 
