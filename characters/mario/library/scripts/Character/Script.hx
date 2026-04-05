@@ -65,14 +65,14 @@ function followUser(arg0, arg1, arg2) {
 	var options = { hitStunPause: false };
 	if (arg2) {
 		var options = { persistent: true, hitStunPause: false };
-		if (arg0) {
-			self.createTimer(1, 0, updatePos, options);
-			return;
-		}
-		self.destroyTimer(updatePos);
 	} else {
 		var options = { persistent: false, hitStunPause: false };
 	}
+	if (arg0) {
+		self.createTimer(1, 0, updatePos, options);
+		return;
+	}
+	self.destroyTimer(updatePos);
 }
 
 
@@ -98,14 +98,14 @@ function loopEffect(arg0, arg1, arg2) {
 	var options = { hitStunPause: false };
 	if (arg2) {
 		var options = { persistent: true, hitStunPause: false };
-		if (arg0) {
-			self.createTimer(1, 0, doLoop, { hitStunPause: false });
-			return;
-		}
-		self.destroyTimer(doLoop);
 	} else {
 		var options = { persistent: false, hitStunPause: false };
 	}
+	if (arg0) {
+		self.createTimer(1, 0, doLoop, { hitStunPause: false });
+		return;
+	}
+	self.destroyTimer(doLoop);
 }
 
 

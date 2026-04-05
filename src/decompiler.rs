@@ -1377,11 +1377,11 @@ impl<'a> StructuredDecoder<'a> {
     }
 
     /// Walk a straight Fall/Jump chain and return the first offset that exits the chain.
-    /// Stops (returning None) at backward branches (loops) or Return.
-    /// For forward branches, returns the fallthrough (merge approximation without recursion).
+    /// Stops at Branch blocks (returns the branch start — the merge is AT the branch, not after).
+    /// Stops at Return/Throw (returns None).
     fn chain_exit(&self, start: usize, exclude: usize) -> Option<usize> {
         let mut cur = start;
-        for _ in 0..16 {
+        for _ in 0..32 {
             if cur == exclude { return Some(cur); }
             let block = match self.block_at(cur) { Some(b) => b, None => return None };
             match &block.term {
@@ -1391,10 +1391,8 @@ impl<'a> StructuredDecoder<'a> {
                     cur = next;
                 }
                 Terminator::Return | Terminator::Throw => return None,
-                // For branches, return the fallthrough as a conservative merge approximation
-                // (avoids infinite recursion through loops)
-                Terminator::Branch { fallthrough, .. } |
-                Terminator::BranchCmp { fallthrough, .. } => return Some(*fallthrough),
+                // Branch block: the merge is AT this block's start (both paths arrive here)
+                Terminator::Branch { .. } | Terminator::BranchCmp { .. } => return Some(cur),
             }
         }
         None
