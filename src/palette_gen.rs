@@ -10,7 +10,7 @@
 /// The R/G map shader reads each sprite pixel's R as the X coordinate into
 /// palette_preview.png to get the actual color (with costume remapping applied).
 
-use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
+use image::{GenericImageView, ImageBuffer, Rgba};
 use serde_json::{json, Value};
 use std::path::Path;
 use std::fs;
@@ -201,27 +201,10 @@ pub fn generate_palettes_and_remap(
         image::ImageFormat::Png,
     )?;
 
-    // ── 4. Remap every sprite's pixels to palette indices ─────────────────────
-    log::info!("palette_gen: remapping {} sprites to R/G palette indices", png_paths.len());
-    let mut remapped = 0usize;
-    for path in &png_paths {
-        let img = match image::open(path) {
-            Ok(i) => i,
-            Err(_) => continue,
-        };
-        let (w, h) = img.dimensions();
-        let mut new_img: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(w, h);
-        for (x, y, px) in img.pixels() {
-            if px[3] > 0 {
-                let idx = nearest_idx(&[px[0], px[1], px[2]], &palette);
-                new_img.put_pixel(x, y, Rgba([idx as u8, 0, 0, px[3]]));
-            }
-            // transparent pixels stay (0,0,0,0)
-        }
-        new_img.save(path)?;
-        remapped += 1;
-    }
-    log::info!("palette_gen: remapped {} sprites", remapped);
+    // Sprites stay as full-color PNGs — we don't remap to R/G indices.
+    // SSF2 sprites weren't authored for the palette shader, so we leave them intact.
+    // Costume swaps in FrayTools will work at the .palettes level but won't
+    // visually recolor the sprites automatically (that requires hand-authored R/G maps).
 
     // ── 5. Generate costumes.palettes JSON ────────────────────────────────────
     let collection_guid = det_uuid(&format!("{}::palettes_guid", char_id));
