@@ -466,11 +466,30 @@ fn generate_script(data: &CharacterData, char_id: &str) -> String {
     );
 
     // Emit decompiled Ext class methods (these belong in Script.hx)
-    let ext_methods: Vec<_> = data.scripts.iter().filter(|s| s.is_ext_method).collect();
+    // Filter out trivial slot initializers (tiny methods that just set SSF2API)
+    let ext_methods: Vec<_> = data.scripts.iter()
+        .filter(|s| s.is_ext_method)
+        .filter(|s| {
+            // Filter out trivial slot initializer stubs
+            !s.code.contains("Object.SSF2API")
+        })
+        .collect();
     if !ext_methods.is_empty() {
         out.push_str("// ── Decompiled from SSF2 XxxExt.as ─────────────────────────────────────────\n\n");
+        // Built-in functions that are already in the template header
+        let template_fns = ["initialize", "update", "inputUpdateHook", "handleLinkFrames", "onTeardown"];
         for script in &ext_methods {
-            out.push_str(&script.code);
+            // Rename colliding functions so they don't shadow the template
+            let code = if template_fns.iter().any(|f| script.name == *f) {
+                script.code.replacen(
+                    &format!("function {}(", script.name),
+                    &format!("function ssf2_{}(", script.name),
+                    1
+                )
+            } else {
+                script.code.clone()
+            };
+            out.push_str(&code);
             out.push('\n');
         }
     }

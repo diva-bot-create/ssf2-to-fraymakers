@@ -28,110 +28,121 @@ function onTeardown() {
 
 // ── Decompiled from SSF2 XxxExt.as ─────────────────────────────────────────
 
-function addEffectToList() {
-	// if (local1 == null) { /* jump 11 */ }
-	self.effects.push(local1);
-	return local1;
+function addEffectToList(arg0) {
+	if (/* ? */ == self) {
+		SSF2API.print("Tried to add a NULL effect to list!");
+		return null;
+	} else {
+		self.effects.push(_v1);
+		return _v1;
+	}
 }
 
-function clearEffectsOnStateChange() {
-	self.clearListener = local1;
+
+function clearEffectsOnStateChange(arg0) {
+	self.clearListener = _v1;
 	self.addEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
 	return;
 }
 
-function clearListener() {
-	self.SSF2API = Object;
+
+function flipX(arg0) {
+	if (!self.isFacingRight()) {
+		return _v1;
+	} else {
+		return _v1 * -1;
+	}
+}
+
+
+function followUser(arg0, arg1, arg2) {
+	_v4 = self;
+	if (!/* ? */) {
+	}
+	if (!/* ? */) {
+		/* ? */.createTimer(/* ? */, self, 1, 0);
+	} else {
+		/* ? */.destroyTimer(self);
+	}
 	return;
 }
 
-function count() {
-	self.SSF2API = Object;
-	return;
-}
 
-function effects() {
-	self.SSF2API = Object;
-	return;
-}
-
-function flipX() {
-	// if (!self.isFacingRight()) { /* jump 2 */ }
-	return local1;
-}
-
-function followUser() {
-	throw /* value */;
-	// if (local1 == local2) { /* jump 7146368 */ }
-	throw /* value */;
-	// if (!null.x - getX.getX().y - getY.getY()) { /* jump 20 */ }
-	// if (!{ persistent: false, hitStunPause: false }) { /* jump 20 */ }
-	self.createTimer({ persistent: true, hitStunPause: false }, self, 1, 0);
-	self.destroyTimer(self);
-	return;
-}
-
-function initialize() {
+function ssf2_initialize() {
 	SSF2API.print("Mario initialized.");
 	return;
 }
 
-function jumpToContinue() {
+
+function jumpToContinue(arg0) {
 	self.removeEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
 	self.updateAttackStats({ allowControl: false, cancelWhenAirborne: true });
 	self.stancePlayFrame("continue");
 	return;
 }
 
-function loopEffect() {
-	throw /* value */;
-	// if (local1 == local2) { /* jump 7146368 */ }
-	throw /* value */;
-	// if (!null) { /* jump 20 */ }
-	// if (!{ persistent: false, hitStunPause: false }) { /* jump 22 */ }
-	{ persistent: true, hitStunPause: false }.createTimer(self, 1, 0, { hitStunPause: false });
-	self.destroyTimer(self);
+
+function loopEffect(arg0, arg1, arg2) {
+	_v4 = self;
+	if (!/* ? */) {
+	}
+	if (!/* ? */) {
+		/* ? */.createTimer(self, 1, 0, { hitStunPause: false });
+	}
+	/* ? */.destroyTimer(self);
 	return;
 }
 
-function pushEffectBehind() {
-	SSF2API.getStage().getMidground().swapChildren(self.getMC(), local1);
-	return local1;
+
+function pushEffectBehind(arg0) {
+	SSF2API.getStage().getMidground().swapChildren(self.getMC(), _v1);
+	return _v1;
 }
 
-function removeAllEffects() {
-	var local2 = 0;
-	// if (0. == null) { /* jump 39 */ }
-	// if (0..parent == null) { /* jump 23 */ }
-	self.effects.removeChild(0.);
-	var local2 = 0;
-	// if (0 < self.effects.length) { /* jump -69 */ }
-	self.effects = Array.new Array();
-	// if (!self.clearListener) { /* jump 15 */ }
-	// if (self.hasEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects)) { /* jump 5 */ }
-	// if (!!local1 == null) { /* jump 13 */ }
-	self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
-	return;
+
+function removeAllEffects(arg0) {
+	_v2 = 0;
+	while (/* ? */ < /* ? */) {
+		self.effects = new Array();
+		if (!self.clearListener) {
+			self.hasEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
+			if (/* ? */) {
+				if (!/* ? */) {
+					self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
+				}
+				return;
+			} else {
+				!_v1 == null;
+			}
+		}
+	}
 }
 
-function setLandingLag() {
-	// if (!local1) { /* jump 43 */ }
-	self.removeEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
-	self.addEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
-	// if (!self.isOnGround()) { /* jump 5 */ }
-	self.jumpToContinue();
-	self.removeEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
-	self.addEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
-	// if (!self.isOnGround()) { /* jump 5 */ }
-	self.toLand();
-	return;
+
+function setLandingLag(arg0) {
+	if (!_v1) {
+		self.removeEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
+		self.addEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
+		if (!self.isOnFloor()) {
+			self.jumpToContinue();
+			return;
+		}
+	} else {
+		self.removeEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
+		self.addEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
+		if (!self.isOnFloor()) {
+			self.toLand();
+		}
+	}
 }
+
 
 function stopListening() {
 	self.clearListener = false;
 	self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
 	return;
 }
+
 
 // ── Frame scripts (85 methods) ──────────────────────────────────────────────
 // NOTE: Frame scripts belong in the .entity file, not here.

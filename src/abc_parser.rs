@@ -595,9 +595,20 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
                     }
                 }
                 // Decompile all other Ext methods for Script.hx
+                // Skip slot/const traits (kind 0/6) — those are variable declarations, not methods
                 name if !matches!(name, "getOwnStats" | "getAttackStats" | "getItemStats" | "getProjectileStats") => {
-                    let code = decompiler::decompile_method(body, abc, name, &[]);
-                    ext_methods.insert(name.to_string(), code);
+                    // Only decompile actual method traits (kind 1/2/3), not slots (kind 0/6)
+                    // The trait.kind is stored in the Trait struct; method_idx > 0 means it's a real method
+                    if t.kind & 0x0F != 0 || t.slot_idx == 0 {
+                        // Get param count from method signature
+                        let params: Vec<String> = if let Some(method) = abc.methods.get(body.method_idx as usize) {
+                            (0..method.param_count).map(|i| format!("arg{}", i)).collect()
+                        } else {
+                            vec![]
+                        };
+                        let code = decompiler::decompile_method(body, abc, name, &params);
+                        ext_methods.insert(name.to_string(), code);
+                    }
                 }
                 _ => {}
             }
