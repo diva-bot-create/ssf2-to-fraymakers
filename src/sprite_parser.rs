@@ -178,7 +178,17 @@ pub fn parse_sprite_boxes(
                 None => continue,
             };
 
-            let fm_name = ssf2_to_fm.get(&ssf2_name).cloned().unwrap_or_else(|| ssf2_name.clone());
+            // Convert SSF2 name → FM name.
+            // ssf2_name might be a raw SSF2 xframe label ('a', 'a_air', etc) OR
+            // a normalized symbol label that maps to one ('jabcombo' → 'a' → 'jab').
+            // The static symbol→SSF2 table in extract_ssf2_anim_name always returns the
+            // SSF2 xframe name ('a'), so we then look that up in the dynamic ssf2_to_fm
+            // map. If not found there (character never calls setXFrame for this anim),
+            // fall back to the static FM mapping table.
+            let fm_name = ssf2_to_fm.get(&ssf2_name)
+                .cloned()
+                .or_else(|| static_ssf2_to_fm(&ssf2_name))
+                .unwrap_or_else(|| ssf2_name.clone());
 
             // Collect internal frame labels (for sub-animation splitting)
             let frame_labels = extract_frame_labels(sprite);
@@ -271,50 +281,102 @@ pub fn sub_anim_image_splits(
     sub_anim_splits(fm_name, frame_labels, total_frames)
 }
 
+/// SSF2 frame labels that are control-flow markers, not real sub-animation boundaries.
+/// These appear in SSF2 ActionScript as `gotoAndPlay("again")` / `gotoAndPlay("finish")`
+/// to implement looping/chaining; they don't correspond to distinct Fraymakers animations.
+const CONTROL_FLOW_LABELS: &[&str] = &[
+    "goback",   // loop back to start of current hit
+    "again",    // restart the combo chain if button pressed
+    "finish",   // tail-end recovery animation
+    "loop",     // generic loop point
+    "afterHit", // post-hit recovery
+    "endlag",   // end-lag frames
+    "continue", // generic continue marker
+    "done",     // end of sub-sequence (used in Jump, not jab)
+];
+
+/// Taunt sprite label names that map to the three Fraymakers taunt slots.
+const TAUNT_LABEL_NAMES: &[&str] = &[
+    "taunt_side", "taunt_neutral", "taunt_updown",
+];
+const TAUNT_FM_NAMES: &[&str] = &["taunt", "taunt_up", "taunt_down"];
+
 /// Given an FM animation name and the internal frame labels of its SSF2 sprite,
 /// return a list of (fm_sub_anim_name, start_frame_inclusive, end_frame_exclusive).
 /// Returns empty vec if no splitting is needed (animation maps 1:1).
+///
+/// # Jab splitting strategy
+/// Every character uses different label names for jab hits (begin/hit2/hit3,
+/// combo1/combo2/combo3, jab2/jab3, kick2, hitHold, etc.).
+/// Rather than matching by name, we:
+///   1. Filter out known control-flow labels (again, finish, loop, goback, ...)
+///   2. Whatever real labels remain — map them positionally to jab1/jab2/jab3/...
+///   3. Each real label marks the START of its sub-animation slice.
+///   4. If only one real label exists (or the first label starts well into the sprite)
+///      we include everything from frame 0 as jab1, starting at the first real label.
 fn sub_anim_splits(
     fm_name: &str,
     frame_labels: &[(String, u16)],
     total_frames: u16,
 ) -> Vec<(String, u16, u16)> {
-    // Table: fm_anim → (required labels in order, fm sub-anim names in order)
-    // The SSF2 label marks the START of that sub-animation's first active frame.
-    let split_table: &[(&str, &[&str], &[&str])] = &[
-        // Jab: begin=1, hit2=8, hit3=18  (frame 0 is pre-roll, ignore it)
-        ("jab",  &["begin", "hit2", "hit3"],  &["jab1", "jab2", "jab3"]),
+    match fm_name {
+        "jab" => split_jab(frame_labels, total_frames),
+        "taunt" => split_taunt(frame_labels, total_frames),
+        _ => vec![],
+    }
+}
 
-        // Taunts: taunt_side=0, taunt_neutral=42, taunt_updown=115
-        // Map to FM: taunt (side), taunt_up, taunt_down  (FM has 3 taunt slots)
-        ("taunt", &["taunt_side", "taunt_neutral", "taunt_updown"], &["taunt", "taunt_up", "taunt_down"]),
-    ];
+/// Split a jab sprite into jab1/jab2/jab3/... by filtering control-flow labels
+/// and mapping remaining labels positionally.
+fn split_jab(frame_labels: &[(String, u16)], total_frames: u16) -> Vec<(String, u16, u16)> {
+    // Filter to only real sub-animation boundary labels
+    let real_labels: Vec<(u16, &str)> = frame_labels.iter()
+        .filter(|(label, _)| !CONTROL_FLOW_LABELS.contains(&label.as_str()))
+        .map(|(label, frame)| (*frame, label.as_str()))
+        .collect();
 
-    for &(anim, required_labels, sub_names) in split_table {
-        if fm_name != anim { continue; }
-
-        // Check that all required labels are present
-        let label_map: std::collections::HashMap<&str, u16> = frame_labels.iter()
-            .map(|(l, f)| (l.as_str(), *f))
-            .collect();
-
-        if required_labels.iter().any(|l| !label_map.contains_key(l)) {
-            // Labels not found — don't split this character's version
-            log::debug!("sub_anim_splits: '{}' missing some labels {:?}, skipping split", fm_name, required_labels);
-            return vec![];
-        }
-
-        // Build (start, end) ranges from the label positions
-        let starts: Vec<u16> = required_labels.iter().map(|l| *label_map.get(l).unwrap()).collect();
-        let mut splits = Vec::new();
-        for (i, (&start, &sub_name)) in starts.iter().zip(sub_names.iter()).enumerate() {
-            let end = if i + 1 < starts.len() { starts[i + 1] } else { total_frames };
-            splits.push((sub_name.to_string(), start, end));
-        }
-        return splits;
+    if real_labels.is_empty() {
+        // No labels at all — single jab1 covering the whole sprite
+        return vec![("jab1".to_string(), 0, total_frames)];
     }
 
-    vec![]
+    // Build ranges: each real label starts a sub-animation that ends at the next one
+    let mut splits = Vec::new();
+    for (i, &(start_frame, _label)) in real_labels.iter().enumerate() {
+        let end_frame = real_labels.get(i + 1)
+            .map(|&(f, _)| f)
+            .unwrap_or(total_frames);
+        let fm_name = format!("jab{}", i + 1);
+        splits.push((fm_name, start_frame, end_frame));
+        log::trace!("  jab split: '{}' (ssf2 label='{}') frames {}..{}",
+            splits.last().unwrap().0, _label, start_frame, end_frame);
+    }
+    splits
+}
+
+/// Split a taunt sprite using the three known SSF2 taunt label names.
+/// Unlike jab, taunts have fixed semantic label names across all characters.
+fn split_taunt(frame_labels: &[(String, u16)], total_frames: u16) -> Vec<(String, u16, u16)> {
+    let label_map: std::collections::HashMap<&str, u16> = frame_labels.iter()
+        .map(|(l, f)| (l.as_str(), *f))
+        .collect();
+
+    // All three taunt labels must be present
+    if TAUNT_LABEL_NAMES.iter().any(|l| !label_map.contains_key(l)) {
+        // This character doesn't have the standard 3-taunt layout — don't split
+        return vec![];
+    }
+
+    let starts: Vec<u16> = TAUNT_LABEL_NAMES.iter()
+        .map(|l| *label_map.get(l).unwrap())
+        .collect();
+
+    starts.iter().enumerate()
+        .map(|(i, &start)| {
+            let end = starts.get(i + 1).copied().unwrap_or(total_frames);
+            (TAUNT_FM_NAMES[i].to_string(), start, end)
+        })
+        .collect()
 }
 
 // ─── Fallbacks ────────────────────────────────────────────────────────────────
@@ -462,7 +524,11 @@ pub fn extract_ssf2_anim_name(
         ("skid", "skid"),
         ("crouch", "crouch"),
         // Attacks - jab / normals
-        ("jab", "a"),
+        // All these map to SSF2 'a' (jab) — they get split into jab1/jab2/jab3 by sub_anim_splits()
+        ("jab",      "a"),
+        ("jabcombo", "a"),   // captainfalcon_fla.JabCombo, etc.
+        ("jablight", "a"),
+        ("jabs",     "a"),
         ("jab1", "a"),
         ("jab2", "a"),
         ("dashattack", "a_forward"),
@@ -597,6 +663,87 @@ pub fn extract_ssf2_anim_name(
     }
 
     None
+}
+
+/// Static SSF2 xframe name → Fraymakers animation name lookup.
+/// Mirrors extractor::build_ssf2_to_fm_anim without needing the dynamic xframe map.
+/// Used when a character's bytecode doesn't call setXFrame for a given animation
+/// (e.g. their jab sprite exists but they use a custom label instead of 'a').
+fn static_ssf2_to_fm(ssf2_name: &str) -> Option<String> {
+    let table: &[(&str, &str)] = &[
+        ("stand",           "idle"),
+        ("walk",            "walk"),
+        ("run",             "run"),
+        ("jump",            "jump"),
+        ("jump_midair",     "jump_aerial"),
+        ("fall",            "fall"),
+        ("land",            "land"),
+        ("heavyland",       "land_heavy"),
+        ("skid",            "skid"),
+        ("crouch",          "crouch"),
+        ("entrance",        "entry"),
+        ("revival",         "respawn"),
+        ("win",             "victory"),
+        ("lose",            "defeat"),
+        ("a",               "jab"),
+        ("a_forward",       "dash_attack"),
+        ("a_forward_tilt",  "tilt_forward"),
+        ("a_up_tilt",       "tilt_up"),
+        ("a_down",          "tilt_down"),
+        ("crouch_attack",   "tilt_down"),
+        ("a_forwardsmash",  "strong_forward"),
+        ("a_up",            "strong_up"),
+        ("a_air",           "aerial_neutral"),
+        ("a_air_forward",   "aerial_forward"),
+        ("a_air_backward",  "aerial_back"),
+        ("a_air_up",        "aerial_up"),
+        ("a_air_down",      "aerial_down"),
+        ("b",               "special_neutral"),
+        ("b_air",           "special_neutral_air"),
+        ("b_forward",       "special_side"),
+        ("b_forward_air",   "special_side_air"),
+        ("b_up",            "special_up"),
+        ("b_up_air",        "special_up_air"),
+        ("b_down",          "special_down"),
+        ("b_down_air",      "special_down_air"),
+        ("throw_forward",   "throw_forward"),
+        ("throw_back",      "throw_back"),
+        ("throw_up",        "throw_up"),
+        ("throw_down",      "throw_down"),
+        ("ledge_attack",    "ledge_attack"),
+        ("getup_attack",    "getup_attack"),
+        ("defend",          "shield"),
+        ("dodgeroll",       "roll"),
+        ("airdodge",        "airdodge"),
+        ("sidestep",        "sidestep"),
+        ("grab",            "grab"),
+        ("carry",           "carry"),
+        ("hurt",            "hurt"),
+        ("stunned",         "stunned"),
+        ("dizzy",           "dizzy"),
+        ("sleep",           "sleep"),
+        ("falling",         "tumble"),
+        ("crash",           "knockdown"),
+        ("frozen",          "frozen"),
+        ("egg",             "egg"),
+        ("star",            "star_ko"),
+        ("pitfall",         "buried"),
+        ("hang",            "ledge_hang"),
+        ("climbup",         "ledge_climb"),
+        ("edgelean",        "ledge_lean"),
+        ("rollup",          "ledge_roll"),
+        ("wallstick",       "wall_stick"),
+        ("taunt",           "taunt"),
+        ("swim",            "swim"),
+        ("ladder",          "ladder"),
+        ("flying",          "fly"),
+        ("tech_ground",     "tech"),
+        ("tech_roll",       "tech_roll"),
+        ("toss",            "item_throw"),
+        ("toss_air",        "item_throw_air"),
+        ("item_jab",        "item_jab"),
+    ];
+    table.iter().find(|(k, _)| *k == ssf2_name).map(|(_, v)| v.to_string())
 }
 
 fn strip_numeric_suffix(s: &str) -> &str {

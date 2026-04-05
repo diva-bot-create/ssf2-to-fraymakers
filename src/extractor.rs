@@ -219,11 +219,17 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
 // ─── SSF2 → Fraymakers animation name table ───────────────────────────────────
 
 /// For SSF2 animations that map to a single FM name but get split into sub-animations
-/// at the sprite level (e.g. jab → jab1/jab2/jab3), return the full list of sub-anim names.
-/// Returns empty vec for animations that are NOT split.
+/// at the sprite level (e.g. jab → jab1/jab2/jab3), return ALL POSSIBLE sub-anim names
+/// that could be produced. These seed the animation list so even unseen sub-anims get
+/// placeholder entries; sprite_parser trims to only those with actual frames.
+///
+/// We don't know at this stage how many sub-anims the sprite will have (it varies per
+/// character), so we emit enough names to cover the maximum we'll encounter (jab4).
 pub fn expand_split_anim(fm_name: &str) -> Vec<String> {
     match fm_name {
-        "jab"   => vec!["jab1".into(), "jab2".into(), "jab3".into()],
+        // Jab: up to 4 hits (captainfalcon, pit, ryu)
+        "jab"   => vec!["jab1".into(), "jab2".into(), "jab3".into(), "jab4".into()],
+        // Taunt: always exactly 3 slots
         "taunt" => vec!["taunt".into(), "taunt_up".into(), "taunt_down".into()],
         _ => vec![],
     }
@@ -231,7 +237,7 @@ pub fn expand_split_anim(fm_name: &str) -> Vec<String> {
 
 /// Returns true if this FM animation name is a sub-animation produced by splitting.
 pub fn is_split_sub_anim(fm_name: &str) -> bool {
-    matches!(fm_name, "jab1" | "jab2" | "jab3" | "taunt_up" | "taunt_down")
+    matches!(fm_name, "jab1" | "jab2" | "jab3" | "jab4" | "taunt_up" | "taunt_down")
 }
 
 fn build_ssf2_to_fm_anim(xframe_map: &XframeMap) -> BTreeMap<String, String> {
