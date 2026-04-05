@@ -1,14 +1,4 @@
-mod ssf;
-mod swf_parser;
-mod abc_parser;
-mod decompiler;
-mod extractor;
-mod entity_gen;
-mod fraytools_project;
-mod haxe_gen;
-mod palette_gen;
-mod sprite_parser;
-mod image_extractor;
+use ssf2_converter::*;
 
 use clap::Parser;
 use anyhow::Result;

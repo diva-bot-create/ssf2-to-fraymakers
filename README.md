@@ -4,9 +4,7 @@ Converts Super Smash Flash 2 character data to [Fraymakers](https://www.fraymake
 
 ## Requirements
 
-- Rust (stable)
-- Java (for JPEXS) — `brew install openjdk`
-- [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler/releases) — `ffdec.jar`
+- Rust (stable) — that's it
 
 ## Build
 
@@ -23,11 +21,8 @@ Binaries in `target/release/`:
 ### 1. Extract costume palettes from misc.ssf (one-time setup)
 
 ```bash
-# Decompile misc.ssf to ActionScript using JPEXS
-java -jar /path/to/ffdec.jar -export script /tmp/misc_scripts/ misc.ssf
-
-# Extract all 45 characters × 15 costumes into JSON
-./target/release/extract_costumes /tmp/misc_scripts/scripts/Misc.as ssf2_costumes.json
+# Reads misc.ssf directly — no external tools needed
+./target/release/extract_costumes misc.ssf ssf2_costumes.json
 ```
 
 ### 2. Convert a character
@@ -76,4 +71,4 @@ The converter maps these directly to Fraymakers palette color slots + maps.
 ## Notes
 
 - Original SSF2 character data © McLeodGaming — this tool is for mod development only
-- See `JPEXS_WORKFLOW.md` for the full inspection methodology
+- `JPEXS_WORKFLOW.md` documents internal SWF/ABC inspection done during development (not required for use)

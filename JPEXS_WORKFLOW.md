@@ -1,4 +1,10 @@
-# JPEXS Workflow — Know Before You Code
+# JPEXS Workflow — Developer Reference Only
+
+> ⚠️ **JPEXS is NOT part of this project and is NOT required by end users.**
+> This document exists purely as a developer reference — we used JPEXS to
+> inspect SWF/ABC internals while building the Rust extraction code.
+> The converter reads `misc.ssf` and character `.ssf` files directly.
+> Never add JPEXS as a dependency or document it in user-facing README.
 
 Before touching any ABC parsing or extraction logic, **inspect the SWF first with JPEXS**. It shows you exactly what the bytecode contains so you know what you're targeting.
 

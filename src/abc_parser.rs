@@ -157,8 +157,10 @@ pub struct ExtractedCharacter {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CostumeData {
     pub name: String,
-    /// ARGB color values (0xAARRGGBB) — the raw palette for this costume
+    /// Source ARGB color values — the base sprite palette (same across all costumes)
     pub colors: Vec<u32>,
+    /// Replacement ARGB color values — what each source color becomes for this costume
+    pub replacements: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1476,7 +1478,7 @@ pub fn extract_costume_data(abc: &AbcFile) -> Vec<CostumeData> {
                     }).collect();
                     if !color_vals.is_empty() {
                         log::debug!("  costume {:?}: {} colors", name, color_vals.len());
-                        costumes.push(CostumeData { name: name.clone(), colors: color_vals });
+                        costumes.push(CostumeData { name: name.clone(), colors: color_vals, replacements: vec![] });
                     }
                 }
                 stack.push(StackVal::Obj(obj));
@@ -1584,6 +1586,7 @@ pub fn extract_costume_data_from_apply_palette(abc: &AbcFile) -> Option<Vec<Cost
                         costumes.push(CostumeData {
                             name: format!("Alt {}", idx + 1),
                             colors: vec![0xFF000000 | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)],
+                            replacements: vec![],
                         });
                     }
                     current_nums.clear();
@@ -1620,7 +1623,7 @@ pub fn extract_costume_data_from_apply_palette(abc: &AbcFile) -> Option<Vec<Cost
     }
 
     // Insert "Default" costume at index 0
-    costumes.insert(0, CostumeData { name: "Default".to_string(), colors: vec![] });
+    costumes.insert(0, CostumeData { name: "Default".to_string(), colors: vec![], replacements: vec![] });
     log::info!("extract_apply_palette: found {} costumes", costumes.len());
     Some(costumes)
 }
@@ -1631,43 +1634,28 @@ pub fn extract_costume_data_from_apply_palette(abc: &AbcFile) -> Option<Vec<Cost
 /// {name: String, colors: [uint, uint, ...]} objects. This function finds them all.
 ///
 /// Returns a map of class_name → Vec<CostumeData>.
+/// Scan all method bodies for costume data. Returns per-character map.
+/// Handles two layouts:
+///   A) misc.ssf getCostumeData: one big method, character key from getproperty on a string constant
+///   B) character-file layout: small per-costume method, char name inferred from class name
 pub fn scan_all_costume_methods(abc: &AbcFile) -> BTreeMap<String, Vec<CostumeData>> {
-    // Build method_idx → (class_name, method_name) map
-    let trait_map: BTreeMap<u32, (String, String)> = abc.classes.iter()
-        .flat_map(|cls| cls.instance_methods.iter().chain(cls.class_methods.iter())
-            .map(move |t| (t.method_idx, (cls.name.clone(), t.name.clone()))))
-        .collect();
-
     let mut results: BTreeMap<String, Vec<CostumeData>> = BTreeMap::new();
-
     for body in &abc.method_bodies {
-        let costumes = decode_costume_objects(&body.bytecode, abc);
-        if costumes.is_empty() { continue; }
-
-        let (cls, _mname) = trait_map.get(&body.method_idx)
-            .cloned().unwrap_or_else(|| (format!("method_{}", body.method_idx), String::new()));
-
-        // Infer character name from class name (e.g. "MarioAPI" → "mario", "SSF2API" → "all")
-        let char_key = infer_char_name(&cls);
-        results.entry(char_key).or_default().extend(costumes);
+        let per_char = decode_costume_objects(&body.bytecode, abc);
+        for (char_name, costumes) in per_char {
+            if !costumes.is_empty() {
+                results.entry(char_name).or_default().extend(costumes);
+            }
+        }
     }
-
     results
 }
 
-fn infer_char_name(class_name: &str) -> String {
-    let lower = class_name.to_lowercase();
-    // Strip common suffixes
-    for suffix in &["api", "data", "ext", "char", "character"] {
-        if lower.ends_with(suffix) && lower.len() > suffix.len() {
-            return lower[..lower.len()-suffix.len()].to_string();
-        }
-    }
-    lower
-}
-
-/// Simulate AVM2 stack execution to find newobject calls that produce {name, colors:[...]} structures.
-fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> Vec<CostumeData> {
+/// Simulate AVM2 stack execution to extract costume palette data.
+/// Returns per-character costume lists, keyed by character name string.
+/// Handles both misc.ssf (single method, array-of-char-keyed objects)
+/// and character-file (small per-costume method) layouts.
+fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> BTreeMap<String, Vec<CostumeData>> {
     #[derive(Clone, Debug)]
     enum V {
         Null,
@@ -1677,12 +1665,35 @@ fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> Vec<CostumeData> {
         Obj(BTreeMap<String, V>),
     }
 
+    fn arr_to_u32(v: Option<&V>) -> Vec<u32> {
+        match v {
+            Some(V::Arr(arr)) => arr.iter().filter_map(|x| {
+                if let V::Num(n) = x { Some(*n as u32) } else { None }
+            }).collect(),
+            _ => vec![],
+        }
+    }
+
     let mut pos = 0usize;
     let mut stack: Vec<V> = Vec::new();
-    let mut costumes: Vec<CostumeData> = Vec::new();
+    // per-character costume accumulator
+    let mut per_char: BTreeMap<String, Vec<CostumeData>> = BTreeMap::new();
+    // tracks which character name was last used as an array key
+    // (set when we see getproperty/setproperty with a plain string constant)
+    let mut current_char: Option<String> = None;
+    // per-char alt counter
+    let mut alt_counters: BTreeMap<String, usize> = BTreeMap::new();
 
     macro_rules! r30 { () => { read_u30_at(code, &mut pos).unwrap_or(0) } }
     macro_rules! pop  { () => { stack.pop().unwrap_or(V::Null) } }
+
+    // Helper: is a string a known SSF2 character name?
+    // We accept any lowercase alphabetic string that looks like a char id.
+    fn looks_like_char_name(s: &str) -> bool {
+        !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric())
+            && s.chars().next().map(|c| c.is_ascii_lowercase()).unwrap_or(false)
+            && s.len() >= 3 && s.len() <= 24
+    }
 
     while pos < code.len() {
         let op = code[pos]; pos += 1;
@@ -1696,6 +1707,59 @@ fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> Vec<CostumeData> {
             0x2F => { let i = r30!() as usize; stack.push(V::Num(*abc.doubles.get(i).unwrap_or(&0.0))); }
             0x26 | 0x27 | 0x20 | 0x28 => stack.push(V::Null),
 
+            // getproperty / setproperty / initproperty — track char name from runtime key
+            // Opcode 0x66 = getproperty, 0x61 = setproperty, 0x68 = initproperty
+            // The multiname index tells us if it's a static or runtime (MultinameL) name.
+            0x66 => {
+                let mn_idx = r30!() as usize;
+                let mn = abc.multinames.get(mn_idx);
+                let is_runtime = mn.map(|m| m.kind == 0x1B || m.kind == 0x1C).unwrap_or(false);
+                let static_name = mn.and_then(|m| if m.name.is_empty() { None } else { Some(m.name.clone()) });
+                if is_runtime {
+                    // Runtime key was top of stack before the receiver
+                    // stack is: [..., receiver, key] — but getproperty pops receiver, uses name from stack
+                    // Actually for MultinameL: pops the name then the object, pushes result
+                    let key = pop!();
+                    pop!(); // receiver / object
+                    if let V::Str(s) = &key {
+                        if looks_like_char_name(s) {
+                            current_char = Some(s.clone());
+                        }
+                    }
+                    stack.push(V::Null); // result of getproperty (the array slot)
+                } else {
+                    // Static name property access
+                    let top = pop!();
+                    if let Some(name) = static_name {
+                        if looks_like_char_name(&name) {
+                            current_char = Some(name);
+                        }
+                        stack.push(top); // preserve for chained calls
+                    } else {
+                        stack.push(V::Null);
+                    }
+                }
+            }
+            0x61 | 0x68 => {
+                let mn_idx = r30!() as usize;
+                let mn = abc.multinames.get(mn_idx);
+                let is_runtime = mn.map(|m| m.kind == 0x1B || m.kind == 0x1C).unwrap_or(false);
+                let static_name = mn.and_then(|m| if m.name.is_empty() { None } else { Some(m.name.clone()) });
+                if is_runtime {
+                    let _val = pop!();
+                    let key = pop!();
+                    pop!(); // object
+                    if let V::Str(s) = &key {
+                        if looks_like_char_name(s) { current_char = Some(s.clone()); }
+                    }
+                } else {
+                    pop!(); pop!();
+                    if let Some(name) = static_name {
+                        if looks_like_char_name(&name) { current_char = Some(name); }
+                    }
+                }
+            }
+
             // newarray
             0x56 => {
                 let n = r30!() as usize;
@@ -1704,7 +1768,7 @@ fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> Vec<CostumeData> {
                 stack.push(V::Arr(items));
             }
 
-            // newobject — the key opcode
+            // newobject — the key opcode; build a costume if it matches the SSF2 palette format
             0x55 => {
                 let n = r30!() as usize;
                 let start = stack.len().saturating_sub(n * 2);
@@ -1715,20 +1779,63 @@ fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> Vec<CostumeData> {
                     if let V::Str(k) = &pairs[i] { obj.insert(k.clone(), pairs[i+1].clone()); }
                     i += 2;
                 }
-                // Check for {name: String, colors: [uint, ...]}
-                if let (Some(V::Str(name)), Some(V::Arr(color_arr))) = (obj.get("name"), obj.get("colors")) {
+
+                // Pattern A: misc.ssf — {team|base, paletteSwap:{colors,replacements}}
+                if let Some(V::Obj(ps)) = obj.get("paletteSwap") {
+                    let colors = arr_to_u32(ps.get("colors"));
+                    let replacements = arr_to_u32(ps.get("replacements"));
+                    if colors.len() >= 4 && colors.len() == replacements.len() {
+                        let char_key = current_char.clone().unwrap_or_else(|| "unknown".to_string());
+                        let alt_n = alt_counters.entry(char_key.clone()).or_insert(0);
+                        let costume_name = if obj.contains_key("base") {
+                            "Default".to_string()
+                        } else if let Some(V::Str(team)) = obj.get("team") {
+                            let mut c = team.chars();
+                            match c.next() {
+                                None    => team.clone(),
+                                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                            }
+                        } else {
+                            *alt_n += 1;
+                            format!("Alt {}", alt_n)
+                        };
+                        per_char.entry(char_key).or_default()
+                            .push(CostumeData { name: costume_name, colors, replacements });
+                    }
+                }
+                // Pattern B: character-file — {name:String, colors:[uint...]}
+                else if let (Some(V::Str(name)), Some(V::Arr(color_arr))) = (obj.get("name"), obj.get("colors")) {
                     let colors: Vec<u32> = color_arr.iter().filter_map(|v| {
                         if let V::Num(n) = v { Some(*n as u32) } else { None }
                     }).collect();
                     if colors.len() >= 4 {
-                        costumes.push(CostumeData { name: name.clone(), colors });
+                        let char_key = current_char.clone().unwrap_or_else(|| "unknown".to_string());
+                        per_char.entry(char_key).or_default()
+                            .push(CostumeData { name: name.clone(), colors, replacements: vec![] });
                     }
                 }
                 stack.push(V::Obj(obj));
             }
 
-            // Calls — pop args + receiver, push return
-            0x46 | 0x4F | 0x4A | 0x6E | 0x4B | 0x45 => {
+            // callproperty / callpropvoid — track "push" calls so we know the target char
+            // For callpropvoid "push", the receiver is _loc1_["mario"] already resolved
+            0x46 | 0x4F => {
+                let mn_idx = r30!() as usize;
+                let argc = r30!() as usize;
+                let mn_name = abc.multinames.get(mn_idx)
+                    .map(|m| m.name.as_str()).unwrap_or("");
+                let drain = (argc + 1).min(stack.len());
+                if mn_name == "push" {
+                    // stack top = arg (the costume object), then receiver = char array
+                    // current_char is already set from the preceding getproperty
+                    stack.drain(stack.len()-drain..);
+                } else {
+                    stack.drain(stack.len()-drain..);
+                }
+                if op == 0x46 { stack.push(V::Null); }
+            }
+            // constructprop / construct / callsuper etc.
+            0x4A | 0x6E | 0x4B | 0x45 => {
                 r30!(); let argc = r30!() as usize;
                 let drain = (argc + 1).min(stack.len());
                 stack.drain(stack.len()-drain..);
@@ -1736,7 +1843,7 @@ fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> Vec<CostumeData> {
             }
 
             0x60 | 0x5C | 0x5D | 0x65 | 0x80 => { r30!(); stack.push(V::Null); }
-            0x61 | 0x66 | 0x68 | 0x62 | 0x63 | 0x08 => { r30!(); }
+            0x62 | 0x63 | 0x08 => { r30!(); }
             0x29 => { pop!(); }
             0x2A => { if let Some(v) = stack.last().cloned() { stack.push(v); } }
             0x2B => { let n = stack.len(); if n >= 2 { stack.swap(n-1, n-2); } }
@@ -1746,7 +1853,7 @@ fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> Vec<CostumeData> {
                 if pos + 3 <= code.len() { pos += 3; }
             }
             0x47 | 0x48 => break,
-            // Arithmetic — consume 1, push result
+            // Arithmetic — consume 1 or 2, push result
             0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA8 | 0xA9 | 0xAA | 0xA5 | 0xA6 | 0xA7 => {
                 if !stack.is_empty() { stack.pop(); }
                 if stack.is_empty() { stack.push(V::Null); } else { *stack.last_mut().unwrap() = V::Null; }
@@ -1757,5 +1864,7 @@ fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> Vec<CostumeData> {
         }
     }
 
-    costumes
+    per_char
 }
+
+
