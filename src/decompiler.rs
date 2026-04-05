@@ -197,6 +197,16 @@ impl Expr {
                 format!("{{ {} }}", items)
             }
             Expr::BinOp(op, l, r) => format!("{} {} {}", l.render(), op, r.render()),
+            Expr::UnOp("!", e) => match e.as_ref() {
+                // Simplify !(a == b) → a != b, !(a != b) → a == b
+                Expr::BinOp("==", l, r) => format!("{} != {}", l.render(), r.render()),
+                Expr::BinOp("!=", l, r) => format!("{} == {}", l.render(), r.render()),
+                Expr::BinOp("<",  l, r) => format!("{} >= {}", l.render(), r.render()),
+                Expr::BinOp(">",  l, r) => format!("{} <= {}", l.render(), r.render()),
+                Expr::BinOp(">=", l, r) => format!("{} < {}",  l.render(), r.render()),
+                Expr::BinOp("<=", l, r) => format!("{} > {}",  l.render(), r.render()),
+                _ => format!("!{}", e.render()),
+            },
             Expr::UnOp(op, e)     => format!("{}{}", op, e.render()),
         }
     }
@@ -981,7 +991,7 @@ impl<'a> BlockDecoder<'a> {
             }
             if self.stack.len() > 64 { self.stack.drain(0..32); }
         }
-        // Don't drain — caller (StructuredDecoder) may pass leftover stack to next block
+        // Don't drain — carry propagates via out_carry in decode_from_with_stack_out
         None
     }
 }
@@ -1018,6 +1028,13 @@ impl<'a> StructuredDecoder<'a> {
     }
 
     fn decode_from_with_stack(&mut self, start: usize, stop_at: Option<usize>, initial_stack: Vec<Expr>) -> Vec<Stmt> {
+        self.decode_from_with_stack_out(start, stop_at, initial_stack, &mut vec![])
+    }
+
+    fn decode_from_with_stack_out(
+        &mut self, start: usize, stop_at: Option<usize>,
+        initial_stack: Vec<Expr>, out_carry: &mut Vec<Expr>
+    ) -> Vec<Stmt> {
         let mut result = Vec::new();
         let mut cur = start;
         let mut carry_stack: Vec<Expr> = initial_stack;
@@ -1100,21 +1117,20 @@ impl<'a> StructuredDecoder<'a> {
 
                         let merge = self.find_merge(then_start, else_start);
 
-                        // Note: residual carry_stack from this block is the branch condition
-                        // (already consumed above). Clear it before sub-decoding.
                         let saved_carry = carry_stack.clone();
                         carry_stack.clear();
 
-                        let then_b = self.decode_from_with_stack(then_start, merge, saved_carry.clone());
+                        // Capture carry from then_b to propagate to merge block
+                        let mut then_leftover = vec![];
+                        let then_b = self.decode_from_with_stack_out(then_start, merge, saved_carry, &mut then_leftover);
                         let else_b = if else_start != merge.unwrap_or(usize::MAX) {
                             self.decode_from_with_stack(else_start, merge, vec![])
                         } else {
                             vec![]
                         };
-
-                        let cond = raw_cond;
-                        result.push(Stmt::If(cond, then_b, else_b));
-                        carry_stack.clear();
+                        result.push(Stmt::If(raw_cond, then_b, else_b));
+                        // Propagate carry from then_b to merge block
+                        carry_stack = then_leftover;
                         cur = merge.unwrap_or(usize::MAX);
                     }
                 }
@@ -1146,43 +1162,163 @@ impl<'a> StructuredDecoder<'a> {
                 }
             }
         }
+        *out_carry = carry_stack;
         result
     }
 
     /// Find the merge point after an if/else.
-    /// Handles nested ifs by following the then-branch to its final exit.
-    fn find_merge(&self, then_start: usize, else_start: usize) -> Option<usize> {
-        let then_exit = self.deep_exit(then_start, else_start);
-        let else_exit = self.block_exit_target(else_start);
+    /// Detect short-circuit && pattern:
+    ///   then_block = a Fall-only block that ends by falling into else_start
+    ///   else_start  = a Branch block (the second condition check)
+    /// If detected, returns (combined_and_cond, inner_then_start, inner_merge)
+    fn try_collapse_and(
+        &mut self,
+        then_start: usize,
+        else_start: usize,
+        first_cond: Expr,
+        initial_stack: &[Expr],
+    ) -> Option<(Expr, usize, Option<usize>)> {
+        // then_start block must be a Fall that exits to else_start
+        let then_block = self.block_at(then_start)?.clone();
+        if !matches!(then_block.term, Terminator::Fall(n) if n == else_start) {
+            return None;
+        }
+        // else_start must be a Branch or BranchCmp
+        let else_block = self.block_at(else_start)?.clone();
+        // For && collapse: the "inner_then" is the continuation AFTER the second check.
+        // We process from fallthrough of the else_block so the condition block is included.
+        // inner_start = fallthrough of else_block (where condition was not taken)
+        // which falls into the merge where the final condition is consumed.
+        let inner_start = match &else_block.term {
+            Terminator::Branch { fallthrough, .. } => *fallthrough,
+            Terminator::BranchCmp { fallthrough, .. } => *fallthrough,
+            _ => return None,
+        };
+        // inner_then: start of the body to decode (the fallthrough of else_block,
+        // which computes the final condition and falls into the merge point)
+        // inner_else: the skip target (where we jump if condition is false)
+        let (inner_then, inner_else) = match &else_block.term {
+            Terminator::Branch { cond_inv, target, fallthrough } => {
+                // Use fallthrough as start so blocks between else_block and merge are processed
+                (*fallthrough, *target)
+            }
+            Terminator::BranchCmp { target, fallthrough, .. } => (*fallthrough, *target),
+            _ => return None,
+        };
 
-        match (then_exit, else_exit) {
+        // The glue block must start with OP_POP (consuming the dup residue).
+        // This is the hallmark of the AS3 short-circuit && pattern.
+        // Without it, we could spuriously collapse unrelated if-chains.
+        if then_block.start < self.bc.len() && self.bc[then_block.start] != OP_POP {
+            return None;
+        }
+
+        // Decode the glue block (then_start..else_start) to extract the second condition
+        let mut dec = BlockDecoder::new(self.bc, self.abc);
+        dec.activation_slots = self.activation_slots.clone();
+        dec.param_locals = self.param_locals.clone();
+        dec.has_activation = !dec.activation_slots.is_empty();
+        dec.stack = initial_stack.to_vec();
+        let _cond2_opt = dec.decode_range(then_start, else_start);
+        // After glue block, dec.stack has the value that the else_block will branch on
+        // (e.g., hasEventListener result)
+
+        // Also decode the else_start block to get its condition expression
+        let mut dec2 = BlockDecoder::new(self.bc, self.abc);
+        dec2.activation_slots = self.activation_slots.clone();
+        dec2.param_locals = self.param_locals.clone();
+        dec2.has_activation = !dec2.activation_slots.is_empty();
+        dec2.stack = dec.stack.clone();
+        let cond3_opt = dec2.decode_range(else_start, else_block.end);
+
+        let second_cond = cond3_opt
+            .or_else(|| dec2.stack.last().cloned())
+            .unwrap_or(Expr::Unknown);
+
+        if matches!(second_cond, Expr::Unknown) {
+            return None;
+        }
+
+        // Decode the fallthrough-of-else_block (inner_then) to get the OR alternative condition
+        // inner_then is the path taken when second_cond is false
+        // inner_then computes the fallback condition (e.g., arg0 != null)
+        let alt_cond = if inner_then != inner_else {
+            let mut dec3 = BlockDecoder::new(self.bc, self.abc);
+            dec3.activation_slots = self.activation_slots.clone();
+            dec3.param_locals = self.param_locals.clone();
+            dec3.has_activation = !dec3.activation_slots.is_empty();
+            // inner_then block has a residue pop of the dup from else_block;
+            // seed the stack with a dummy so pop consumes it cleanly
+            dec3.stack = vec![Expr::Null]; // dup residue placeholder
+            let _r = dec3.decode_range(inner_then, inner_then + 16.min(self.bc.len() - inner_then));
+            // Find the last expression computed
+            dec3.stack.last().cloned()
+        } else { None };
+
+        // Build the combined condition:
+        // (first_cond && second_cond) || alt_cond
+        let first_and_second = Expr::BinOp("&&", Box::new(first_cond), Box::new(second_cond));
+        let combined = if let Some(alt) = alt_cond {
+            if !matches!(alt, Expr::Unknown | Expr::Null) {
+                Expr::BinOp("||", Box::new(first_and_second), Box::new(alt))
+            } else {
+                Expr::BinOp("&&", Box::new(Expr::BinOp("&&".into(), Box::new(Expr::Null), Box::new(Expr::Null))), Box::new(Expr::Null)) // fallback
+            }
+        } else {
+            first_and_second
+        };
+
+        // The body is at the merge of inner_then and inner_else
+        // Find where both paths converge (the final branch block's merge)
+        // Use inner_else's successor as the body start (where the final condition is checked)
+        let body_merge = self.find_merge_inner(inner_then, inner_else);
+
+        // Mark all consumed blocks as visited
+        self.visited.insert(then_start);
+        self.visited.insert(else_start);
+        self.visited.insert(inner_then); // fallthrough of else_block
+
+        Some((combined, inner_else, body_merge))
+    }
+
+    fn find_merge(&self, then_start: usize, else_start: usize) -> Option<usize> {
+        self.find_merge_inner(then_start, else_start)
+    }
+    fn find_merge_inner(&self, then_start: usize, else_start: usize) -> Option<usize> {
+        // Walk the then-branch chain to find where it exits
+        let then_final_exit = self.chain_exit(then_start, else_start);
+        let else_final_exit = self.chain_exit(else_start, then_start);
+
+        match (then_final_exit, else_final_exit) {
             (Some(a), Some(b)) if a == b => Some(a),
             (Some(a), None) => Some(a),
             (None, Some(b)) => Some(b),
+            // then-chain exits to else_start means else block is the continuation (not a branch)
             _ => {
                 if else_start > then_start { Some(else_start) } else { None }
             }
         }
     }
 
-    /// Follow a block chain (Fall/Jump only, up to 8 hops) to find its final exit target.
-    /// Stops at `stop_before` to avoid cycles.
-    fn deep_exit(&self, start: usize, stop_before: usize) -> Option<usize> {
+    /// Walk a straight Fall/Jump chain and return the first offset that exits the chain.
+    /// Stops (returning None) at backward branches (loops) or Return.
+    /// For forward branches, returns the fallthrough (merge approximation without recursion).
+    fn chain_exit(&self, start: usize, exclude: usize) -> Option<usize> {
         let mut cur = start;
-        for _ in 0..8 {
-            if cur == stop_before { return Some(cur); }
-            let block = self.block_at(cur)?;
+        for _ in 0..16 {
+            if cur == exclude { return Some(cur); }
+            let block = match self.block_at(cur) { Some(b) => b, None => return None };
             match &block.term {
                 Terminator::Fall(next) | Terminator::Jump(next) => {
                     let next = *next;
-                    if next == stop_before { return Some(next); }
+                    if next == exclude { return Some(next); }
                     cur = next;
                 }
                 Terminator::Return | Terminator::Throw => return None,
-                Terminator::Branch { fallthrough, .. } | Terminator::BranchCmp { fallthrough, .. } => {
-                    // For branches, the "then" exit is the fallthrough
-                    return Some(*fallthrough);
-                }
+                // For branches, return the fallthrough as a conservative merge approximation
+                // (avoids infinite recursion through loops)
+                Terminator::Branch { fallthrough, .. } |
+                Terminator::BranchCmp { fallthrough, .. } => return Some(*fallthrough),
             }
         }
         None

@@ -63,12 +63,12 @@ function followUser(arg0, arg1, arg2) {
 		var _s6 = { persistent: true, hitStunPause: false };
 		if (arg0) {
 			self.createTimer(1, 0, _s7, _s6);
-		} else {
-			self.destroyTimer(_s7);
+			return;
 		}
-		return;
+		self.destroyTimer(_s7);
+	} else {
+		var _s6 = { persistent: false, hitStunPause: false };
 	}
-	var _s6 = { persistent: false, hitStunPause: false };
 }
 
 
@@ -93,12 +93,12 @@ function loopEffect(arg0, arg1, arg2) {
 		var _s4 = { persistent: true, hitStunPause: false };
 		if (arg0) {
 			self.createTimer(1, 0, _s5, { hitStunPause: false });
-		} else {
-			self.destroyTimer(_s5);
+			return;
 		}
-		return;
+		self.destroyTimer(_s5);
+	} else {
+		var _s4 = { persistent: false, hitStunPause: false };
 	}
-	var _s4 = { persistent: false, hitStunPause: false };
 }
 
 
@@ -123,8 +123,8 @@ function removeAllEffects(arg0) {
 	self.effects = new Array();
 	if (self.clearListener) {
 	}
-	if (/* ? */) {
-		if (/* ? */) {
+	if (self.hasEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects)) {
+		if (self.hasEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects)) {
 			self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
 		}
 		return;
