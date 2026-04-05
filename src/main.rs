@@ -30,6 +30,11 @@ struct Args {
     #[arg(short, long)]
     name: Option<String>,
 
+    /// Path to ssf2_costumes.json (from extract_costumes.py on misc.ssf).
+    /// If provided, uses real SSF2 palette data instead of k-means approximation.
+    #[arg(long, value_name = "JSON")]
+    costumes: Option<PathBuf>,
+
     /// Verbose output
     #[arg(short, long)]
     verbose: bool,
@@ -100,7 +105,7 @@ fn main() -> Result<()> {
     log::info!("Extracted {} sprite images, {} anim image maps", img_result.images.len(), img_result.anim_images.len());
 
     // Generate Fraymakers files
-    haxe_gen::generate(&args.output, &char_name, &char_data, &sprite_boxes, &img_result)?;
+    haxe_gen::generate(&args.output, &char_name, &char_data, &sprite_boxes, &img_result, args.costumes.as_deref())?;
     log::info!("Generated Fraymakers files in {}", args.output.display());
 
     Ok(())

@@ -1624,3 +1624,138 @@ pub fn extract_costume_data_from_apply_palette(abc: &AbcFile) -> Option<Vec<Cost
     log::info!("extract_apply_palette: found {} costumes", costumes.len());
     Some(costumes)
 }
+
+/// Scan ALL method bodies for SSF2 costume data patterns.
+///
+/// SSF2 misc.ssf stores costume data per-character as methods that return arrays of
+/// {name: String, colors: [uint, uint, ...]} objects. This function finds them all.
+///
+/// Returns a map of class_name → Vec<CostumeData>.
+pub fn scan_all_costume_methods(abc: &AbcFile) -> BTreeMap<String, Vec<CostumeData>> {
+    // Build method_idx → (class_name, method_name) map
+    let trait_map: BTreeMap<u32, (String, String)> = abc.classes.iter()
+        .flat_map(|cls| cls.instance_methods.iter().chain(cls.class_methods.iter())
+            .map(move |t| (t.method_idx, (cls.name.clone(), t.name.clone()))))
+        .collect();
+
+    let mut results: BTreeMap<String, Vec<CostumeData>> = BTreeMap::new();
+
+    for body in &abc.method_bodies {
+        let costumes = decode_costume_objects(&body.bytecode, abc);
+        if costumes.is_empty() { continue; }
+
+        let (cls, _mname) = trait_map.get(&body.method_idx)
+            .cloned().unwrap_or_else(|| (format!("method_{}", body.method_idx), String::new()));
+
+        // Infer character name from class name (e.g. "MarioAPI" → "mario", "SSF2API" → "all")
+        let char_key = infer_char_name(&cls);
+        results.entry(char_key).or_default().extend(costumes);
+    }
+
+    results
+}
+
+fn infer_char_name(class_name: &str) -> String {
+    let lower = class_name.to_lowercase();
+    // Strip common suffixes
+    for suffix in &["api", "data", "ext", "char", "character"] {
+        if lower.ends_with(suffix) && lower.len() > suffix.len() {
+            return lower[..lower.len()-suffix.len()].to_string();
+        }
+    }
+    lower
+}
+
+/// Simulate AVM2 stack execution to find newobject calls that produce {name, colors:[...]} structures.
+fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> Vec<CostumeData> {
+    #[derive(Clone, Debug)]
+    enum V {
+        Null,
+        Num(f64),
+        Str(String),
+        Arr(Vec<V>),
+        Obj(BTreeMap<String, V>),
+    }
+
+    let mut pos = 0usize;
+    let mut stack: Vec<V> = Vec::new();
+    let mut costumes: Vec<CostumeData> = Vec::new();
+
+    macro_rules! r30 { () => { read_u30_at(code, &mut pos).unwrap_or(0) } }
+    macro_rules! pop  { () => { stack.pop().unwrap_or(V::Null) } }
+
+    while pos < code.len() {
+        let op = code[pos]; pos += 1;
+        match op {
+            // Push literals
+            0x24 => { let v = code.get(pos).copied().unwrap_or(0) as i8; pos += 1; stack.push(V::Num(v as f64)); }
+            0x25 => { let v = r30!() as i16; stack.push(V::Num(v as f64)); }
+            0x2C => { let i = r30!() as usize; stack.push(V::Str(abc.strings.get(i).cloned().unwrap_or_default())); }
+            0x2D => { let i = r30!() as usize; stack.push(V::Num(*abc.ints.get(i).unwrap_or(&0) as f64)); }
+            0x2E => { let i = r30!() as usize; stack.push(V::Num(*abc.uints.get(i).unwrap_or(&0) as f64)); }
+            0x2F => { let i = r30!() as usize; stack.push(V::Num(*abc.doubles.get(i).unwrap_or(&0.0))); }
+            0x26 | 0x27 | 0x20 | 0x28 => stack.push(V::Null),
+
+            // newarray
+            0x56 => {
+                let n = r30!() as usize;
+                let start = stack.len().saturating_sub(n);
+                let items: Vec<V> = stack.drain(start..).collect();
+                stack.push(V::Arr(items));
+            }
+
+            // newobject — the key opcode
+            0x55 => {
+                let n = r30!() as usize;
+                let start = stack.len().saturating_sub(n * 2);
+                let pairs: Vec<V> = stack.drain(start..).collect();
+                let mut obj: BTreeMap<String, V> = BTreeMap::new();
+                let mut i = 0;
+                while i + 1 < pairs.len() {
+                    if let V::Str(k) = &pairs[i] { obj.insert(k.clone(), pairs[i+1].clone()); }
+                    i += 2;
+                }
+                // Check for {name: String, colors: [uint, ...]}
+                if let (Some(V::Str(name)), Some(V::Arr(color_arr))) = (obj.get("name"), obj.get("colors")) {
+                    let colors: Vec<u32> = color_arr.iter().filter_map(|v| {
+                        if let V::Num(n) = v { Some(*n as u32) } else { None }
+                    }).collect();
+                    if colors.len() >= 4 {
+                        costumes.push(CostumeData { name: name.clone(), colors });
+                    }
+                }
+                stack.push(V::Obj(obj));
+            }
+
+            // Calls — pop args + receiver, push return
+            0x46 | 0x4F | 0x4A | 0x6E | 0x4B | 0x45 => {
+                r30!(); let argc = r30!() as usize;
+                let drain = (argc + 1).min(stack.len());
+                stack.drain(stack.len()-drain..);
+                stack.push(V::Null);
+            }
+
+            0x60 | 0x5C | 0x5D | 0x65 | 0x80 => { r30!(); stack.push(V::Null); }
+            0x61 | 0x66 | 0x68 | 0x62 | 0x63 | 0x08 => { r30!(); }
+            0x29 => { pop!(); }
+            0x2A => { if let Some(v) = stack.last().cloned() { stack.push(v); } }
+            0x2B => { let n = stack.len(); if n >= 2 { stack.swap(n-1, n-2); } }
+            0xD0 | 0xD1 | 0xD2 | 0xD3 => stack.push(V::Null),
+            // Branch opcodes (3-byte offsets)
+            0x10 | 0x0C | 0x0D | 0x0E | 0x0F | 0x13 | 0x14 | 0x15 | 0x16 | 0x17 | 0x18 | 0x19 | 0x1A => {
+                if pos + 3 <= code.len() { pos += 3; }
+            }
+            0x47 | 0x48 => break,
+            // Arithmetic — consume 1, push result
+            0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA8 | 0xA9 | 0xAA | 0xA5 | 0xA6 | 0xA7 => {
+                if !stack.is_empty() { stack.pop(); }
+                if stack.is_empty() { stack.push(V::Null); } else { *stack.last_mut().unwrap() = V::Null; }
+            }
+            0x90 | 0x96 | 0xAB | 0xB1 => { if !stack.is_empty() { *stack.last_mut().unwrap() = V::Null; } }
+            0x30 | 0x1D | 0x02 | 0x82 | 0x73 | 0x74 | 0x75 | 0x76 | 0x70 => {}
+            _ => {}
+        }
+    }
+
+    costumes
+}

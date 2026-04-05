@@ -11,7 +11,7 @@ use crate::entity_gen;
 use crate::fraytools_project;
 use crate::palette_gen;
 
-pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult) -> Result<()> {
+pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult, costumes_json: Option<&Path>) -> Result<()> {
     let char_id = char_name.to_lowercase().replace(" ", "");
     let char_dir = output_dir.join(&char_id);
     let scripts_dir = char_dir.join("library/scripts/Character");
@@ -50,7 +50,7 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
     log::info!("Generated {} .meta sidecar files", meta_count);
 
     // ── Palette / costumes ──────────────────────────────────────────────────
-    match palette_gen::generate_palettes_and_remap(&char_id, char_name, &sprites_dir) {
+    match palette_gen::generate_palettes_and_remap(&char_id, char_name, &sprites_dir, costumes_json) {
         Ok(pal) => {
             // costumes.palettes + .meta
             fs::write(char_dir.join("library/costumes.palettes"), &pal.palettes_json)?;
