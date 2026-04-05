@@ -1118,7 +1118,29 @@ impl<'a> StructuredDecoder<'a> {
                             (target, fallthrough)
                         };
 
-                        let merge = self.find_merge(then_start, else_start);
+                        let mut merge = self.find_merge(then_start, else_start);
+
+                        // Ternary-select promotion:
+                        // Pattern: then_start is a Fall block landing on else_start,
+                        // else_start is a Branch whose fallthrough falls to the same merge.
+                        // We extend merge deeper so both value-producing paths are captured.
+                        if merge == Some(else_start) {
+                            if let Some(eb) = self.block_at(else_start).cloned() {
+                                match &eb.term {
+                                    Terminator::Branch { target: et, fallthrough: ef, .. } |
+                                    Terminator::BranchCmp { target: et, fallthrough: ef, .. } => {
+                                        let et = *et; let ef = *ef;
+                                        // then-of-else falls through; find where the then-path exits
+                                        let deeper = self.chain_exit(et, ef)
+                                            .or_else(|| self.chain_exit(ef, et));
+                                        if deeper.is_some() && deeper != Some(else_start) {
+                                            merge = deeper;
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
 
                         let saved_carry = carry_stack.clone();
                         carry_stack.clear();
@@ -1140,8 +1162,6 @@ impl<'a> StructuredDecoder<'a> {
                         {
                             let then_val = then_leftover.remove(0);
                             let else_val = else_leftover.remove(0);
-                            // Emit as: var _phi = cond ? then_val : else_val
-                            // Push the ternary onto carry_stack for the merge block to use
                             let ternary = Expr::GetLex(format!(
                                 "({} ? {} : {})",
                                 raw_cond.render(), then_val.render(), else_val.render()
@@ -1149,7 +1169,6 @@ impl<'a> StructuredDecoder<'a> {
                             carry_stack = vec![ternary];
                         } else {
                             result.push(Stmt::If(raw_cond, then_b, else_b));
-                            // Prefer then_leftover for carry; fall back to else_leftover
                             carry_stack = if !then_leftover.is_empty() { then_leftover } else { else_leftover };
                         }
                         cur = merge.unwrap_or(usize::MAX);
@@ -1306,7 +1325,6 @@ impl<'a> StructuredDecoder<'a> {
         self.find_merge_inner(then_start, else_start)
     }
     fn find_merge_inner(&self, then_start: usize, else_start: usize) -> Option<usize> {
-        // Walk the then-branch chain to find where it exits
         let then_final_exit = self.chain_exit(then_start, else_start);
         let else_final_exit = self.chain_exit(else_start, then_start);
 
@@ -1314,7 +1332,6 @@ impl<'a> StructuredDecoder<'a> {
             (Some(a), Some(b)) if a == b => Some(a),
             (Some(a), None) => Some(a),
             (None, Some(b)) => Some(b),
-            // then-chain exits to else_start means else block is the continuation (not a branch)
             _ => {
                 if else_start > then_start { Some(else_start) } else { None }
             }
