@@ -128,12 +128,10 @@ function removeAllEffects(arg0) {
 		}
 	}
 	self.effects = new Array();
-	if (self.clearListener) {
-		if (self.hasEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects)) {
-			self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
-			return;
-		}
+	if ((self.clearListener && self.hasEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects)) || arg0 != null) {
+		self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
 	}
+	return;
 }
 
 
@@ -144,14 +142,13 @@ function setLandingLag(arg0) {
 		if (self.isOnFloor()) {
 			self.jumpToContinue();
 		}
-	} else {
-		self.removeEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
-		self.addEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
-		if (self.isOnFloor()) {
-			self.toLand();
-		}
+		return;
 	}
-	return;
+	self.removeEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
+	self.addEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
+	if (self.isOnFloor()) {
+		self.toLand();
+	}
 }
 
 

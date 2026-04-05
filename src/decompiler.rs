@@ -1118,60 +1118,52 @@ impl<'a> StructuredDecoder<'a> {
                             (target, fallthrough)
                         };
 
-                        let mut merge = self.find_merge(then_start, else_start);
+                        let merge = self.find_merge(then_start, else_start);
 
-                        // Ternary-select promotion:
-                        // Pattern: then_start is a Fall block landing on else_start,
-                        // else_start is a Branch whose fallthrough falls to the same merge.
-                        // We extend merge deeper so both value-producing paths are captured.
-                        if merge == Some(else_start) {
-                            if let Some(eb) = self.block_at(else_start).cloned() {
-                                match &eb.term {
-                                    Terminator::Branch { target: et, fallthrough: ef, .. } |
-                                    Terminator::BranchCmp { target: et, fallthrough: ef, .. } => {
-                                        let et = *et; let ef = *ef;
-                                        // then-of-else falls through; find where the then-path exits
-                                        let deeper = self.chain_exit(et, ef)
-                                            .or_else(|| self.chain_exit(ef, et));
-                                        if deeper.is_some() && deeper != Some(else_start) {
-                                            merge = deeper;
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
+                        // Short-circuit && / || pattern detection:
+                        // When then_start starts with OP_POP and falls directly to else_start
+                        // (a Branch), this is AS3's short-circuit evaluation:
+                        //   outer_cond && inner_cond [|| alt_cond]
+                        // Collapse the whole thing into a single if-condition.
+                        let collapse = self.try_collapse_and(
+                            then_start, else_start, raw_cond.clone(), &carry_stack
+                        );
 
                         let saved_carry = carry_stack.clone();
                         carry_stack.clear();
 
-                        // Capture carry from then_b to propagate to merge block
-                        let mut then_leftover = vec![];
-                        let then_b = self.decode_from_with_stack_out(then_start, merge, saved_carry, &mut then_leftover);
-                        let mut else_leftover = vec![];
-                        let else_b = if else_start != merge.unwrap_or(usize::MAX) {
-                            self.decode_from_with_stack_out(else_start, merge, vec![], &mut else_leftover)
+                        if let Some((combined_cond, body_start, body_merge)) = collapse {
+                            let body = self.decode_from(body_start, body_merge);
+                            result.push(Stmt::If(combined_cond, body, vec![]));
+                            cur = body_merge.unwrap_or(usize::MAX);
                         } else {
-                            vec![]
-                        };
+                            // Capture carry from then_b to propagate to merge block
+                            let mut then_leftover = vec![];
+                            let then_b = self.decode_from_with_stack_out(then_start, merge, saved_carry, &mut then_leftover);
+                            let mut else_leftover = vec![];
+                            let else_b = if else_start != merge.unwrap_or(usize::MAX) {
+                                self.decode_from_with_stack_out(else_start, merge, vec![], &mut else_leftover)
+                            } else {
+                                vec![]
+                            };
 
-                        // Ternary select pattern: both branches produce no statements
-                        // but leave a value on the carry stack (phi-node synthesis)
-                        if then_b.is_empty() && else_b.is_empty()
-                            && then_leftover.len() == 1 && else_leftover.len() == 1
-                        {
-                            let then_val = then_leftover.remove(0);
-                            let else_val = else_leftover.remove(0);
-                            let ternary = Expr::GetLex(format!(
-                                "({} ? {} : {})",
-                                raw_cond.render(), then_val.render(), else_val.render()
-                            ));
-                            carry_stack = vec![ternary];
-                        } else {
-                            result.push(Stmt::If(raw_cond, then_b, else_b));
-                            carry_stack = if !then_leftover.is_empty() { then_leftover } else { else_leftover };
+                            // Ternary select: both branches produce no stmts but leave a carry value
+                            if then_b.is_empty() && else_b.is_empty()
+                                && then_leftover.len() == 1 && else_leftover.len() == 1
+                            {
+                                let then_val = then_leftover.remove(0);
+                                let else_val = else_leftover.remove(0);
+                                let ternary = Expr::GetLex(format!(
+                                    "({} ? {} : {})",
+                                    raw_cond.render(), then_val.render(), else_val.render()
+                                ));
+                                carry_stack = vec![ternary];
+                            } else {
+                                result.push(Stmt::If(raw_cond, then_b, else_b));
+                                carry_stack = if !then_leftover.is_empty() { then_leftover } else { else_leftover };
+                            }
+                            cur = merge.unwrap_or(usize::MAX);
                         }
-                        cur = merge.unwrap_or(usize::MAX);
                     }
                 }
                 Terminator::BranchCmp { op, target, fallthrough } => {
@@ -1283,6 +1275,10 @@ impl<'a> StructuredDecoder<'a> {
         // inner_then is the path taken when second_cond is false
         // inner_then computes the fallback condition (e.g., arg0 != null)
         let alt_cond = if inner_then != inner_else {
+            // Find the exact end of the inner_then block
+            let inner_then_end = self.block_at(inner_then)
+                .map(|b| b.end)
+                .unwrap_or(inner_then + 16.min(self.bc.len() - inner_then));
             let mut dec3 = BlockDecoder::new(self.bc, self.abc);
             dec3.activation_slots = self.activation_slots.clone();
             dec3.param_locals = self.param_locals.clone();
@@ -1290,9 +1286,9 @@ impl<'a> StructuredDecoder<'a> {
             // inner_then block has a residue pop of the dup from else_block;
             // seed the stack with a dummy so pop consumes it cleanly
             dec3.stack = vec![Expr::Null]; // dup residue placeholder
-            let _r = dec3.decode_range(inner_then, inner_then + 16.min(self.bc.len() - inner_then));
-            // Find the last expression computed
-            dec3.stack.last().cloned()
+            let r = dec3.decode_range(inner_then, inner_then_end);
+            // Prefer condition expr returned by decode_range; fall back to stack top
+            r.or_else(|| dec3.stack.last().cloned())
         } else { None };
 
         // Build the combined condition:
@@ -1300,25 +1296,44 @@ impl<'a> StructuredDecoder<'a> {
         let first_and_second = Expr::BinOp("&&", Box::new(first_cond), Box::new(second_cond));
         let combined = if let Some(alt) = alt_cond {
             if !matches!(alt, Expr::Unknown | Expr::Null) {
-                Expr::BinOp("||", Box::new(first_and_second), Box::new(alt))
+                // Wrap && side in parens: (A && B) || C
+                let lhs = Expr::GetLex(format!("({})", first_and_second.render()));
+                Expr::BinOp("||", Box::new(lhs), Box::new(alt))
             } else {
-                Expr::BinOp("&&", Box::new(Expr::BinOp("&&".into(), Box::new(Expr::Null), Box::new(Expr::Null))), Box::new(Expr::Null)) // fallback
+                first_and_second
             }
         } else {
             first_and_second
         };
 
-        // The body is at the merge of inner_then and inner_else
-        // Find where both paths converge (the final branch block's merge)
-        // Use inner_else's successor as the body start (where the final condition is checked)
-        let body_merge = self.find_merge_inner(inner_then, inner_else);
+        // inner_else is the block that consumes the combined condition value (e.g. iffalse→end).
+        // We need: body_start = where execution goes when condition is TRUE
+        //          body_merge = where both paths rejoin (after-if continuation)
+        let (body_start, body_merge) = if let Some(final_block) = self.block_at(inner_else).cloned() {
+            match &final_block.term {
+                Terminator::Branch { cond_inv, target, fallthrough } => {
+                    // iffalse (cond_inv=true): true → fallthrough (body), false → target (skip)
+                    // iftrue  (cond_inv=false): true → target (body), false → fallthrough (skip)
+                    let (body, after) = if *cond_inv {
+                        (*fallthrough, *target)
+                    } else {
+                        (*target, *fallthrough)
+                    };
+                    (body, Some(after))
+                }
+                _ => (inner_else, self.find_merge_inner(inner_then, inner_else)),
+            }
+        } else {
+            (inner_else, self.find_merge_inner(inner_then, inner_else))
+        };
 
         // Mark all consumed blocks as visited
         self.visited.insert(then_start);
         self.visited.insert(else_start);
-        self.visited.insert(inner_then); // fallthrough of else_block
+        self.visited.insert(inner_then);  // fallthrough of else_block
+        self.visited.insert(inner_else);  // final condition-consumption block
 
-        Some((combined, inner_else, body_merge))
+        Some((combined, body_start, body_merge))
     }
 
     fn find_merge(&self, then_start: usize, else_start: usize) -> Option<usize> {
