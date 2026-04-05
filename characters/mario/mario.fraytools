@@ -1,0 +1,39 @@
+{
+  "version": "0.3.0",
+  "name": "mario",
+  "description": "Mario — converted from Super Smash Flash 2",
+  "author": "SSF2 to Fraymakers Converter",
+  "type": "character",
+  "guid": "ssf2-mario-converted",
+  "plugins": [],
+  "library": {
+    "path": "library",
+    "entities": {
+      "Character": {
+        "path": "entities/Character.entity",
+        "type": "entity"
+      }
+    },
+    "scripts": {
+      "Script": {
+        "path": "scripts/Character/Script.hx",
+        "type": "script"
+      },
+      "CharacterStats": {
+        "path": "scripts/Character/CharacterStats.hx",
+        "type": "script"
+      },
+      "HitboxStats": {
+        "path": "scripts/Character/HitboxStats.hx",
+        "type": "script"
+      },
+      "AnimationStats": {
+        "path": "scripts/Character/AnimationStats.hx",
+        "type": "script"
+      }
+    }
+  },
+  "export": {
+    "targets": ["character"]
+  }
+}

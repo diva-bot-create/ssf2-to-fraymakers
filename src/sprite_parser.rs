@@ -308,7 +308,7 @@ fn find_collision_box_base_size(swf: &swf::Swf, sym_names: &BTreeMap<u16, String
 
 /// Extract SSF2 animation name from a symbol name like "mario_fla.NAir_40".
 /// Uses the ssf2_to_fm map to validate/match against known animation names.
-fn extract_ssf2_anim_name(
+pub fn extract_ssf2_anim_name(
     sym: &str,
     char_lower: &str,
     ssf2_to_fm: &BTreeMap<String, String>,

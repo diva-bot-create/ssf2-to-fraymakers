@@ -6,6 +6,7 @@ mod extractor;
 mod entity_gen;
 mod haxe_gen;
 mod sprite_parser;
+mod image_extractor;
 
 use clap::Parser;
 use anyhow::Result;
@@ -83,8 +84,21 @@ fn main() -> Result<()> {
         });
     log::info!("Sprite boxes: {} animations with geometry", sprite_boxes.len());
 
+    // Extract sprite images from SWF
+    let char_output_dir = args.output.join(&char_name);
+    let img_result = image_extractor::extract_images(&swf_data, &char_output_dir, &char_name, &char_data.ssf2_to_fm_anim)
+        .unwrap_or_else(|e| {
+            log::warn!("image_extractor failed: {}", e);
+            image_extractor::ImageExtractionResult {
+                images: Default::default(),
+                shape_to_bitmap: Default::default(),
+                anim_images: Default::default(),
+            }
+        });
+    log::info!("Extracted {} sprite images, {} anim image maps", img_result.images.len(), img_result.anim_images.len());
+
     // Generate Fraymakers files
-    haxe_gen::generate(&args.output, &char_name, &char_data, &sprite_boxes)?;
+    haxe_gen::generate(&args.output, &char_name, &char_data, &sprite_boxes, &img_result)?;
     log::info!("Generated Fraymakers files in {}", args.output.display());
 
     Ok(())

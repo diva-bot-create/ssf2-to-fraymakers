@@ -12,6 +12,7 @@
 
 use crate::extractor::CharacterData;
 use crate::sprite_parser::{AnimationBoxData, BoxType};
+use crate::image_extractor::{AnimFrameImages, ImageExtractionResult};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
@@ -63,6 +64,7 @@ pub fn generate_entity(
     data: &CharacterData,
     char_id: &str,
     sprite_boxes: &BTreeMap<String, AnimationBoxData>,
+    img_result: &ImageExtractionResult,
 ) -> String {
     let mut keyframes: Vec<Value> = Vec::new();
     let mut layers: Vec<Value> = Vec::new();
@@ -91,7 +93,11 @@ pub fn generate_entity(
     }
 
     for (anim_name, anim_info) in &data.animations {
-        let frame_count = (anim_info.frames as u32).max(1);
+        // Prefer frame count from sprite data (actual DefineSprite frames) over AnimationInfo
+        let frame_count = sprite_boxes.get(anim_name)
+            .map(|sb| sb.total_frames as u32)
+            .unwrap_or((anim_info.frames as u32).max(1))
+            .max(1);
         let anim_id = uuid(char_id, &format!("anim_{}", anim_name));
 
         let mut anim_layer_ids: Vec<String> = Vec::new();
@@ -300,23 +306,77 @@ pub fn generate_entity(
             }
         }
 
-        // ── 5. IMAGE layer ────────────────────────────────────────────────────
+        // ── 5. IMAGE layer — per-frame sprite references ──────────────────────
         let img_layer_id = uuid(char_id, &format!("layer_image_{}", anim_name));
-        let img_kf_id = uuid(char_id, &format!("kf_image_{}", anim_name));
-        keyframes.push(json!({
-            "$id": img_kf_id,
-            "type": "IMAGE",
-            "length": frame_count,
-            "symbol": Value::Null,
-            "tweened": false,
-            "tweenType": "LINEAR",
-            "pluginMetadata": {}
-        }));
+        let mut img_kf_ids: Vec<String> = Vec::new();
+
+        if let Some(anim_imgs) = img_result.anim_images.get(anim_name) {
+            // Build run-length IMAGE keyframes: consecutive frames with same symbol = one kf
+            let total = frame_count;
+            let mut f: u32 = 0;
+            while f < total {
+                let entry = anim_imgs.frames.get(&(f as u16));
+                let sym_name = entry.map(|(_, s)| s.as_str());
+                let shape_id = entry.map(|(id, _)| *id);
+
+                // Find run length: how many consecutive frames have the same symbol?
+                let mut run = 1u32;
+                while f + run < total {
+                    let next_entry = anim_imgs.frames.get(&((f + run) as u16));
+                    let next_sym = next_entry.map(|(_, s)| s.as_str());
+                    if next_sym == sym_name { run += 1; } else { break; }
+                }
+
+                let kf_id = uuid(char_id, &format!("kf_image_{}_f{}", anim_name, f));
+
+                // Resolve to a symbol ref for the IMAGE keyframe.
+                // Strategy: shape_id → bitmap (via shape_to_bitmap or direct) → symbol $id
+                //           OR symbol_name → matching image symbol
+                let symbol_ref = shape_id.and_then(|sid| {
+                    let bmp_id = img_result.shape_to_bitmap.get(&sid).copied().unwrap_or(sid);
+                    img_result.images.get(&bmp_id)
+                        .map(|img| uuid(char_id, &format!("sym_{}", img.symbol_name)))
+                }).or_else(|| {
+                    // Fallback: look up by symbol name from frames entry
+                    sym_name.and_then(|sn| {
+                        img_result.images.values()
+                            .find(|img| img.symbol_name == sn)
+                            .map(|img| uuid(char_id, &format!("sym_{}", img.symbol_name)))
+                    })
+                });
+
+                keyframes.push(json!({
+                    "$id": kf_id,
+                    "type": "IMAGE",
+                    "length": run,
+                    "symbol": symbol_ref.map(|s| Value::String(s)).unwrap_or(Value::Null),
+                    "tweened": false,
+                    "tweenType": "LINEAR",
+                    "pluginMetadata": {}
+                }));
+                img_kf_ids.push(kf_id);
+                f += run;
+            }
+        } else {
+            // No image data — single null-symbol keyframe
+            let kf_id = uuid(char_id, &format!("kf_image_{}_f0", anim_name));
+            keyframes.push(json!({
+                "$id": kf_id,
+                "type": "IMAGE",
+                "length": frame_count,
+                "symbol": Value::Null,
+                "tweened": false,
+                "tweenType": "LINEAR",
+                "pluginMetadata": {}
+            }));
+            img_kf_ids.push(kf_id);
+        }
+
         layers.push(json!({
             "$id": img_layer_id,
             "name": "Image",
             "type": "IMAGE",
-            "keyframes": [img_kf_id],
+            "keyframes": img_kf_ids,
             "hidden": false,
             "locked": false,
             "pluginMetadata": {}
@@ -346,11 +406,23 @@ pub fn generate_entity(
         }));
     }
 
+    // ── Symbol declarations for images ───────────────────────────────────────
+    let mut image_symbols: Vec<Value> = Vec::new();
+    for (_, img) in &img_result.images {
+        let sym_id = uuid(char_id, &format!("sym_{}", img.symbol_name));
+        image_symbols.push(json!({
+            "$id": sym_id,
+            "name": img.symbol_name,
+            "type": "IMAGE",
+            "path": img.png_path
+        }));
+    }
+
     let entity = json!({
         "animations": animations,
         "keyframes": keyframes,
         "layers": layers,
-        "symbols": [],
+        "symbols": image_symbols,
         "objects": objects,
         "guid": uuid(char_id, "entity_guid"),
         "id": "character",
