@@ -11,7 +11,7 @@ brew install --cask jpexs-decompiler
 
 Or download from: https://github.com/jindrapetrik/jpexs-decompiler/releases
 
-We also have `lib/ffdec_lib.jar` in this repo for headless CLI use (see below).
+Download `ffdec.jar` from the releases page above — it's the standalone CLI/GUI app.
 
 ---
 
@@ -39,10 +39,10 @@ Key things to look for:
 
 ```bash
 # Export all ActionScript source from a SWF
-java -jar lib/ffdec_lib.jar -export script /tmp/mario_scripts/ mario.ssf
+java -jar /tmp/ffdec/ffdec.jar -export script /tmp/mario_scripts/ mario.ssf
 
 # Export specific class
-java -jar lib/ffdec_lib.jar -export script /tmp/misc_scripts/ misc.ssf
+java -jar /tmp/ffdec/ffdec.jar -export script /tmp/misc_scripts/ misc.ssf
 
 # Then grep for what you need
 grep -r "getCostumeData\|colors\|costume" /tmp/misc_scripts/ -l
@@ -57,7 +57,7 @@ This dumps readable `.as` files — way easier to read than reverse-engineering 
 ### Step 1: Dump the AS3 source first
 
 ```bash
-java -jar lib/ffdec_lib.jar -export script /tmp/misc_scripts/ misc.ssf
+java -jar /path/to/ffdec.jar -export script /tmp/misc_scripts/ misc.ssf
 grep -r "getCostumeData\|costume_data\|colors" /tmp/misc_scripts/ -l
 ```
 
@@ -116,13 +116,12 @@ _loc1_["mario"].push({
 # 1. Dump Misc.as from misc.ssf
 java -jar /tmp/ffdec/ffdec.jar -export script /tmp/misc_scripts/ misc.ssf
 
-# 2. Parse to JSON
-python3 extract_costumes.py /tmp/misc_scripts/scripts/Misc.as
-# → /tmp/ssf2_costumes.json
+# 2. Parse to JSON (Rust binary)
+./target/release/extract_costumes /tmp/misc_scripts/scripts/Misc.as ssf2_costumes.json
 
 # 3. Convert with real costumes
-./target/debug/ssf2_converter mario.ssf \
-    --costumes /tmp/ssf2_costumes.json \
+./target/release/ssf2_converter mario.ssf \
+    --costumes ssf2_costumes.json \
     --output ./characters
 ```
 

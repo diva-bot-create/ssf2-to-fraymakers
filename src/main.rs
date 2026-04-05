@@ -30,7 +30,7 @@ struct Args {
     #[arg(short, long)]
     name: Option<String>,
 
-    /// Path to ssf2_costumes.json (from extract_costumes.py on misc.ssf).
+    /// Path to ssf2_costumes.json (from the extract_costumes binary run on misc.ssf).
     /// If provided, uses real SSF2 palette data instead of k-means approximation.
     #[arg(long, value_name = "JSON")]
     costumes: Option<PathBuf>,

@@ -2,49 +2,78 @@
 
 Converts Super Smash Flash 2 character data to [Fraymakers](https://www.fraymakersthegame.com/) mod format.
 
-## What this does
-
-- Extracts attack hitbox data, movement stats, and script logic from SSF2 `.swf` files via JPEXS decompiler
-- Generates Fraymakers-compatible `HitboxStats.hx`, `CharacterStats.hx`, `AnimationStats.hx`, and `Script.hx` files
-- Covers all 47 SSF2 characters
-
-## Structure
-
-```
-characters/
-  {name}/
-    HitboxStats.hx      — hitbox data (damage, angle, knockback, etc.)
-    CharacterStats.hx   — movement physics (weight, gravity, speed, etc.)
-    AnimationStats.hx   — per-animation flags and properties
-    Script.hx           — character-specific logic (ported from SSF2 Ext.as)
-scripts/
-  parse_attacks.py      — extract attack/hitbox data from SSF2 ABC bytecode
-  gen_script_hx.py      — generate Script.hx from decompiled AS3
-```
-
 ## Requirements
 
-- Python 3.8+
-- [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler) for initial `.swf` decompilation
-- Fraymakers character template: https://github.com/Fraymakers/character-template
+- Rust (stable)
+- Java (for JPEXS) — `brew install openjdk`
+- [JPEXS Free Flash Decompiler](https://github.com/jindrapetrik/jpexs-decompiler/releases) — `ffdec.jar`
+
+## Build
+
+```bash
+cargo build --release
+```
+
+Binaries in `target/release/`:
+- `ssf2_converter` — main character converter
+- `extract_costumes` — extracts palette data from misc.ssf via decompiled Misc.as
 
 ## Usage
 
-1. Decompile SSF2 `.swf` files with JPEXS → output AS3 to `/tmp/ssf2_as3/{charname}/`
-2. Run `python3 scripts/parse_attacks.py` to extract hitbox/stats data
-3. Run `python3 scripts/gen_script_hx.py /tmp/ssf2_as3/ ./characters/` to generate Script.hx files
+### 1. Extract costume palettes from misc.ssf (one-time setup)
 
-## Status
+```bash
+# Decompile misc.ssf to ActionScript using JPEXS
+java -jar /path/to/ffdec.jar -export script /tmp/misc_scripts/ misc.ssf
 
-| File | Status |
-|---|---|
-| HitboxStats.hx | ✅ 47/47 characters |
-| CharacterStats.hx | ✅ 47/47 characters |
-| AnimationStats.hx | ✅ 47/47 characters |
-| Script.hx | ✅ 47/47 characters |
+# Extract all 45 characters × 15 costumes into JSON
+./target/release/extract_costumes /tmp/misc_scripts/scripts/Misc.as ssf2_costumes.json
+```
+
+### 2. Convert a character
+
+```bash
+# With real SSF2 costume data (recommended)
+./target/release/ssf2_converter mario.ssf --costumes ssf2_costumes.json
+
+# Without (falls back to k-means palette from sprites)
+./target/release/ssf2_converter mario.ssf
+```
+
+Output goes to `./characters/{name}/` — a complete Fraymakers character package.
+
+## Output structure
+
+```
+characters/mario/
+  library/
+    scripts/Character/
+      CharacterStats.hx     — movement physics
+      HitboxStats.hx        — per-attack hitbox data
+      AnimationStats.hx     — animation flags
+      Script.hx             — character logic
+    entities/
+      Character.entity      — Fraymakers entity with palette map
+    costumes.palettes        — 15 SSF2 costumes (Red/Green/Blue/Default + 11 alts)
+    costumes.palettes.meta
+    sprites/
+      mario_*.png           — extracted sprite frames
+      palette_preview.png   — palette color slots (76px wide)
+  mario.fraytools           — FrayTools project file
+```
+
+## How costumes work
+
+SSF2 stores costume data in `misc.ssf` → `Misc.as` → `getCostumeData()`.
+Each character has 15 costumes:
+- **Red / Green / Blue** — team color variants
+- **Default** — the base costume (`"base": true`)
+- **Alt 1–11** — additional unlockable costumes
+
+Each costume contains 76 source colors (`colors`) and 76 replacement colors (`replacements`).
+The converter maps these directly to Fraymakers palette color slots + maps.
 
 ## Notes
 
-- SSF2 API calls are translated to Fraymakers equivalents where possible
-- Lines marked `// TODO:` need manual review (no direct Fraymakers equivalent)
 - Original SSF2 character data © McLeodGaming — this tool is for mod development only
+- See `JPEXS_WORKFLOW.md` for the full inspection methodology

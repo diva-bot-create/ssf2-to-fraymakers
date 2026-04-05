@@ -2,7 +2,7 @@
 ///
 /// Two modes:
 /// 1. **Real SSF2 data** (preferred): loads costume data extracted from misc.ssf via
-///    `extract_costumes.py`. Each SSF2 costume has `colors` (source palette, same for all
+///    the `extract_costumes` binary. Each SSF2 costume has `colors` (source palette, same for all
 ///    costumes) and `replacements` (what those colors become). These map directly to
 ///    Fraymakers palette color slots + maps.
 ///
@@ -45,7 +45,7 @@ pub struct PaletteResult {
     pub base_map_id:        String,
 }
 
-// ─── SSF2 costume data (from extract_costumes.py output) ─────────────────────
+// ─── SSF2 costume data (from extract_costumes binary output) ────────────────
 
 #[derive(Debug)]
 pub struct Ssf2Costume {
