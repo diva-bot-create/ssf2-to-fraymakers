@@ -343,27 +343,80 @@ fn extract_ssf2_anim_name(
         ("sidestep", "sidestep"),
         // Damage
         ("hurt", "hurt"),
+        ("hurts", "hurt"),       // SSF2 uses plural: Hurts_67
         ("stun", "stunned"),
+        ("stunned", "stunned"),
         ("dizzy", "dizzy"),
         ("sleep", "sleep"),
         ("tumble", "falling"),
+        ("tumblefall", "falling"), // TumbleFall_81
+        ("sentflying", "crash"),   // SentFlying_72 = knockdown/star-KO trajectory
         ("knockdown", "crash"),
         ("frozen", "frozen"),
         ("egg", "egg"),
+        ("star", "star_ko"),
         ("starko", "starko"),
         ("pitfall", "pitfall"),
         // Edge
         ("hang", "hang"),
         ("climbup", "climbup"),
+        ("hangclimb", "climbup"),   // HangClimb_74
         ("edgelean", "edgelean"),
         ("rollup", "rollup"),
+        ("hangroll", "rollup"),     // HangRoll_75
         ("ledgeattack", "ledge_attack"),
+        ("hangattack", "ledge_attack"), // HangAttack_76
+        // Defense
+        ("guard", "defend"),        // Guard_78
+        ("spotdodge", "sidestep"),  // SpotDodge_71
         // Misc
+        ("taunts", "taunt"),        // Taunts_86
         ("taunt", "taunt"),
         ("getupattack", "getup_attack"),
+        ("getup", "tech_ground"),   // GetUp_82
         ("carry", "carry"),
         ("tech", "tech_ground"),
+        ("techground", "tech_ground"), // TechGround_203
         ("techroll", "tech_roll"),
+        ("getuproll", "tech_roll"),  // GetUpRoll_77
+        // Run
+        ("run", "run"),
+        ("dash", "run"),
+        ("turn", "run"),      // Turn_14 = dash turn, part of run state
+        ("revival", "revival"),
+        ("win", "win"),
+        // Specials (SSF2-specific label names)
+        ("nspecial", "b"),
+        ("nspecialair", "b_air"),
+        ("sspecial", "b_forward"),
+        ("sspecialair", "b_forward_air"),
+        ("uspecial", "b_up"),
+        ("uspecialair", "b_up_air"),
+        ("dspecial", "b_down"),
+        ("dspecialair", "b_down_air"),
+        ("screwattack", "b_up"),    // Mario's up-b is screwattack
+        ("specialland", "land"),    // SpecialLand_19
+        // Smash attacks (alternate label forms)
+        ("dsmash", "a_down"),       // DSmash_29 = down smash, not in xframe table? map to strong_down
+        // Throws
+        ("fthrow", "throw_forward"),
+        ("bthrow", "throw_back"),
+        ("uthrow", "throw_up"),
+        ("dthrow", "throw_down"),
+        ("grabpummel", "grab"),      // Grab_Pummel_66
+        // Items
+        ("itemswing", "item_jab"),
+        ("itemdashattack", "item_dash"),
+        ("itemthrows", "toss"),
+        ("itemthrowsair", "toss_air"),
+        ("itempickup", "item_pickup"),
+        ("itemraise", "item_raise"),
+        ("itemshoot", "item_shoot"),
+        ("itemsmash", "item_smash"),
+        ("itemtilt", "item_tilt"),
+        ("itemfan", "item_fan"),
+        ("itemhomerun", "item_homerun"),
+        ("itemhomrun", "item_homerun"), // alternate spelling
     ];
 
     for (label, ssf2) in label_to_ssf2 {
