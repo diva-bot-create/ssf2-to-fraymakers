@@ -1,6 +1,7 @@
 mod ssf;
 mod swf_parser;
 mod abc_parser;
+mod decompiler;
 mod extractor;
 mod haxe_gen;
 

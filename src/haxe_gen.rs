@@ -465,30 +465,26 @@ fn generate_script(data: &CharacterData, char_id: &str) -> String {
         data.name
     );
 
-    // Emit frame scripts from SSF2 timeline
-    if !data.scripts.is_empty() {
-        out.push_str("// ── SSF2 Timeline frame scripts ─────────────────────────────────────────────\n");
-        out.push_str("// Each function maps to one SSF2 timeline class frame method.\n");
-        out.push_str("// API calls are translated where a Fraymakers equivalent exists.\n\n");
-
-        // Group scripts by animation name (strip frame number from end)
-        let mut by_anim: std::collections::BTreeMap<String, Vec<&crate::extractor::ScriptInfo>> = Default::default();
-        for script in &data.scripts {
-            let anim = if script.name.starts_with("frame") {
-                "timeline".to_string()
-            } else {
-                script.name.clone()
-            };
-            by_anim.entry(anim).or_default().push(script);
+    // Emit decompiled Ext class methods (these belong in Script.hx)
+    let ext_methods: Vec<_> = data.scripts.iter().filter(|s| s.is_ext_method).collect();
+    if !ext_methods.is_empty() {
+        out.push_str("// ── Decompiled from SSF2 XxxExt.as ─────────────────────────────────────────\n\n");
+        for script in &ext_methods {
+            out.push_str(&script.code);
+            out.push('\n');
         }
+    }
 
-        for (anim, scripts) in &by_anim {
-            out.push_str(&format!("// ── {} ──\n", anim));
-            for script in scripts {
-                out.push_str(&script.code);
-                out.push('\n');
-            }
-        }
+    // Frame scripts note
+    let frame_scripts: Vec<_> = data.scripts.iter().filter(|s| !s.is_ext_method).collect();
+    if !frame_scripts.is_empty() {
+        out.push_str(&format!(
+            "// ── Frame scripts ({} methods) ──────────────────────────────────────────────\n",
+            frame_scripts.len()
+        ));
+        out.push_str("// NOTE: Frame scripts belong in the .entity file, not here.\n");
+        out.push_str("// They are stored as FRAME_SCRIPT keyframes in each animation layer.\n");
+        out.push_str("// See conversion_stats.json for the full list of extracted frame methods.\n\n");
     }
 
     out

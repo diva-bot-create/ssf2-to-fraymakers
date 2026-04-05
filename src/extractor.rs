@@ -59,6 +59,7 @@ pub struct AnimationInfo {
 pub struct ScriptInfo {
     pub name: String,
     pub code: String,
+    pub is_ext_method: bool,
 }
 
 impl Default for CharacterStats {
@@ -100,10 +101,19 @@ pub fn extract(swf: &SwfFile, char_name: &str) -> Result<CharacterData> {
                     char_stats = convert_stats(&s.values);
                 }
 
-                // Convert frame scripts to ScriptInfo
+                // Decompiled Ext methods → Script.hx
+                for (method_name, code) in &extracted.ext_methods {
+                    scripts.push(ScriptInfo {
+                        name: method_name.clone(),
+                        code: code.clone(),
+                        is_ext_method: true,
+                    });
+                }
+
+                // Frame scripts → will go to .entity file (not Script.hx)
                 for (method_name, actions) in &extracted.frame_scripts {
                     let code = render_frame_script(method_name, actions);
-                    scripts.push(ScriptInfo { name: method_name.clone(), code });
+                    scripts.push(ScriptInfo { name: method_name.clone(), code, is_ext_method: false });
                 }
 
                 // Extract animation info from symbol names

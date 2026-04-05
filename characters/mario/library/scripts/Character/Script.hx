@@ -26,773 +26,115 @@ function onTeardown() {
 
 // --- end general functions
 
-// ── SSF2 Timeline frame scripts ─────────────────────────────────────────────
-// Each function maps to one SSF2 timeline class frame method.
-// API calls are translated where a Fraymakers equivalent exists.
+// ── Decompiled from SSF2 XxxExt.as ─────────────────────────────────────────
 
-// ── timeline ──
-// frame1
-function frame1_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function addEffectToList() {
+	// if (local1 == null) { /* jump 11 */ }
+	self.effects.push(local1);
+	return local1;
 }
 
-// frame10
-function frame10_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function clearEffectsOnStateChange() {
+	self.clearListener = local1;
+	self.addEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
+	return;
 }
 
-// frame11
-function frame11_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function clearListener() {
+	self.SSF2API = Object;
+	return;
 }
 
-// frame12
-function frame12_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function count() {
+	self.SSF2API = Object;
+	return;
 }
 
-// frame13
-function frame13_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function effects() {
+	self.SSF2API = Object;
+	return;
 }
 
-// frame14
-function frame14_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function flipX() {
+	// if (!self.isFacingRight()) { /* jump 2 */ }
+	return local1;
 }
 
-// frame15
-function frame15_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function followUser() {
+	throw /* value */;
+	// if (local1 == local2) { /* jump 7146368 */ }
+	throw /* value */;
+	// if (!null.x - getX.getX().y - getY.getY()) { /* jump 20 */ }
+	// if (!{ persistent: false, hitStunPause: false }) { /* jump 20 */ }
+	self.createTimer({ persistent: true, hitStunPause: false }, self, 1, 0);
+	self.destroyTimer(self);
+	return;
 }
 
-// frame16
-function frame16_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function initialize() {
+	SSF2API.print("Mario initialized.");
+	return;
 }
 
-// frame17
-function frame17_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function jumpToContinue() {
+	self.removeEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
+	self.updateAttackStats({ allowControl: false, cancelWhenAirborne: true });
+	self.stancePlayFrame("continue");
+	return;
 }
 
-// frame18
-function frame18_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function loopEffect() {
+	throw /* value */;
+	// if (local1 == local2) { /* jump 7146368 */ }
+	throw /* value */;
+	// if (!null) { /* jump 20 */ }
+	// if (!{ persistent: false, hitStunPause: false }) { /* jump 22 */ }
+	{ persistent: true, hitStunPause: false }.createTimer(self, 1, 0, { hitStunPause: false });
+	self.destroyTimer(self);
+	return;
 }
 
-// frame19
-function frame19_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function pushEffectBehind() {
+	SSF2API.getStage().getMidground().swapChildren(self.getMC(), local1);
+	return local1;
 }
 
-// frame2
-function frame2_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function removeAllEffects() {
+	var local2 = 0;
+	// if (0. == null) { /* jump 39 */ }
+	// if (0..parent == null) { /* jump 23 */ }
+	self.effects.removeChild(0.);
+	var local2 = 0;
+	// if (0 < self.effects.length) { /* jump -69 */ }
+	self.effects = Array.new Array();
+	// if (!self.clearListener) { /* jump 15 */ }
+	// if (self.hasEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects)) { /* jump 5 */ }
+	// if (!!local1 == null) { /* jump 13 */ }
+	self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
+	return;
 }
 
-// frame20
-function frame20_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function setLandingLag() {
+	// if (!local1) { /* jump 43 */ }
+	self.removeEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
+	self.addEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
+	// if (!self.isOnGround()) { /* jump 5 */ }
+	self.jumpToContinue();
+	self.removeEventListener(SSF2Event.GROUND_TOUCH, self.jumpToContinue);
+	self.addEventListener(SSF2Event.GROUND_TOUCH, self.toLand);
+	// if (!self.isOnGround()) { /* jump 5 */ }
+	self.toLand();
+	return;
 }
 
-// frame21
-function frame21_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
+function stopListening() {
+	self.clearListener = false;
+	self.removeEventListener(SSF2Event.STATE_CHANGE, self.removeAllEffects);
+	return;
 }
 
-// frame22
-function frame22_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame23
-function frame23_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame24
-function frame24_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame25
-function frame25_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame26
-function frame26_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame27
-function frame27_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame28
-function frame28_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame29
-function frame29_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame3
-function frame3_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame30
-function frame30_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame31
-function frame31_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame32
-function frame32_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame33
-function frame33_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame34
-function frame34_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame35
-function frame35_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame36
-function frame36_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame37
-function frame37_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame38
-function frame38_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame39
-function frame39_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame4
-function frame4_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame40
-function frame40_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame41
-function frame41_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame42
-function frame42_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame43
-function frame43_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame44
-function frame44_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame45
-function frame45_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame46
-function frame46_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame47
-function frame47_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame48
-function frame48_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame49
-function frame49_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame5
-function frame5_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame50
-function frame50_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame51
-function frame51_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame52
-function frame52_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame53
-function frame53_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame54
-function frame54_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame55
-function frame55_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame56
-function frame56_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame57
-function frame57_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame58
-function frame58_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame59
-function frame59_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame6
-function frame6_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame60
-function frame60_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame61
-function frame61_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame62
-function frame62_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame63
-function frame63_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame64
-function frame64_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame65
-function frame65_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame66
-function frame66_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame67
-function frame67_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame68
-function frame68_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame69
-function frame69_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame7
-function frame7_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame70
-function frame70_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame71
-function frame71_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame72
-function frame72_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame73
-function frame73_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame74
-function frame74_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame75
-function frame75_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame76
-function frame76_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame77
-function frame77_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame78
-function frame78_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame79
-function frame79_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame8
-function frame8_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame80
-function frame80_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame81
-function frame81_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame82
-function frame82_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame83
-function frame83_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame84
-function frame84_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame85
-function frame85_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
-
-// frame9
-function frame9_framescript(frame:Int) {
-	switch (frame) {
-		case 0:
-			// SSF2: stop()
-		}
-	}
-}
+// ── Frame scripts (85 methods) ──────────────────────────────────────────────
+// NOTE: Frame scripts belong in the .entity file, not here.
+// They are stored as FRAME_SCRIPT keyframes in each animation layer.
+// See conversion_stats.json for the full list of extracted frame methods.
 

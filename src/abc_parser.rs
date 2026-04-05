@@ -10,6 +10,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use crate::decompiler;
 
 // ─── AVM2 opcodes we care about ──────────────────────────────────────────────
 const OP_PUSHBYTE:      u8 = 0x24;
@@ -141,6 +142,8 @@ pub struct ExtractedCharacter {
     pub attacks: BTreeMap<String, AttackData>,
     pub stats: Option<CharStats>,
     pub frame_scripts: BTreeMap<String, Vec<FrameAction>>,
+    /// Decompiled Ext class methods translated to Fraymakers Haxe
+    pub ext_methods: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -529,6 +532,7 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
     let mut attacks: BTreeMap<String, AttackData> = BTreeMap::new();
     let mut stats: Option<CharStats> = None;
     let mut frame_scripts: BTreeMap<String, Vec<FrameAction>> = BTreeMap::new();
+    let mut ext_methods: BTreeMap<String, String> = BTreeMap::new();
 
     // Build method name lookup: method_idx → name
     let mut method_names: BTreeMap<u32, String> = BTreeMap::new();
@@ -590,6 +594,11 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
                         frame_scripts.insert(name.to_string(), actions);
                     }
                 }
+                // Decompile all other Ext methods for Script.hx
+                name if !matches!(name, "getOwnStats" | "getAttackStats" | "getItemStats" | "getProjectileStats") => {
+                    let code = decompiler::decompile_method(body, abc, name, &[]);
+                    ext_methods.insert(name.to_string(), code);
+                }
                 _ => {}
             }
         }
@@ -628,14 +637,15 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
         }
     }
 
-    log::info!("Extracted {} attacks, {} frame scripts, stats={}", 
-        attacks.len(), frame_scripts.len(), stats.is_some());
+    log::info!("Extracted {} attacks, {} frame scripts, {} ext methods, stats={}",
+        attacks.len(), frame_scripts.len(), ext_methods.len(), stats.is_some());
 
     Ok(ExtractedCharacter {
         name: char_name.to_string(),
         attacks,
         stats,
         frame_scripts,
+        ext_methods,
     })
 }
 
