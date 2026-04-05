@@ -55,7 +55,11 @@ function flipX(arg0) {
 
 
 function followUser(arg0, arg1, arg2) {
-	var _s7 = /* closure method_3297 */;
+	var _s7 = function() {
+	effectMC.x = self.getX() + xOffset;
+	effectMC.y = self.getY() + yOffset;
+	return;
+	};
 	var _s4 = arg1.x - self.getX();
 	var _s5 = arg1.y - self.getY();
 	var _s6 = { hitStunPause: false };
@@ -87,7 +91,10 @@ function jumpToContinue(arg0) {
 
 
 function loopEffect(arg0, arg1, arg2) {
-	var _s5 = /* closure method_3299 */;
+	var _s5 = function() {
+	effectMC.gotoAndStop(1);
+	return;
+	};
 	var _s4 = { hitStunPause: false };
 	if (arg2) {
 		var _s4 = { persistent: true, hitStunPause: false };

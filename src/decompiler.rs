@@ -140,6 +140,7 @@ pub enum Expr {
     BinOp(&'static str, Box<Expr>, Box<Expr>),
     UnOp(&'static str, Box<Expr>),
     GetLex(String),
+    Closure(String),  // inline function literal, body already rendered
     Unknown,
 }
 
@@ -155,8 +156,9 @@ impl Expr {
             Expr::Null      => "null".to_string(),
             Expr::This      => "self".to_string(),
             Expr::Local(n)  => format!("_v{}", n),
-            Expr::GetLex(n) => n.clone(),
-            Expr::Unknown   => "/* ? */".to_string(),
+            Expr::GetLex(n)    => n.clone(),
+            Expr::Closure(body) => body.clone(),
+            Expr::Unknown       => "/* ? */".to_string(),
             Expr::GetProperty(obj, name) => {
                 format!("{}.{}", obj.render(), name)
             }
@@ -902,8 +904,9 @@ impl<'a> BlockDecoder<'a> {
                 }
                 OP_NEWFUNCTION => {
                     let fn_idx = read_u30_at(self.bc, &mut pos);
-                    // newfunction creates a closure. Emit as a comment reference.
-                    self.stack.push(Expr::GetLex(format!("/* closure method_{} */", fn_idx)));
+                    // Find the method body and decompile it inline
+                    let closure_expr = decompile_closure(fn_idx, self.abc);
+                    self.stack.push(closure_expr);
                 }
                 OP_NEWCLASS    => { read_u30_at(self.bc, &mut pos); self.stack.push(Expr::GetLex("/* class */".into())); }
 
@@ -1123,14 +1126,32 @@ impl<'a> StructuredDecoder<'a> {
                         // Capture carry from then_b to propagate to merge block
                         let mut then_leftover = vec![];
                         let then_b = self.decode_from_with_stack_out(then_start, merge, saved_carry, &mut then_leftover);
+                        let mut else_leftover = vec![];
                         let else_b = if else_start != merge.unwrap_or(usize::MAX) {
-                            self.decode_from_with_stack(else_start, merge, vec![])
+                            self.decode_from_with_stack_out(else_start, merge, vec![], &mut else_leftover)
                         } else {
                             vec![]
                         };
-                        result.push(Stmt::If(raw_cond, then_b, else_b));
-                        // Propagate carry from then_b to merge block
-                        carry_stack = then_leftover;
+
+                        // Ternary select pattern: both branches produce no statements
+                        // but leave a value on the carry stack (phi-node synthesis)
+                        if then_b.is_empty() && else_b.is_empty()
+                            && then_leftover.len() == 1 && else_leftover.len() == 1
+                        {
+                            let then_val = then_leftover.remove(0);
+                            let else_val = else_leftover.remove(0);
+                            // Emit as: var _phi = cond ? then_val : else_val
+                            // Push the ternary onto carry_stack for the merge block to use
+                            let ternary = Expr::GetLex(format!(
+                                "({} ? {} : {})",
+                                raw_cond.render(), then_val.render(), else_val.render()
+                            ));
+                            carry_stack = vec![ternary];
+                        } else {
+                            result.push(Stmt::If(raw_cond, then_b, else_b));
+                            // Prefer then_leftover for carry; fall back to else_leftover
+                            carry_stack = if !then_leftover.is_empty() { then_leftover } else { else_leftover };
+                        }
                         cur = merge.unwrap_or(usize::MAX);
                     }
                 }
@@ -1403,6 +1424,51 @@ fn infer_activation_slots(bc: &[u8], params: &[String]) -> BTreeMap<u32, String>
 }
 
 /// Decompile an ABC method body to a Fraymakers Haxe function string.
+/// Decompile a closure (newfunction) into a Haxe function literal.
+fn decompile_closure(method_idx: u32, abc: &AbcFile) -> Expr {
+    // Find method body
+    let body = match abc.method_bodies.iter().find(|b| b.method_idx == method_idx) {
+        Some(b) => b,
+        None => return Expr::GetLex(format!("/* closure method_{} not found */", method_idx)),
+    };
+
+    // Get param count from method info
+    let param_count = abc.methods.get(method_idx as usize)
+        .map(|m| m.param_count as usize)
+        .unwrap_or(0);
+
+    // Build param names: arg0, arg1, ...
+    let params: Vec<String> = (0..param_count).map(|i| format!("arg{}", i)).collect();
+
+    if body.bytecode.is_empty() {
+        return Expr::Closure(format!("function({}) {{}}", params.join(", ")));
+    }
+
+    let activation_slots = infer_activation_slots(&body.bytecode, &params);
+    let mut decoder = StructuredDecoder::new_with_slots(&body.bytecode, abc, activation_slots);
+    for (i, param) in params.iter().enumerate() {
+        decoder.param_locals.insert((i + 1) as u32, param.clone());
+    }
+    let stmts = decoder.decode_from(0, None);
+    let stmts: Vec<Stmt> = stmts.into_iter().filter(|s| {
+        !matches!(s, Stmt::VarDecl(0, Expr::This))
+    }).collect();
+
+    // Render as Haxe function literal
+    let body_str = render_stmts(&stmts, 1);
+    // Check if single return-value expression (simplify to arrow-style if possible)
+    let literal = if stmts.len() == 1 {
+        if let Stmt::Return(Some(e)) = &stmts[0] {
+            format!("function({}) {{ return {}; }}", params.join(", "), e.render())
+        } else {
+            format!("function({}) {{\n{}\t}}", params.join(", "), body_str)
+        }
+    } else {
+        format!("function({}) {{\n{}\t}}", params.join(", "), body_str)
+    };
+    Expr::Closure(literal)
+}
+
 pub fn decompile_method(
     body: &crate::abc_parser::MethodBody,
     abc: &AbcFile,
