@@ -469,10 +469,13 @@ fn decode_lossless(bmp: &swf::DefineBitsLossless) -> Result<Vec<u8>> {
                     let ci = idx.min(nc - 1);
                     let base = ci * bytes_per_color;
                     if has_alpha {
-                        let a = palette[base];
-                        let r = palette[base + 1];
-                        let g = palette[base + 2];
-                        let b = palette[base + 3];
+                        // DefineBitsLossless2 ColorMap8 palette is RGBA (not ARGB).
+                        // SWF spec: format=3 with alpha uses swf_rgba = {R, G, B, A}.
+                        // Only format=5 (Rgb32) uses ARGB order.
+                        let r = palette[base];
+                        let g = palette[base + 1];
+                        let b = palette[base + 2];
+                        let a = palette[base + 3];
                         rgba.extend_from_slice(&[r, g, b, a]);
                     } else {
                         let r = palette[base];
