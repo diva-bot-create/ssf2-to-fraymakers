@@ -109,11 +109,15 @@ pub fn extract_images(
     let mut shape_to_bitmap: ShapeToBitmapMap = BTreeMap::new();
     for tag in &swf.tags {
         if let swf::Tag::DefineShape(shape) = tag {
-            // Look for bitmap fill in fill styles
+
+            // Look for bitmap fill in fill styles.
+            // Skip id=65535 (SWF null/clipping bitmap) — take the first real bitmap.
             for fill in &shape.styles.fill_styles {
                 if let swf::FillStyle::Bitmap { id, .. } = fill {
-                    shape_to_bitmap.insert(shape.id, *id);
-                    break; // take first bitmap fill
+                    if *id != 65535 {
+                        shape_to_bitmap.insert(shape.id, *id);
+                        break;
+                    }
                 }
             }
         }
@@ -237,6 +241,144 @@ fn build_anim_frame_images(
     let char_lower = char_name.to_lowercase();
     let mut result = BTreeMap::new();
 
+    // Pre-build a lookup of all DefineSprite tags by id (including unnamed ones)
+    let all_sprites: BTreeMap<u16, &swf::Sprite> = swf.tags.iter().filter_map(|t| {
+        if let swf::Tag::DefineSprite(s) = t { Some((s.id, s)) } else { None }
+    }).collect();
+
+    // Pre-build effect sprite frame tables: sprite_id → Vec<frame> → Vec<(shape_id, sym, mat)>
+    // Effect sprites are _fla. named sprites that are NOT top-level animation containers.
+    // Recursively expands unnamed inner sprites.
+    let effect_sprites: BTreeMap<u16, Vec<Vec<(u16, String, ImageLocalMatrix)>>> = {
+        // Two-pass approach:
+        // Pass 1: build inner unnamed sprite frame tables
+        // Pass 2: for named effect sprites, inline the unnamed sub-sprites
+
+        // First build all unnamed sprite frame tables
+        let mut unnamed_frames: BTreeMap<u16, Vec<Vec<(u16, String, ImageLocalMatrix)>>> = BTreeMap::new();
+        for (&sid, sprite) in &all_sprites {
+            if symbols.contains_key(&sid) { continue; } // skip named ones
+            let mut disp: BTreeMap<u16, (u16, String, ImageLocalMatrix)> = BTreeMap::new();
+            let mut frames: Vec<Vec<(u16, String, ImageLocalMatrix)>> = Vec::new();
+            for stag in &sprite.tags {
+                match stag {
+                    swf::Tag::ShowFrame => {
+                        frames.push(disp.values().map(|(id, sym, mat)| (*id, sym.clone(), *mat)).collect());
+                    }
+                    swf::Tag::PlaceObject(po) => {
+                        let local_mat = po.matrix.map(|m| {
+                            let a = m.a.to_f64(); let b = m.b.to_f64();
+                            let c = m.c.to_f64(); let d = m.d.to_f64();
+                            ImageLocalMatrix {
+                                tx: m.tx.get() as f64 / 20.0, ty: m.ty.get() as f64 / 20.0,
+                                sx: (a*a + b*b).sqrt(), sy: (c*c + d*d).sqrt(),
+                                rotation: b.atan2(a).to_degrees(),
+                            }
+                        }).unwrap_or_default();
+                        match &po.action {
+                            swf::PlaceObjectAction::Place(cid) | swf::PlaceObjectAction::Replace(cid) => {
+                                if let Some(sname) = symbols.get(cid) {
+                                    let lower = sname.to_lowercase();
+                                    if !lower.contains("collisonbox") && !lower.contains("collisionbox") {
+                                        disp.insert(po.depth, (*cid, sname.clone(), local_mat));
+                                    }
+                                }
+                            }
+                            swf::PlaceObjectAction::Modify => {
+                                if let Some(e) = disp.get_mut(&po.depth) { e.2 = local_mat; }
+                            }
+                        }
+                    }
+                    swf::Tag::RemoveObject(ro) => { disp.remove(&ro.depth); }
+                    _ => {}
+                }
+            }
+            if !frames.is_empty() { unnamed_frames.insert(sid, frames); }
+        }
+
+        // Now build named effect sprite tables, inlining unnamed sub-sprites
+        let mut map = BTreeMap::new();
+        for tag in &swf.tags {
+            if let swf::Tag::DefineSprite(sprite) = tag {
+                let sym = match symbols.get(&sprite.id) { Some(s) => s.as_str(), None => continue };
+                if !sym.contains("_fla.") { continue; }
+                if extract_ssf2_anim_name(sym, &char_lower, ssf2_to_fm).is_some() { continue; }
+
+                let mut disp: BTreeMap<u16, (u16, String, ImageLocalMatrix)> = BTreeMap::new();
+                // depth → (unnamed_sprite_id, place_parent_mat, frame_started)
+                let mut unnamed_placements: BTreeMap<u16, (u16, ImageLocalMatrix, u16)> = BTreeMap::new();
+                let mut cur_frame: u16 = 0;
+                let mut effect_frames: Vec<Vec<(u16, String, ImageLocalMatrix)>> = Vec::new();
+
+                for stag in &sprite.tags {
+                    match stag {
+                        swf::Tag::ShowFrame => {
+                            let mut snap: Vec<(u16, String, ImageLocalMatrix)> = disp.values()
+                                .map(|(id, sym, mat)| (*id, sym.clone(), *mat)).collect();
+                            // Expand unnamed sub-sprites: pick their frame at (cur_frame - place_frame)
+                            for (&_depth, (unnamed_id, parent_mat, place_frame)) in &unnamed_placements {
+                                if let Some(uframes) = unnamed_frames.get(unnamed_id) {
+                                    let uf_idx = (cur_frame.saturating_sub(*place_frame) as usize)
+                                        .min(uframes.len().saturating_sub(1));
+                                    for (inner_id, inner_sym, inner_mat) in &uframes[uf_idx] {
+                                        let composed = ImageLocalMatrix {
+                                            tx: parent_mat.tx + inner_mat.tx * parent_mat.sx,
+                                            ty: parent_mat.ty + inner_mat.ty * parent_mat.sy,
+                                            sx: parent_mat.sx * inner_mat.sx,
+                                            sy: parent_mat.sy * inner_mat.sy,
+                                            rotation: parent_mat.rotation + inner_mat.rotation,
+                                        };
+                                        snap.push((*inner_id, inner_sym.clone(), composed));
+                                    }
+                                }
+                            }
+                            effect_frames.push(snap);
+                            cur_frame += 1;
+                        }
+                        swf::Tag::PlaceObject(po) => {
+                            let local_mat = po.matrix.map(|m| {
+                                let a = m.a.to_f64(); let b = m.b.to_f64();
+                                let c = m.c.to_f64(); let d = m.d.to_f64();
+                                ImageLocalMatrix {
+                                    tx: m.tx.get() as f64 / 20.0, ty: m.ty.get() as f64 / 20.0,
+                                    sx: (a*a + b*b).sqrt(), sy: (c*c + d*d).sqrt(),
+                                    rotation: b.atan2(a).to_degrees(),
+                                }
+                            }).unwrap_or_default();
+                            match &po.action {
+                                swf::PlaceObjectAction::Place(cid) | swf::PlaceObjectAction::Replace(cid) => {
+                                    if let Some(sname) = symbols.get(cid) {
+                                        let lower = sname.to_lowercase();
+                                        if !lower.contains("collisonbox") && !lower.contains("collisionbox") {
+                                            disp.insert(po.depth, (*cid, sname.clone(), local_mat));
+                                        }
+                                    } else if unnamed_frames.contains_key(cid) {
+                                        unnamed_placements.insert(po.depth, (*cid, local_mat, cur_frame));
+                                    }
+                                }
+                                swf::PlaceObjectAction::Modify => {
+                                    if let Some(e) = disp.get_mut(&po.depth) { e.2 = local_mat; }
+                                    if let Some(e) = unnamed_placements.get_mut(&po.depth) { e.1 = local_mat; }
+                                }
+                            }
+                        }
+                        swf::Tag::RemoveObject(ro) => {
+                            disp.remove(&ro.depth);
+                            unnamed_placements.remove(&ro.depth);
+                        }
+                        _ => {}
+                    }
+                }
+                if !effect_frames.is_empty() {
+                    log::debug!("image_extractor: effect sprite id={} '{}' has {} frames",
+                        sprite.id, sym, effect_frames.len());
+                    map.insert(sprite.id, effect_frames);
+                }
+            }
+        }
+        map
+    };
+
     for tag in &swf.tags {
         if let swf::Tag::DefineSprite(sprite) = tag {
             let sym = symbols.get(&sprite.id)
@@ -264,37 +406,75 @@ fn build_anim_frame_images(
             let mut current_frame: u16 = 0;
             // depth → (shape_id, symbol_name, local_matrix) — the active display list
             let mut display_list: BTreeMap<u16, (u16, String, ImageLocalMatrix)> = BTreeMap::new();
+            // depth → (effect_sprite_id, place_frame, parent_matrix) — sub-sprite placements
+            let mut sub_sprite_placements: BTreeMap<u16, (u16, u16, ImageLocalMatrix)> = BTreeMap::new();
             let mut frames: BTreeMap<u16, Vec<FrameImageEntry>> = BTreeMap::new();
 
             for stag in &sprite.tags {
                 match stag {
                     swf::Tag::ShowFrame => {
-                        // Snapshot the display list as this frame's entries
-                        if !display_list.is_empty() {
-                            let entries: Vec<FrameImageEntry> = display_list.iter()
-                                .map(|(&depth, (id, sym, mat))| {
-                                    // Apply root MC transform to get world-space coords.
-                                    // Root MC scale (sx/sy) affects position but not rotation
-                                    // (root is never rotated in SSF2, only scaled for character size).
-                                    let world_tx = root_xf.tx + mat.tx * root_xf.sx;
-                                    let world_ty = root_xf.ty + mat.ty * root_xf.sy;
-                                    let world_sx = mat.sx * root_xf.sx.abs();
-                                    let world_sy = mat.sy * root_xf.sy.abs();
-                                    // Rotation is purely local (root doesn't rotate)
-                                    let world_rotation = mat.rotation;
-                                    FrameImageEntry {
-                                        depth,
-                                        shape_id: *id,
-                                        symbol_name: sym.clone(),
-                                        local_matrix: *mat,
+                        let mut entries: Vec<FrameImageEntry> = Vec::new();
+
+                        // Regular display list entries
+                        for (&depth, (id, sym, mat)) in &display_list {
+                            let world_tx = root_xf.tx + mat.tx * root_xf.sx;
+                            let world_ty = root_xf.ty + mat.ty * root_xf.sy;
+                            let world_sx = mat.sx * root_xf.sx.abs();
+                            let world_sy = mat.sy * root_xf.sy.abs();
+                            entries.push(FrameImageEntry {
+                                depth,
+                                shape_id: *id,
+                                symbol_name: sym.clone(),
+                                local_matrix: *mat,
+                                world_tx,
+                                world_ty,
+                                world_sx,
+                                world_sy,
+                                world_rotation: mat.rotation,
+                            });
+                        }
+
+                        // Expand effect sub-sprite placements into their current inner frame
+                        for (&depth, (effect_id, place_frame, parent_mat)) in &sub_sprite_placements {
+                            if let Some(effect_frames) = effect_sprites.get(effect_id) {
+                                let eff_frame = (current_frame.saturating_sub(*place_frame)) as usize;
+                                // Clamp to last frame (effect may loop or hold)
+                                let eff_frame = eff_frame.min(effect_frames.len().saturating_sub(1));
+                                for (inner_id, inner_sym, inner_mat) in &effect_frames[eff_frame] {
+                                    // Compose parent_mat • inner_mat
+                                    let composed_tx = parent_mat.tx + inner_mat.tx * parent_mat.sx;
+                                    let composed_ty = parent_mat.ty + inner_mat.ty * parent_mat.sy;
+                                    let composed_sx = parent_mat.sx * inner_mat.sx;
+                                    let composed_sy = parent_mat.sy * inner_mat.sy;
+                                    let composed_rot = parent_mat.rotation + inner_mat.rotation;
+                                    let world_tx = root_xf.tx + composed_tx * root_xf.sx;
+                                    let world_ty = root_xf.ty + composed_ty * root_xf.sy;
+                                    let world_sx = composed_sx * root_xf.sx.abs();
+                                    let world_sy = composed_sy * root_xf.sy.abs();
+                                    // Use a high depth slot so effect renders on top
+                                    let effect_depth = depth + 1000;
+                                    entries.push(FrameImageEntry {
+                                        depth: effect_depth,
+                                        shape_id: *inner_id,
+                                        symbol_name: inner_sym.clone(),
+                                        local_matrix: ImageLocalMatrix {
+                                            tx: composed_tx, ty: composed_ty,
+                                            sx: composed_sx, sy: composed_sy,
+                                            rotation: composed_rot,
+                                        },
                                         world_tx,
                                         world_ty,
                                         world_sx,
                                         world_sy,
-                                        world_rotation,
-                                    }
-                                })
-                                .collect();
+                                        world_rotation: composed_rot,
+                                    });
+                                }
+                            }
+                        }
+
+                        if !entries.is_empty() {
+                            // Sort by depth so layers are ordered back-to-front
+                            entries.sort_by_key(|e| e.depth);
                             frames.insert(current_frame, entries);
                         }
                         current_frame += 1;
@@ -315,16 +495,12 @@ fn build_anim_frame_images(
                             let b = m.b.to_f64();
                             let c = m.c.to_f64();
                             let d = m.d.to_f64();
-                            // Decompose: scale = sqrt(a²+b²), rotation = atan2(b,a)
-                            let sx = (a*a + b*b).sqrt();
-                            let sy = (c*c + d*d).sqrt();
-                            let rotation = b.atan2(a).to_degrees();
                             ImageLocalMatrix {
                                 tx: m.tx.get() as f64 / 20.0,
                                 ty: m.ty.get() as f64 / 20.0,
-                                sx,
-                                sy,
-                                rotation,
+                                sx: (a*a + b*b).sqrt(),
+                                sy: (c*c + d*d).sqrt(),
+                                rotation: b.atan2(a).to_degrees(),
                             }
                         }).unwrap_or_default();
 
@@ -337,16 +513,23 @@ fn build_anim_frame_images(
                                     None => continue,
                                 };
                                 let lower = sym_name.to_lowercase();
-                                if lower.contains("collisonbox") || lower.contains("collisionbox")
-                                    || lower.contains("_fla.")
-                                {
+                                if lower.contains("collisonbox") || lower.contains("collisionbox") {
+                                    continue;
+                                }
+                                // Effect sprite (nested _fla. movieclip)? Track as sub-sprite.
+                                if lower.contains("_fla.") {
+                                    if effect_sprites.contains_key(char_id) {
+                                        sub_sprite_placements.insert(depth, (*char_id, current_frame, local_mat));
+                                    }
                                     continue;
                                 }
                                 display_list.insert(depth, (*char_id, sym_name, local_mat));
                             }
                             swf::PlaceObjectAction::Modify => {
-                                // Update matrix of existing entry
                                 if let Some(entry) = display_list.get_mut(&depth) {
+                                    entry.2 = local_mat;
+                                } else if let Some(entry) = sub_sprite_placements.get_mut(&depth) {
+                                    // Update the parent matrix of a sub-sprite placement
                                     entry.2 = local_mat;
                                 }
                             }
@@ -354,6 +537,7 @@ fn build_anim_frame_images(
                     }
                     swf::Tag::RemoveObject(ro) => {
                         display_list.remove(&ro.depth);
+                        sub_sprite_placements.remove(&ro.depth);
                     }
                     _ => {}
                 }
