@@ -11,7 +11,8 @@
     {
       "$id": "af106791-b7be-5d27-8685-6c43e324267a",
       "layers": [
-        "39fd36ca-4052-5c12-8e8c-041f2c4839d0"
+        "39fd36ca-4052-5c12-8e8c-041f2c4839d0",
+        "836832e5-692f-5eb4-9669-54d88baeb563"
       ],
       "name": "projectileIdle",
       "pluginMetadata": {}
@@ -175,6 +176,33 @@
       "type": "IMAGE"
     },
     {
+      "$id": "22673660-5f61-59b5-971f-c33b05b5f3e7",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": "74456134-c206-5dc7-b7ad-473f754ca307",
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "COLLISION_BOX"
+    },
+    {
+      "$id": "21f1bacb-4488-533f-8070-878ad1434855",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": "6fbfb58e-f2ea-56f9-889f-4d3ec9ad704e",
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "COLLISION_BOX"
+    },
+    {
+      "$id": "e8bc8176-2d45-5a85-92a1-e16ca1ead026",
+      "length": 14,
+      "pluginMetadata": {},
+      "symbol": "facf217a-563a-59cb-8b0d-c0583a251e1d",
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "COLLISION_BOX"
+    },
+    {
       "$id": "77e591ac-27fb-54b0-9878-0749a3f17ed2",
       "length": 1,
       "pluginMetadata": {},
@@ -230,6 +258,26 @@
       "type": "IMAGE"
     },
     {
+      "$id": "836832e5-692f-5eb4-9669-54d88baeb563",
+      "defaultAlpha": 0.5,
+      "defaultColor": "0xff0000",
+      "hidden": false,
+      "keyframes": [
+        "22673660-5f61-59b5-971f-c33b05b5f3e7",
+        "21f1bacb-4488-533f-8070-878ad1434855",
+        "e8bc8176-2d45-5a85-92a1-e16ca1ead026"
+      ],
+      "locked": false,
+      "name": "hitbox0",
+      "pluginMetadata": {
+        "com.fraymakers.FraymakersMetadata": {
+          "collisionBoxType": "HIT_BOX",
+          "index": 0
+        }
+      },
+      "type": "COLLISION_BOX"
+    },
+    {
       "$id": "1878005c-a009-58ee-aa3e-5d4a17cc9923",
       "hidden": false,
       "keyframes": [
@@ -263,7 +311,10 @@
       "type": "FRAME_SCRIPT"
     }
   ],
-  "paletteMap": null,
+  "paletteMap": {
+    "paletteCollection": "99bb1a5b-f0dc-5b21-96c9-8ded5621d096",
+    "paletteMap": "f514d04e-644b-5ca0-a209-7585e7e177a2"
+  },
   "pluginMetadata": {
     "com.fraymakers.FraymakersMetadata": {
       "objectType": "PROJECTILE",
@@ -273,7 +324,50 @@
   "plugins": [
     "com.fraymakers.FraymakersMetadata"
   ],
-  "symbols": [],
+  "symbols": [
+    {
+      "$id": "74456134-c206-5dc7-b7ad-473f754ca307",
+      "alpha": 0.5,
+      "color": "0xff0000",
+      "pivotX": 9.2,
+      "pivotY": 2.01,
+      "pluginMetadata": {},
+      "rotation": -0.0,
+      "scaleX": 18.41,
+      "scaleY": 4.02,
+      "type": "COLLISION_BOX",
+      "x": -19.3,
+      "y": -2.01
+    },
+    {
+      "$id": "6fbfb58e-f2ea-56f9-889f-4d3ec9ad704e",
+      "alpha": 0.5,
+      "color": "0xff0000",
+      "pivotX": 24.87,
+      "pivotY": 2.01,
+      "pluginMetadata": {},
+      "rotation": -0.0,
+      "scaleX": 49.74,
+      "scaleY": 4.02,
+      "type": "COLLISION_BOX",
+      "x": -30.32,
+      "y": -2.01
+    },
+    {
+      "$id": "facf217a-563a-59cb-8b0d-c0583a251e1d",
+      "alpha": 0.5,
+      "color": "0xff0000",
+      "pivotX": 38.65,
+      "pivotY": 2.01,
+      "pluginMetadata": {},
+      "rotation": -0.0,
+      "scaleX": 77.31,
+      "scaleY": 4.02,
+      "type": "COLLISION_BOX",
+      "x": -39.8,
+      "y": -2.01
+    }
+  ],
   "tags": [],
   "terrains": [],
   "tilesets": [],

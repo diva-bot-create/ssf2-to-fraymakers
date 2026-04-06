@@ -912,6 +912,47 @@ fn normalize_anim_label(s: &str) -> String {
 /// PlaceObject::Place(id) with name = new object at depth
 /// PlaceObject::Modify = move/transform existing object at depth (no character change)
 /// PlaceObject::Replace(id) = replace object at depth
+/// Extract collision boxes for a specific DefineSprite by ID.
+/// Used for projectile inner sprites (e.g. mario_fireball_mc).
+/// Returns AnimationBoxData with frames keyed 0-based.
+pub fn extract_boxes_for_sprite_id(
+    swf_data: &[u8],
+    sprite_id: u16,
+) -> anyhow::Result<Option<AnimationBoxData>> {
+    let swf_buf = swf::decompress_swf(Cursor::new(swf_data))?;
+    let swf = swf::parse_swf(&swf_buf)?;
+
+    let mut sym_names: BTreeMap<u16, String> = BTreeMap::new();
+    for tag in &swf.tags {
+        if let swf::Tag::SymbolClass(links) = tag {
+            for link in links {
+                let name = link.class_name.to_str_lossy(encoding_rs::WINDOWS_1252).to_string();
+                sym_names.insert(link.id, name);
+            }
+        }
+    }
+
+    let box_base_size = find_collision_box_base_size(&swf, &sym_names);
+    let identity = XframeTransform { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0 };
+
+    for tag in &swf.tags {
+        if let swf::Tag::DefineSprite(sprite) = tag {
+            if sprite.id != sprite_id { continue; }
+            let frames = extract_frame_boxes(sprite, &sym_names, box_base_size, identity);
+            if frames.is_empty() { return Ok(None); }
+            return Ok(Some(AnimationBoxData {
+                ssf2_name: String::new(),
+                fm_name: String::new(),
+                total_frames: sprite.num_frames,
+                frames,
+                sprite_frame_offset: 0,
+                frame_labels: vec![],
+            }));
+        }
+    }
+    Ok(None)
+}
+
 /// RemoveObject = remove from display list
 ///
 /// We track the display list across frames and snapshot the current boxes each frame.

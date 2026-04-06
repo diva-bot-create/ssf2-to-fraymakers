@@ -124,7 +124,7 @@ fn main() -> Result<()> {
 
     // Generate Fraymakers files
     haxe_gen::generate(&args.output, &char_name, &char_data, &sprite_boxes, &img_result,
-        args.costumes.as_deref(), &sounds, &projectiles, head_sprite.as_ref())?;
+        args.costumes.as_deref(), &sounds, &projectiles, head_sprite.as_ref(), &swf_data)?;
     log::info!("Generated Fraymakers files in {}", args.output.display());
 
     Ok(())

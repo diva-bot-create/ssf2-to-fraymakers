@@ -253,7 +253,10 @@
       "type": "FRAME_SCRIPT"
     }
   ],
-  "paletteMap": null,
+  "paletteMap": {
+    "paletteCollection": "c886089f-f1db-58bb-8eb2-b17a3c39903c",
+    "paletteMap": "b80cf4d1-4d71-5269-8fcd-2d4338468da4"
+  },
   "pluginMetadata": {
     "com.fraymakers.FraymakersMetadata": {
       "objectType": "PROJECTILE",

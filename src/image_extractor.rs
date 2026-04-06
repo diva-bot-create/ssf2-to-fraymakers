@@ -773,6 +773,190 @@ fn sanitize_name(name: &str) -> String {
     name.replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "_")
 }
 
+// ─── Projectile image frame extraction ────────────────────────────────────────────────────────
+
+/// Per-frame image data for a single projectile animation.
+#[derive(Debug, Clone)]
+pub struct ProjectileFrameImages {
+    /// frame index → symbol name of the image placed on that frame (if any)
+    pub frames: Vec<Option<String>>,
+    /// symbol_name → meta GUID
+    pub image_guids: BTreeMap<String, String>,
+}
+
+/// Extract per-frame image data for a projectile's inner sprite.
+///
+/// Uses the same two-pass effect-sprite flattening as `extract_images`.
+/// Given the inner sprite ID (e.g. 194 for mario_fireball_mc), returns
+/// the image symbol name placed on each frame.
+pub fn extract_projectile_frame_images(
+    swf_data: &[u8],
+    char_id: &str,
+    inner_sprite_id: u16,
+    img_result: &ImageExtractionResult,
+) -> Result<ProjectileFrameImages> {
+    use std::io::Cursor;
+    let swf_buf = swf::decompress_swf(Cursor::new(swf_data)).context("decompress")?;
+    let swf = swf::parse_swf(&swf_buf).context("parse")?;
+
+    // Build symbol map
+    let mut symbols: BTreeMap<u16, String> = BTreeMap::new();
+    for tag in &swf.tags {
+        if let swf::Tag::SymbolClass(links) = tag {
+            for link in links {
+                let name = link.class_name.to_str_lossy(encoding_rs::WINDOWS_1252).to_string();
+                if !name.is_empty() { symbols.insert(link.id, name); }
+            }
+        }
+    }
+
+    // Collect all sprites
+    let mut all_sprites: BTreeMap<u16, &swf::Sprite> = BTreeMap::new();
+    for tag in &swf.tags {
+        if let swf::Tag::DefineSprite(s) = tag { all_sprites.insert(s.id, s); }
+    }
+
+    // Pass 1: unnamed sprite frame tables
+    // These sprites have no SymbolClass entry; they contain raw shape placements.
+    // We resolve shape_id → bitmap_id → symbol_name via img_result.shape_to_bitmap.
+    let mut unnamed_frames: BTreeMap<u16, Vec<Vec<(u16, String, ImageLocalMatrix)>>> = BTreeMap::new();
+    for (&sid, sprite) in &all_sprites {
+        if symbols.contains_key(&sid) { continue; }
+        let mut disp: BTreeMap<u16, (u16, String, ImageLocalMatrix)> = BTreeMap::new();
+        let mut frames: Vec<Vec<(u16, String, ImageLocalMatrix)>> = Vec::new();
+        for stag in &sprite.tags {
+            match stag {
+                swf::Tag::ShowFrame => {
+                    frames.push(disp.values().map(|(id, sym, mat)| (*id, sym.clone(), *mat)).collect());
+                }
+                swf::Tag::PlaceObject(po) => {
+                    let mat = po_to_mat(po);
+                    match &po.action {
+                        swf::PlaceObjectAction::Place(cid) | swf::PlaceObjectAction::Replace(cid) => {
+                            if let Some(sname) = symbols.get(cid) {
+                                // Named symbol
+                                disp.insert(po.depth, (*cid, sname.clone(), mat));
+                            } else if let Some(&bitmap_id) = img_result.shape_to_bitmap.get(cid) {
+                                // Unnamed shape with a bitmap fill — resolve to symbol name
+                                if let Some(img) = img_result.images.get(&bitmap_id) {
+                                    disp.insert(po.depth, (*cid, img.symbol_name.clone(), mat));
+                                }
+                            }
+                        }
+                        swf::PlaceObjectAction::Modify => {
+                            if let Some(e) = disp.get_mut(&po.depth) { e.2 = mat; }
+                        }
+                    }
+                }
+                swf::Tag::RemoveObject(ro) => { disp.remove(&ro.depth); }
+                _ => {}
+            }
+        }
+        if !frames.is_empty() { unnamed_frames.insert(sid, frames); }
+    }
+
+    // Pass 2: flatten target sprite
+    let sprite = match all_sprites.get(&inner_sprite_id) {
+        Some(s) => s,
+        None => return Ok(ProjectileFrameImages { frames: vec![], image_guids: BTreeMap::new() }),
+    };
+
+    let mut disp: BTreeMap<u16, (u16, String, ImageLocalMatrix)> = BTreeMap::new();
+    let mut unnamed_placements: BTreeMap<u16, (u16, ImageLocalMatrix, u16)> = BTreeMap::new();
+    let mut cur_frame: u16 = 0;
+    let mut effect_frames: Vec<Vec<(u16, String, ImageLocalMatrix)>> = Vec::new();
+
+    for stag in &sprite.tags {
+        match stag {
+            swf::Tag::ShowFrame => {
+                let mut snap: Vec<(u16, String, ImageLocalMatrix)> =
+                    disp.values().map(|(id, sym, mat)| (*id, sym.clone(), *mat)).collect();
+                for (&_depth, (unnamed_id, parent_mat, place_frame)) in &unnamed_placements {
+                    if let Some(uframes) = unnamed_frames.get(unnamed_id) {
+                        let uf_idx = (cur_frame.saturating_sub(*place_frame) as usize)
+                            .min(uframes.len().saturating_sub(1));
+                        for (inner_id, inner_sym, inner_mat) in &uframes[uf_idx] {
+                            let composed = ImageLocalMatrix {
+                                tx: parent_mat.tx + inner_mat.tx * parent_mat.sx,
+                                ty: parent_mat.ty + inner_mat.ty * parent_mat.sy,
+                                sx: parent_mat.sx * inner_mat.sx,
+                                sy: parent_mat.sy * inner_mat.sy,
+                                rotation: parent_mat.rotation + inner_mat.rotation,
+                            };
+                            snap.push((*inner_id, inner_sym.clone(), composed));
+                        }
+                    }
+                }
+                effect_frames.push(snap);
+                cur_frame += 1;
+            }
+            swf::Tag::PlaceObject(po) => {
+                let mat = po_to_mat(po);
+                match &po.action {
+                    swf::PlaceObjectAction::Place(cid) | swf::PlaceObjectAction::Replace(cid) => {
+                        if let Some(sname) = symbols.get(cid) {
+                            let lower = sname.to_lowercase();
+                            if !lower.contains("collisonbox") && !lower.contains("collisionbox") {
+                                disp.insert(po.depth, (*cid, sname.clone(), mat));
+                            }
+                        } else if unnamed_frames.contains_key(cid) {
+                            // Unnamed sub-sprite
+                            unnamed_placements.insert(po.depth, (*cid, mat, cur_frame));
+                        } else if let Some(&bitmap_id) = img_result.shape_to_bitmap.get(cid) {
+                            // Direct shape placement with bitmap fill
+                            if let Some(img) = img_result.images.get(&bitmap_id) {
+                                disp.insert(po.depth, (*cid, img.symbol_name.clone(), mat));
+                            }
+                        }
+                    }
+                    swf::PlaceObjectAction::Modify => {
+                        if let Some(e) = disp.get_mut(&po.depth) { e.2 = mat; }
+                        if let Some(e) = unnamed_placements.get_mut(&po.depth) { e.1 = mat; }
+                    }
+                }
+            }
+            swf::Tag::RemoveObject(ro) => {
+                disp.remove(&ro.depth);
+                unnamed_placements.remove(&ro.depth);
+            }
+            _ => {}
+        }
+    }
+
+    // Convert effect_frames → per-frame symbol names
+    let mut frames: Vec<Option<String>> = Vec::new();
+    let mut image_guids: BTreeMap<String, String> = BTreeMap::new();
+
+    for frame_entries in &effect_frames {
+        // Each entry now has the resolved symbol_name already (from Pass 1 & 2 fixes).
+        // Take the first non-empty symbol name in the frame.
+        let sym_name = frame_entries.iter().find_map(|(_shape_id, sym_name, _mat)| {
+            if sym_name.is_empty() { None } else { Some(sym_name.clone()) }
+        });
+        if let Some(ref sym) = sym_name {
+            let meta_guid = crate::uuid_gen::det_uuid(&format!("{}::meta_{}", char_id, sym));
+            image_guids.insert(sym.clone(), meta_guid);
+        }
+        frames.push(sym_name);
+    }
+
+    Ok(ProjectileFrameImages { frames, image_guids })
+}
+
+fn po_to_mat(po: &swf::PlaceObject) -> ImageLocalMatrix {
+    po.matrix.map(|m| {
+        let a = m.a.to_f64(); let b = m.b.to_f64();
+        let c = m.c.to_f64(); let d = m.d.to_f64();
+        ImageLocalMatrix {
+            tx: m.tx.get() as f64 / 20.0,
+            ty: m.ty.get() as f64 / 20.0,
+            sx: (a*a + b*b).sqrt(),
+            sy: (c*c + d*d).sqrt(),
+            rotation: b.atan2(a).to_degrees(),
+        }
+    }).unwrap_or_default()
+}
+
 // ─── Projectile and menu sprite discovery ───────────────────────────────────────
 
 /// A projectile sprite discovered in the SWF.

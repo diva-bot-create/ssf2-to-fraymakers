@@ -12,7 +12,7 @@ use crate::fraytools_project;
 use crate::palette_gen;
 use crate::uuid_gen::det_uuid;
 
-pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult, costumes_json: Option<&Path>, sounds: &[crate::sound_extractor::SoundEntry], projectiles: &[crate::image_extractor::DiscoveredProjectile], head_sprite: Option<&crate::image_extractor::DiscoveredHead>) -> Result<()> {
+pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult, costumes_json: Option<&Path>, sounds: &[crate::sound_extractor::SoundEntry], projectiles: &[crate::image_extractor::DiscoveredProjectile], head_sprite: Option<&crate::image_extractor::DiscoveredHead>, swf_data: &[u8]) -> Result<()> {
     let char_id = char_name.to_lowercase().replace(" ", "");
     let char_dir = output_dir.join(&char_id);
     let scripts_dir = char_dir.join("library/scripts/Character");
@@ -113,28 +113,42 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
 
     // ── projectile.entity files ───────────────────────────────────────────────────
     for proj in projectiles {
-        // Get collision boxes from the inner sprite if available
-        let inner_anim_name = proj.inner_sprite_name.as_ref()
-            .and_then(|n| {
-                // Try to find this sprite's boxes in our parsed data
-                // The inner sprite might be keyed by its fla name
-                sprite_boxes.iter()
-                    .find(|(_, data)| {
-                        // Match by checking if any instance data matches
-                        !data.frames.is_empty()
-                    })
-                    .map(|(k, _)| k.clone())
-            });
+        // Extract image frames from the inner sprite using effect-sprite flattening
+        let (image_frames, image_guids) = if let Some(inner_id) = proj.inner_sprite_id {
+            match crate::image_extractor::extract_projectile_frame_images(
+                swf_data, &char_id, inner_id, img_result
+            ) {
+                Ok(pfi) => {
+                    log::debug!("Projectile '{}': {} image frames", proj.name, pfi.frames.len());
+                    (pfi.frames, pfi.image_guids)
+                }
+                Err(e) => {
+                    log::warn!("Failed to extract images for projectile '{}': {}", proj.name, e);
+                    (vec![], std::collections::BTreeMap::new())
+                }
+            }
+        } else {
+            (vec![], std::collections::BTreeMap::new())
+        };
 
-        // For now, create a basic projectile entity with placeholder
-        // Image frames would need to come from the inner sprite's image placements
+        // Extract collision boxes from the inner sprite
+        let boxes = if let Some(inner_id) = proj.inner_sprite_id {
+            match crate::sprite_parser::extract_boxes_for_sprite_id(swf_data, inner_id) {
+                Ok(b) => b,
+                Err(e) => {
+                    log::warn!("Failed to extract boxes for projectile '{}': {}", proj.name, e);
+                    None
+                }
+            }
+        } else { None };
+
         let proj_info = entity_gen::ProjectileInfo {
             name: proj.name.clone(),
             inner_sprite_name: proj.inner_sprite_name.clone(),
             inner_frame_count: proj.inner_frame_count,
-            boxes: None, // TODO: extract boxes from inner sprite
-            image_frames: vec![], // TODO: extract image frames from inner sprite
-            image_guids: std::collections::BTreeMap::new(),
+            boxes,
+            image_frames,
+            image_guids,
         };
 
         let filename = format!("{}.entity", sanitize_entity_name(&proj.name));

@@ -11,7 +11,9 @@
     {
       "$id": "fbdb09f2-9406-5a0e-9443-f4782fd360a9",
       "layers": [
-        "808d6d9a-3565-58d5-897b-ce73fbfd7a63"
+        "808d6d9a-3565-58d5-897b-ce73fbfd7a63",
+        "659b2e9c-5962-5f0e-8e73-581ac71fb65d",
+        "b2ba7e95-a0b2-510f-b977-512c2038e0c4"
       ],
       "name": "projectileIdle",
       "pluginMetadata": {}
@@ -121,6 +123,42 @@
       "type": "IMAGE"
     },
     {
+      "$id": "90aa07b1-4a5d-5800-92ec-b0794dd2adef",
+      "length": 9,
+      "pluginMetadata": {},
+      "symbol": "0d8b5d5a-d36d-56fe-8a6d-9a0357118471",
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "COLLISION_BOX"
+    },
+    {
+      "$id": "63680bd2-12e8-5b93-b41b-7d81383ea012",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "COLLISION_BOX"
+    },
+    {
+      "$id": "2966c7c9-ac96-5e44-a466-9e6a95c88ac8",
+      "length": 9,
+      "pluginMetadata": {},
+      "symbol": "5e3a2547-af52-557f-a423-5de6468206a6",
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "COLLISION_BOX"
+    },
+    {
+      "$id": "d63d6331-6bd6-5e94-a9cf-2cc7adb8308a",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "COLLISION_BOX"
+    },
+    {
       "$id": "0fa0af15-0b4f-5f50-9c43-a7d9b1182163",
       "length": 1,
       "pluginMetadata": {},
@@ -170,6 +208,44 @@
       "type": "IMAGE"
     },
     {
+      "$id": "659b2e9c-5962-5f0e-8e73-581ac71fb65d",
+      "defaultAlpha": 0.5,
+      "defaultColor": "0xff0000",
+      "hidden": false,
+      "keyframes": [
+        "90aa07b1-4a5d-5800-92ec-b0794dd2adef",
+        "63680bd2-12e8-5b93-b41b-7d81383ea012"
+      ],
+      "locked": false,
+      "name": "hitbox0",
+      "pluginMetadata": {
+        "com.fraymakers.FraymakersMetadata": {
+          "collisionBoxType": "HIT_BOX",
+          "index": 0
+        }
+      },
+      "type": "COLLISION_BOX"
+    },
+    {
+      "$id": "b2ba7e95-a0b2-510f-b977-512c2038e0c4",
+      "defaultAlpha": 0.5,
+      "defaultColor": "0xfcba03",
+      "hidden": false,
+      "keyframes": [
+        "2966c7c9-ac96-5e44-a466-9e6a95c88ac8",
+        "d63d6331-6bd6-5e94-a9cf-2cc7adb8308a"
+      ],
+      "locked": false,
+      "name": "hurtbox0",
+      "pluginMetadata": {
+        "com.fraymakers.FraymakersMetadata": {
+          "collisionBoxType": "HURT_BOX",
+          "index": 0
+        }
+      },
+      "type": "COLLISION_BOX"
+    },
+    {
       "$id": "760077fc-344e-5ace-a6e1-82bb071b775c",
       "hidden": false,
       "keyframes": [
@@ -216,7 +292,36 @@
   "plugins": [
     "com.fraymakers.FraymakersMetadata"
   ],
-  "symbols": [],
+  "symbols": [
+    {
+      "$id": "0d8b5d5a-d36d-56fe-8a6d-9a0357118471",
+      "alpha": 0.5,
+      "color": "0xff0000",
+      "pivotX": 8.83,
+      "pivotY": 8.82,
+      "pluginMetadata": {},
+      "rotation": -0.0,
+      "scaleX": 17.66,
+      "scaleY": 17.63,
+      "type": "COLLISION_BOX",
+      "x": -0.73,
+      "y": -17.32
+    },
+    {
+      "$id": "5e3a2547-af52-557f-a423-5de6468206a6",
+      "alpha": 0.5,
+      "color": "0xfcba03",
+      "pivotX": 8.83,
+      "pivotY": 8.82,
+      "pluginMetadata": {},
+      "rotation": -0.0,
+      "scaleX": 17.66,
+      "scaleY": 17.63,
+      "type": "COLLISION_BOX",
+      "x": -0.73,
+      "y": -17.32
+    }
+  ],
   "tags": [],
   "terrains": [],
   "tilesets": [],

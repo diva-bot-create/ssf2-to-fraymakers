@@ -785,7 +785,10 @@
       "type": "COLLISION_BOX"
     }
   ],
-  "paletteMap": null,
+  "paletteMap": {
+    "paletteCollection": "c168580a-88ca-501b-ba25-a2ed17e31ae7",
+    "paletteMap": "f2bf1126-98d0-558b-bfdf-6b18f12405a9"
+  },
   "pluginMetadata": {
     "com.fraymakers.FraymakersMetadata": {
       "spritesheetGroup": "menu",
