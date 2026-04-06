@@ -195,37 +195,105 @@ pub fn generate_entity(
         }
 
         // ── 2. FRAME_SCRIPT layer ─────────────────────────────────────────────
+        // Each script gets a 1-frame keyframe. Frames without code get blank
+        // keyframes (symbol: null). This matches FrayTools' expectation that
+        // script keyframes fire once on their start frame only.
         {
             let layer_id = uuid(char_id, &format!("layer_script_{}", anim_name));
-            let kf_id = uuid(char_id, &format!("kf_script_{}", anim_name));
-            let script_code = {
-                let ssf2_name = data.ssf2_to_fm_anim.iter()
-                    .find(|(_, fm)| fm.as_str() == anim_name.as_str())
-                    .map(|(ssf2, _)| ssf2.clone());
-                let mut code = String::new();
-                if let Some(ssf2) = ssf2_name {
-                    let pattern = format!("xframe = \"{}\"", ssf2);
-                    for script in &data.scripts {
-                        if !script.is_ext_method && script.code.contains(&pattern) {
-                            code = script.code.clone();
-                            break;
+
+            // Find the SSF2 name for this animation
+            let ssf2_name = data.ssf2_to_fm_anim.iter()
+                .find(|(_, fm)| fm.as_str() == anim_name.as_str())
+                .map(|(ssf2, _)| ssf2.clone());
+
+            // Get the sub-animation frame offset (for split anims like jab1/jab2)
+            let frame_offset = sprite_boxes.get(anim_name)
+                .map(|sb| sb.sprite_frame_offset as u32)
+                .unwrap_or(0);
+
+            // Collect per-frame scripts: parse "{ssf2_name}__frame{N}" names,
+            // subtract frame_offset to get local frame index.
+            let mut frame_code: BTreeMap<u32, String> = BTreeMap::new();
+            if let Some(ref ssf2) = ssf2_name {
+                let prefix = format!("{}__frame", ssf2);
+                for script in &data.scripts {
+                    if script.is_ext_method { continue; }
+                    if let Some(rest) = script.name.strip_prefix(&prefix) {
+                        if let Ok(global_frame) = rest.parse::<u32>() {
+                            if global_frame >= frame_offset {
+                                let local_frame = global_frame - frame_offset;
+                                if local_frame < frame_count {
+                                    frame_code.insert(local_frame, script.code.clone());
+                                }
+                            }
                         }
                     }
                 }
-                code
-            };
-            keyframes.push(json!({
-                "$id": kf_id,
-                "type": "FRAME_SCRIPT",
-                "length": frame_count,
-                "code": script_code,
-                "pluginMetadata": {}
-            }));
+            }
+
+            // Build keyframe sequence: for each frame with code, emit a 1-frame
+            // script keyframe. Fill gaps with blank keyframes. After the last
+            // script frame, fill remaining frames with a blank keyframe.
+            let mut script_kf_ids: Vec<String> = Vec::new();
+            let mut cursor: u32 = 0;
+
+            let script_frames: Vec<u32> = frame_code.keys().copied().collect();
+            for &sf in &script_frames {
+                // Gap before this script frame
+                if sf > cursor {
+                    let gap_kf_id = uuid(char_id, &format!("kf_script_gap_{}_{}", anim_name, cursor));
+                    keyframes.push(json!({
+                        "$id": gap_kf_id,
+                        "type": "FRAME_SCRIPT",
+                        "length": sf - cursor,
+                        "code": "",
+                        "pluginMetadata": {}
+                    }));
+                    script_kf_ids.push(gap_kf_id);
+                }
+                // Script keyframe (1 frame)
+                let kf_id = uuid(char_id, &format!("kf_script_{}_f{}", anim_name, sf));
+                keyframes.push(json!({
+                    "$id": kf_id,
+                    "type": "FRAME_SCRIPT",
+                    "length": 1,
+                    "code": frame_code[&sf],
+                    "pluginMetadata": {}
+                }));
+                script_kf_ids.push(kf_id);
+                cursor = sf + 1;
+            }
+            // Trailing blank to fill remaining frames
+            if cursor < frame_count {
+                let tail_kf_id = uuid(char_id, &format!("kf_script_tail_{}", anim_name));
+                keyframes.push(json!({
+                    "$id": tail_kf_id,
+                    "type": "FRAME_SCRIPT",
+                    "length": frame_count - cursor,
+                    "code": "",
+                    "pluginMetadata": {}
+                }));
+                script_kf_ids.push(tail_kf_id);
+            }
+
+            // If no scripts at all, still need one blank keyframe spanning the animation
+            if script_kf_ids.is_empty() {
+                let kf_id = uuid(char_id, &format!("kf_script_empty_{}", anim_name));
+                keyframes.push(json!({
+                    "$id": kf_id,
+                    "type": "FRAME_SCRIPT",
+                    "length": frame_count,
+                    "code": "",
+                    "pluginMetadata": {}
+                }));
+                script_kf_ids.push(kf_id);
+            }
+
             layers.push(json!({
                 "$id": layer_id,
                 "name": "Scripts",
                 "type": "FRAME_SCRIPT",
-                "keyframes": [kf_id],
+                "keyframes": script_kf_ids,
                 "hidden": false,
                 "locked": false,
                 "language": "",
