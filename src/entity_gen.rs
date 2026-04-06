@@ -517,10 +517,11 @@ pub fn generate_entity(
                         // Key for run-length: same symbol AND same world transform
                         let sym_name = entry.map(|e| e.symbol_name.as_str());
                         let shape_id = entry.map(|e| e.shape_id);
-                        let world_tx = entry.map(|e| round2(e.world_tx)).unwrap_or(0.0);
-                        let world_ty = entry.map(|e| round2(e.world_ty)).unwrap_or(0.0);
-                        let world_sx = entry.map(|e| round2(e.world_sx)).unwrap_or(1.0);
-                        let world_sy = entry.map(|e| round2(e.world_sy)).unwrap_or(1.0);
+                        let world_tx  = entry.map(|e| round2(e.world_tx)).unwrap_or(0.0);
+                        let world_ty  = entry.map(|e| round2(e.world_ty)).unwrap_or(0.0);
+                        let world_sx  = entry.map(|e| round2(e.world_sx)).unwrap_or(1.0);
+                        let world_sy  = entry.map(|e| round2(e.world_sy)).unwrap_or(1.0);
+                        let world_rot = entry.map(|e| round2(e.world_rotation)).unwrap_or(0.0);
 
                         // Run-length encode consecutive frames with identical symbol + world transform
                         let mut run = 1u32;
@@ -528,10 +529,11 @@ pub fn generate_entity(
                             let next = anim_imgs.frames.get(&((f + run) as u16))
                                 .and_then(|v| v.get(slot));
                             let matches = next.map(|e| e.symbol_name.as_str()) == sym_name
-                                && next.map(|e| round2(e.world_tx)) == Some(world_tx).filter(|_| sym_name.is_some())
-                                && next.map(|e| round2(e.world_ty)) == Some(world_ty).filter(|_| sym_name.is_some())
-                                && next.map(|e| round2(e.world_sx)) == Some(world_sx).filter(|_| sym_name.is_some())
-                                && next.map(|e| round2(e.world_sy)) == Some(world_sy).filter(|_| sym_name.is_some());
+                                && next.map(|e| round2(e.world_tx))       == Some(world_tx).filter(|_| sym_name.is_some())
+                                && next.map(|e| round2(e.world_ty))       == Some(world_ty).filter(|_| sym_name.is_some())
+                                && next.map(|e| round2(e.world_sx))       == Some(world_sx).filter(|_| sym_name.is_some())
+                                && next.map(|e| round2(e.world_sy))       == Some(world_sy).filter(|_| sym_name.is_some())
+                                && next.map(|e| round2(e.world_rotation)) == Some(world_rot).filter(|_| sym_name.is_some());
                             if matches { run += 1; } else { break; }
                         }
 
@@ -555,9 +557,9 @@ pub fn generate_entity(
                                 .cloned().unwrap_or_default();
 
                             // FrayTools uses y-down (negative = above foot), same as SSF2.
-                            // x/y = top-left corner of the image. Direct pass-through.
-                            // Pivot = offset from top-left to the transform origin
-                            //         (image center for rotation/scale).
+                            // x/y = top-left corner of the image (unrotated).
+                            // Pivot = image center (rotation origin).
+                            // Rotation is in degrees from the SWF matrix decomposition.
                             let img_w = img.width as f64;
                             let img_h = img.height as f64;
                             let fm_sx = round2(world_sx.abs());
@@ -574,7 +576,7 @@ pub fn generate_entity(
                                 "pivotX": pivot_x,
                                 "pivotY": pivot_y,
                                 "pluginMetadata": {},
-                                "rotation": 0,
+                                "rotation": round2(world_rot),
                                 "scaleX": fm_sx,
                                 "scaleY": fm_sy,
                                 "type": "IMAGE",

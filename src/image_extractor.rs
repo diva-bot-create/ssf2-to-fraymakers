@@ -26,16 +26,20 @@ pub type ShapeToBitmapMap = BTreeMap<u16, u16>;
 
 /// Local placement matrix for an image within its sub-sprite (in SSF2 local pixel space).
 /// tx/ty are in pixels (already divided by 20 from twips).
+/// sx/sy are scale magnitudes (always positive).
+/// rotation is in degrees, derived from the matrix b/c shear components.
 #[derive(Debug, Clone, Copy)]
 pub struct ImageLocalMatrix {
     pub tx: f64,
     pub ty: f64,
     pub sx: f64,
     pub sy: f64,
+    /// Rotation in degrees (from matrix a/b components). 0 = no rotation.
+    pub rotation: f64,
 }
 
 impl Default for ImageLocalMatrix {
-    fn default() -> Self { Self { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0 } }
+    fn default() -> Self { Self { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0, rotation: 0.0 } }
 }
 
 /// A single image layer placed at a specific depth in one frame.
@@ -52,6 +56,8 @@ pub struct FrameImageEntry {
     pub world_ty: f64,
     pub world_sx: f64,
     pub world_sy: f64,
+    /// World-space rotation in degrees (local rotation + root MC rotation, if any).
+    pub world_rotation: f64,
 }
 
 /// Per-animation per-frame image references.
@@ -267,11 +273,15 @@ fn build_anim_frame_images(
                         if !display_list.is_empty() {
                             let entries: Vec<FrameImageEntry> = display_list.iter()
                                 .map(|(&depth, (id, sym, mat))| {
-                                    // Apply root MC transform to get world-space coords
+                                    // Apply root MC transform to get world-space coords.
+                                    // Root MC scale (sx/sy) affects position but not rotation
+                                    // (root is never rotated in SSF2, only scaled for character size).
                                     let world_tx = root_xf.tx + mat.tx * root_xf.sx;
                                     let world_ty = root_xf.ty + mat.ty * root_xf.sy;
-                                    let world_sx = mat.sx * root_xf.sx;
-                                    let world_sy = mat.sy * root_xf.sy;
+                                    let world_sx = mat.sx * root_xf.sx.abs();
+                                    let world_sy = mat.sy * root_xf.sy.abs();
+                                    // Rotation is purely local (root doesn't rotate)
+                                    let world_rotation = mat.rotation;
                                     FrameImageEntry {
                                         depth,
                                         shape_id: *id,
@@ -281,6 +291,7 @@ fn build_anim_frame_images(
                                         world_ty,
                                         world_sx,
                                         world_sy,
+                                        world_rotation,
                                     }
                                 })
                                 .collect();
@@ -299,11 +310,22 @@ fn build_anim_frame_images(
                         }
 
                         let depth = po.depth;
-                        let local_mat = po.matrix.map(|m| ImageLocalMatrix {
-                            tx: m.tx.get() as f64 / 20.0,
-                            ty: m.ty.get() as f64 / 20.0,
-                            sx: m.a.to_f64(),
-                            sy: m.d.to_f64(),
+                        let local_mat = po.matrix.map(|m| {
+                            let a = m.a.to_f64();
+                            let b = m.b.to_f64();
+                            let c = m.c.to_f64();
+                            let d = m.d.to_f64();
+                            // Decompose: scale = sqrt(a²+b²), rotation = atan2(b,a)
+                            let sx = (a*a + b*b).sqrt();
+                            let sy = (c*c + d*d).sqrt();
+                            let rotation = b.atan2(a).to_degrees();
+                            ImageLocalMatrix {
+                                tx: m.tx.get() as f64 / 20.0,
+                                ty: m.ty.get() as f64 / 20.0,
+                                sx,
+                                sy,
+                                rotation,
+                            }
                         }).unwrap_or_default();
 
                         match &po.action {
