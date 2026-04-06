@@ -29,7 +29,8 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
     fs::write(char_dir.join(format!("{}.fraytools", char_name)), fraytools_project::generate_fraytools_project(char_name))?;
 
     // manifest.json (based on character-template)
-    fs::write(char_dir.join("library/manifest.json"), generate_manifest(&char_id, char_name))?;
+    let proj_names: Vec<String> = projectiles.iter().map(|p| p.name.clone()).collect();
+    fs::write(char_dir.join("library/manifest.json"), generate_manifest(&char_id, char_name, &proj_names))?;
 
     // Character.entity
     let entities_dir = char_dir.join("library/entities");
@@ -137,7 +138,17 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
         };
 
         let filename = format!("{}.entity", sanitize_entity_name(&proj.name));
-        fs::write(entities_dir.join(&filename), entity_gen::generate_projectile_entity(&char_id, &proj_info))?;
+        let mut proj_json = entity_gen::generate_projectile_entity(&char_id, &proj_info);
+        // Fill in paletteMap if available
+        if let (Some(ref cg), Some(ref pm)) = (&palette_collection_guid, &palette_base_map_id) {
+            let mut proj_val: serde_json::Value = serde_json::from_str(&proj_json).unwrap_or(serde_json::json!({}));
+            proj_val["paletteMap"] = serde_json::json!({
+                "paletteCollection": cg,
+                "paletteMap": pm
+            });
+            proj_json = serde_json::to_string_pretty(&proj_val).unwrap_or(proj_json);
+        }
+        fs::write(entities_dir.join(&filename), proj_json)?;
         log::info!("Generated projectile entity: {} ({} frames)", filename, proj.inner_frame_count);
     }
 
@@ -681,13 +692,11 @@ function jab3_end() {
 
 // ─── manifest.json ───────────────────────────────────────────────────────────
 
-fn generate_manifest(char_id: &str, display_name: &str) -> String {
+fn generate_manifest(char_id: &str, display_name: &str, projectile_names: &[String]) -> String {
     let ai_id   = format!("{}Ai", char_id);
     let ai_script_id = format!("{}AiScript", char_id);
-    serde_json::json!({
-        "resourceId": char_id,
-        "content": [
-          {
+
+    let mut content = vec![serde_json::json!({
             "id": char_id,
             "name": display_name,
             "description": format!("{} — converted from Super Smash Flash 2", display_name),
@@ -734,13 +743,31 @@ fn generate_manifest(char_id: &str, display_name: &str) -> String {
                     }
                 }
             }
-          },
-          {
-            "id":       ai_id,
-            "type":     "characterAi",
-            "scriptId": ai_script_id
-          }
-        ]
+    })];  // close vec![json!({...})]
+
+    content.push(serde_json::json!({
+        "id":       ai_id,
+        "type":     "characterAi",
+        "scriptId": ai_script_id
+    }));
+
+    // Add projectile entries
+    for proj_name in projectile_names {
+        let entity_id = proj_name.replace('_', "");
+        content.push(serde_json::json!({
+            "id":               format!("{}Projectile", entity_id),
+            "type":             "projectile",
+            "objectStatsId":    format!("{}ProjectileStats", entity_id),
+            "animationStatsId": format!("{}ProjectileAnimationStats", entity_id),
+            "hitboxStatsId":    format!("{}ProjectileHitboxStats", entity_id),
+            "scriptId":         format!("{}ProjectileScript", entity_id),
+            "costumesId":       format!("{}Costumes", char_id)
+        }));
+    }
+
+    serde_json::json!({
+        "resourceId": char_id,
+        "content": content
     }).to_string()
 }
 
