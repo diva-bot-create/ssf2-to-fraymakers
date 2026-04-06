@@ -61,6 +61,65 @@ fn box_type_to_fm(bt: BoxType) -> &'static str {
     }
 }
 
+/// Convert an SSF2 instance name to a Fraymakers layer name.
+/// SSF2 naming → FM naming:
+///   attackBox  → hitbox0   (SSF2 "attack" = FM "hit")
+///   attackBox2 → hitbox1
+///   attackBox3 → hitbox2
+///   hitBox     → hurtbox0  (SSF2 "hit" = FM "hurt")
+///   hitBox2    → hurtbox1
+///   hurtBox    → hurtbox0
+///   grabBox    → grabbox0
+///   ledgeBox   → ledgegrabbox0
+///   etc.
+fn ssf2_box_name_to_fm(inst_name: &str) -> String {
+    let lower = inst_name.to_lowercase();
+
+    // Extract numeric suffix: "attackBox2" → suffix=2, "hitBox" → suffix=0 (none = 0)
+    // SSF2 uses 1-based suffixes (attackBox=first, attackBox2=second)
+    // FM uses 0-based (hitbox0, hitbox1)
+    let (prefix_lower, raw_num) = if let Some(pos) = lower.find(|c: char| c.is_ascii_digit()) {
+        let num: usize = lower[pos..].parse().unwrap_or(1);
+        (&lower[..pos], num)
+    } else {
+        (lower.as_str(), 1usize)
+    };
+    // Convert to 0-based: raw_num 1 → index 0, raw_num 2 → index 1
+    let index = raw_num.saturating_sub(1);
+
+    match prefix_lower {
+        p if p.starts_with("attackbox") || p.starts_with("attack_box") =>
+            format!("hitbox{}", index),
+        p if p.starts_with("hitbox") || p.starts_with("hurtbox") =>
+            format!("hurtbox{}", index),
+        p if p.starts_with("grabbox") || p.starts_with("grab") =>
+            format!("grabbox{}", index),
+        p if p.starts_with("itembox") | p.starts_with("item_box") =>
+            format!("itembox{}", index),
+        p if p.starts_with("shieldbox") =>
+            format!("shieldbox{}", index),
+        p if p.starts_with("reflectbox") =>
+            format!("reflectbox{}", index),
+        p if p.starts_with("absorbbox") =>
+            format!("absorbbox{}", index),
+        p if p.starts_with("ledgebox") || p.starts_with("ledgegrab") =>
+            format!("ledgegrabbox{}", index),
+        _ => format!("{}{}", prefix_lower.trim_end_matches('_'), index),
+    }
+}
+
+/// Extract the numeric index from a Fraymakers box layer name.
+/// "hitbox0" → 0, "hurtbox1" → 1, "grabbox0" → 0
+fn fm_box_index(fm_name: &str) -> usize {
+    fm_name.chars().rev()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .chars().rev()
+        .collect::<String>()
+        .parse()
+        .unwrap_or(0)
+}
+
 fn box_color(bt: BoxType) -> &'static str {
     match bt {
         BoxType::Hitbox     => "0xff0000",
@@ -250,10 +309,13 @@ pub fn generate_entity(
                 }
             }
 
-            for (box_idx, inst_name) in instances_in_anim.iter().enumerate() {
+            for inst_name in instances_in_anim.iter() {
                 let box_type = BoxType::from_instance_name(inst_name).unwrap_or(BoxType::Hurtbox);
                 let fm_box_type = box_type_to_fm(box_type);
                 let color = box_color(box_type);
+                // Convert SSF2 instance name to FM layer name (hitBox→hurtbox0, attackBox→hitbox0)
+                let fm_layer_name = ssf2_box_name_to_fm(inst_name);
+                let box_idx = fm_box_index(&fm_layer_name);
                 let layer_id = uuid(char_id, &format!("layer_box_{}_{}", anim_name, inst_name));
 
                 let mut box_kf_ids: Vec<String> = Vec::new();
@@ -350,7 +412,7 @@ pub fn generate_entity(
 
                 layers.push(json!({
                     "$id": layer_id,
-                    "name": inst_name,
+                    "name": fm_layer_name,
                     "type": "COLLISION_BOX",
                     "keyframes": box_kf_ids,
                     "hidden": false,
