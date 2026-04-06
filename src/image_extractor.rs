@@ -331,8 +331,11 @@ fn build_anim_frame_images(
                         match &po.action {
                             swf::PlaceObjectAction::Place(char_id)
                             | swf::PlaceObjectAction::Replace(char_id) => {
-                                let sym_name = symbols.get(char_id).cloned()
-                                    .unwrap_or_else(|| format!("id_{}", char_id));
+                                // Skip unnamed sprites (no SymbolClass entry) — they have no PNG.
+                                let sym_name = match symbols.get(char_id) {
+                                    Some(n) => n.clone(),
+                                    None => continue,
+                                };
                                 let lower = sym_name.to_lowercase();
                                 if lower.contains("collisonbox") || lower.contains("collisionbox")
                                     || lower.contains("_fla.")
