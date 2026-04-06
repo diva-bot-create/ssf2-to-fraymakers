@@ -24,12 +24,24 @@ pub struct ExtractedImage {
 /// Maps shape/character IDs to bitmap IDs (DefineShape → bitmap fill ID)
 pub type ShapeToBitmapMap = BTreeMap<u16, u16>;
 
-/// Per-animation per-frame image references
+/// A single image layer placed at a specific depth in one frame.
+#[derive(Debug, Clone)]
+pub struct FrameImageEntry {
+    pub depth: u16,
+    pub shape_id: u16,
+    pub symbol_name: String,
+}
+
+/// Per-animation per-frame image references.
+/// Each frame may have multiple entries (one per depth/layer).
+/// Entries within a frame are ordered by depth (ascending = back-to-front).
 #[derive(Debug, Clone)]
 pub struct AnimFrameImages {
-    /// frame_index → (shape_id, symbol_name)
-    pub frames: BTreeMap<u16, (u16, String)>,
+    /// frame_index → ordered list of (depth, shape_id, symbol_name)
+    pub frames: BTreeMap<u16, Vec<FrameImageEntry>>,
     pub total_frames: u16,
+    /// Number of distinct depth slots used across all frames (= number of IMAGE layers to create)
+    pub max_depth_slots: usize,
 }
 
 /// Result of image extraction
@@ -213,21 +225,27 @@ fn build_anim_frame_images(
             log::debug!("image_extractor: sprite '{}' → ssf2='{}' fm='{}'", sym, ssf2_name, fm_name);
 
             let mut current_frame: u16 = 0;
-            let mut frames: BTreeMap<u16, (u16, String)> = BTreeMap::new();
-            let mut current_image_id: Option<u16> = None;
-            let mut current_image_sym: Option<String> = None;
+            // depth → (shape_id, symbol_name) — the active display list
+            let mut display_list: BTreeMap<u16, (u16, String)> = BTreeMap::new();
+            let mut frames: BTreeMap<u16, Vec<FrameImageEntry>> = BTreeMap::new();
 
             for stag in &sprite.tags {
                 match stag {
                     swf::Tag::ShowFrame => {
-                        // Record current image for this frame
-                        if let (Some(id), Some(ref sym_name)) = (current_image_id, &current_image_sym) {
-                            frames.insert(current_frame, (id, sym_name.clone()));
+                        // Snapshot the display list as this frame's entries
+                        if !display_list.is_empty() {
+                            let entries: Vec<FrameImageEntry> = display_list.iter()
+                                .map(|(&depth, (id, sym))| FrameImageEntry {
+                                    depth,
+                                    shape_id: *id,
+                                    symbol_name: sym.clone(),
+                                })
+                                .collect();
+                            frames.insert(current_frame, entries);
                         }
                         current_frame += 1;
                     }
                     swf::Tag::PlaceObject(po) => {
-                        // Track the image being placed (non-box shapes)
                         let inst_name = po.name.as_ref()
                             .map(|n| String::from_utf8_lossy(n.as_bytes()).to_string())
                             .unwrap_or_default();
@@ -237,35 +255,37 @@ fn build_anim_frame_images(
                             continue;
                         }
 
-                        // This is an image being placed (bitmap directly or shape with bitmap fill)
-                        let placed_id = match &po.action {
-                            swf::PlaceObjectAction::Place(id) => Some(*id),
-                            swf::PlaceObjectAction::Replace(id) => Some(*id),
-                            _ => None,
-                        };
-                        if let Some(char_id) = placed_id {
-                            let sym_name = symbols.get(&char_id).cloned()
-                                .unwrap_or_else(|| format!("id_{}", char_id));
-                            // Skip collision-related shapes (CollisonBox, etc.)
-                            let lower = sym_name.to_lowercase();
-                            if lower.contains("collisonbox") || lower.contains("collisionbox")
-                                || lower.contains("_fla.") // sub-sprites, not images
-                            {
-                                continue;
+                        let depth = po.depth;
+                        match &po.action {
+                            swf::PlaceObjectAction::Place(char_id)
+                            | swf::PlaceObjectAction::Replace(char_id) => {
+                                let sym_name = symbols.get(char_id).cloned()
+                                    .unwrap_or_else(|| format!("id_{}", char_id));
+                                let lower = sym_name.to_lowercase();
+                                if lower.contains("collisonbox") || lower.contains("collisionbox")
+                                    || lower.contains("_fla.")
+                                {
+                                    continue;
+                                }
+                                display_list.insert(depth, (*char_id, sym_name));
                             }
-                            current_image_id = Some(char_id);
-                            current_image_sym = Some(sym_name);
+                            swf::PlaceObjectAction::Modify => {
+                                // Modify without char id — leave display list entry as-is
+                            }
                         }
+                    }
+                    swf::Tag::RemoveObject(ro) => {
+                        display_list.remove(&ro.depth);
                     }
                     _ => {}
                 }
             }
 
-            log::debug!("image_extractor: fm='{}' raw_frames={} from {} sprite frames, img_id={:?}", fm_name, frames.len(), sprite.num_frames, current_image_id);
+            log::debug!("image_extractor: fm='{}' raw_frames={} from {} sprite frames", fm_name, frames.len(), sprite.num_frames);
             if !frames.is_empty() {
-                // Fill in frames that didn't get an explicit PlaceObject (inherit from previous)
+                // Fill in frames that didn't get an explicit ShowFrame snapshot (inherit previous)
                 let total = sprite.num_frames;
-                let mut last_entry: Option<(u16, String)> = None;
+                let mut last_entry: Option<Vec<FrameImageEntry>> = None;
                 for f in 0..total {
                     if let Some(entry) = frames.get(&f) {
                         last_entry = Some(entry.clone());
@@ -273,6 +293,8 @@ fn build_anim_frame_images(
                         frames.insert(f, entry.clone());
                     }
                 }
+                // Compute max depth slots across all frames
+                let max_depth_slots = frames.values().map(|v| v.len()).max().unwrap_or(1);
 
                 // Check if this animation should be split into sub-animations
                 // (same split table as sprite_parser)
@@ -283,19 +305,22 @@ fn build_anim_frame_images(
                     result.insert(fm_name, AnimFrameImages {
                         frames,
                         total_frames: total,
+                        max_depth_slots,
                     });
                 } else {
                     for (sub_fm_name, start_frame, end_frame) in sub_splits {
                         let slice_len = end_frame.saturating_sub(start_frame);
-                        let sliced: BTreeMap<u16, (u16, String)> = frames.iter()
+                        let sliced: BTreeMap<u16, Vec<FrameImageEntry>> = frames.iter()
                             .filter(|(&f, _)| f >= start_frame && f < end_frame)
                             .map(|(&f, v)| (f - start_frame, v.clone()))
                             .collect();
-                        log::debug!("image_extractor: sub-anim '{}': frames {}..{} ({} img frames)",
-                            sub_fm_name, start_frame, end_frame, sliced.len());
+                        let sub_max = sliced.values().map(|v| v.len()).max().unwrap_or(1);
+                        log::debug!("image_extractor: sub-anim '{}': frames {}..{} ({} img frames, {} depth slots)",
+                            sub_fm_name, start_frame, end_frame, sliced.len(), sub_max);
                         result.insert(sub_fm_name, AnimFrameImages {
                             frames: sliced,
                             total_frames: slice_len,
+                            max_depth_slots: sub_max,
                         });
                     }
                 }
@@ -342,7 +367,7 @@ fn apply_image_fallbacks(result: &mut BTreeMap<String, AnimFrameImages>) {
         // Override if missing entirely OR if present but has no actual image frames
         let needs_fallback = match result.get(*missing) {
             None => true,
-            Some(existing) => existing.frames.is_empty() || existing.frames.values().all(|(_, sym)| sym.starts_with("id_")),
+            Some(existing) => existing.frames.is_empty() || existing.frames.values().all(|entries| entries.iter().all(|e| e.symbol_name.starts_with("id_"))),
         };
         if !needs_fallback { continue; }
         if let Some(donor_data) = result.get(*donor) {

@@ -383,76 +383,85 @@ pub fn generate_entity(
             }
         }
 
-        // ── 5. IMAGE layer ────────────────────────────────────────────────────
+        // ── 5. IMAGE layers (one per depth slot, back-to-front) ────────────────────
         {
-            let img_layer_id = uuid(char_id, &format!("layer_image_{}", anim_name));
-            let mut img_kf_ids: Vec<String> = Vec::new();
+            let num_slots = img_result.anim_images.get(anim_name)
+                .map(|a| a.max_depth_slots.max(1))
+                .unwrap_or(1);
 
-            if let Some(anim_imgs) = img_result.anim_images.get(anim_name) {
-                let total = frame_count;
-                let mut f: u32 = 0;
-                while f < total {
-                    let entry = anim_imgs.frames.get(&(f as u16));
-                    let sym_name = entry.map(|(_, s)| s.as_str());
-                    let shape_id = entry.map(|(id, _)| *id);
+            for slot in 0..num_slots {
+                let img_layer_id = uuid(char_id, &format!("layer_image_{}_{}", anim_name, slot));
+                let mut img_kf_ids: Vec<String> = Vec::new();
 
-                    let mut run = 1u32;
-                    while f + run < total {
-                        let next_entry = anim_imgs.frames.get(&((f + run) as u16));
-                        let next_sym = next_entry.map(|(_, s)| s.as_str());
-                        if next_sym == sym_name { run += 1; } else { break; }
-                    }
+                if let Some(anim_imgs) = img_result.anim_images.get(anim_name) {
+                    let total = frame_count;
+                    let mut f: u32 = 0;
+                    while f < total {
+                        let entry = anim_imgs.frames.get(&(f as u16))
+                            .and_then(|v| v.get(slot));
+                        let sym_name = entry.map(|e| e.symbol_name.as_str());
+                        let shape_id = entry.map(|e| e.shape_id);
 
-                    let kf_id = uuid(char_id, &format!("kf_image_{}_f{}", anim_name, f));
+                        // Run-length encode identical consecutive frames
+                        let mut run = 1u32;
+                        while f + run < total {
+                            let next = anim_imgs.frames.get(&((f + run) as u16))
+                                .and_then(|v| v.get(slot));
+                            if next.map(|e| e.symbol_name.as_str()) == sym_name { run += 1; } else { break; }
+                        }
 
-                    let symbol_ref = shape_id.and_then(|sid| {
-                        let bmp_id = img_result.shape_to_bitmap.get(&sid).copied().unwrap_or(sid);
-                        img_result.images.get(&bmp_id)
-                            .map(|img| uuid(char_id, &format!("sym_{}", img.symbol_name)))
-                    }).or_else(|| {
-                        sym_name.and_then(|sn| {
-                            img_result.images.values()
-                                .find(|img| img.symbol_name == sn)
+                        let kf_id = uuid(char_id, &format!("kf_image_{}_s{}_f{}", anim_name, slot, f));
+
+                        let symbol_ref = shape_id.and_then(|sid| {
+                            let bmp_id = img_result.shape_to_bitmap.get(&sid).copied().unwrap_or(sid);
+                            img_result.images.get(&bmp_id)
                                 .map(|img| uuid(char_id, &format!("sym_{}", img.symbol_name)))
-                        })
-                    });
+                        }).or_else(|| {
+                            sym_name.and_then(|sn| {
+                                img_result.images.values()
+                                    .find(|img| img.symbol_name == sn)
+                                    .map(|img| uuid(char_id, &format!("sym_{}", img.symbol_name)))
+                            })
+                        });
 
+                        keyframes.push(json!({
+                            "$id": kf_id,
+                            "type": "IMAGE",
+                            "length": run,
+                            "symbol": symbol_ref.map(Value::String).unwrap_or(Value::Null),
+                            "tweened": false,
+                            "tweenType": "LINEAR",
+                            "pluginMetadata": {}
+                        }));
+                        img_kf_ids.push(kf_id);
+                        f += run;
+                    }
+                } else if slot == 0 {
+                    // No image data — single null keyframe for slot 0 only
+                    let kf_id = uuid(char_id, &format!("kf_image_{}_s0_f0", anim_name));
                     keyframes.push(json!({
                         "$id": kf_id,
                         "type": "IMAGE",
-                        "length": run,
-                        "symbol": symbol_ref.map(|s| Value::String(s)).unwrap_or(Value::Null),
+                        "length": frame_count,
+                        "symbol": Value::Null,
                         "tweened": false,
                         "tweenType": "LINEAR",
                         "pluginMetadata": {}
                     }));
                     img_kf_ids.push(kf_id);
-                    f += run;
                 }
-            } else {
-                let kf_id = uuid(char_id, &format!("kf_image_{}_f0", anim_name));
-                keyframes.push(json!({
-                    "$id": kf_id,
+
+                layers.push(json!({
+                    "$id": img_layer_id,
+                    "name": format!("Image {}", slot),
                     "type": "IMAGE",
-                    "length": frame_count,
-                    "symbol": Value::Null,
-                    "tweened": false,
-                    "tweenType": "LINEAR",
+                    "keyframes": img_kf_ids,
+                    "hidden": false,
+                    "locked": false,
                     "pluginMetadata": {}
                 }));
-                img_kf_ids.push(kf_id);
+                anim_layer_ids.push(img_layer_id);
             }
-
-            layers.push(json!({
-                "$id": img_layer_id,
-                "name": "Image 0",
-                "type": "IMAGE",
-                "keyframes": img_kf_ids,
-                "hidden": false,
-                "locked": false,
-                "pluginMetadata": {}
-            }));
-            anim_layer_ids.push(img_layer_id);
         }
 
         animations.push(json!({
