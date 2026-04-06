@@ -223,7 +223,11 @@ pub fn generate_entity(
                             if global_frame >= frame_offset {
                                 let local_frame = global_frame - frame_offset;
                                 if local_frame < frame_count {
-                                    frame_code.insert(local_frame, script.code.clone());
+                                    // Strip the outer "function name() {" wrapper and
+                                    // trailing "}", keeping only the function body.
+                                    // The body lines are indented by one tab; de-indent them.
+                                    let body = extract_function_body(&script.code);
+                                    frame_code.insert(local_frame, body);
                                 }
                             }
                         }
@@ -703,4 +707,34 @@ pub fn get_image_meta_guids(
 
 fn round2(v: f64) -> f64 {
     (v * 100.0).round() / 100.0
+}
+
+/// Strip the `function name() {` wrapper from a script and return just the body,
+/// with one level of leading tab removed from each line.
+fn extract_function_body(code: &str) -> String {
+    let mut lines: Vec<&str> = code.lines().collect();
+    // Drop leading blank lines
+    while lines.first().map(|l| l.trim().is_empty()).unwrap_or(false) {
+        lines.remove(0);
+    }
+    // Drop trailing blank lines
+    while lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) {
+        lines.pop();
+    }
+    if lines.is_empty() {
+        return String::new();
+    }
+    // First line should be `function name() {` — drop it
+    if lines.first().map(|l| l.trim_start().starts_with("function ")).unwrap_or(false) {
+        lines.remove(0);
+    }
+    // Last line should be `}` — drop it
+    if lines.last().map(|l| l.trim() == "}").unwrap_or(false) {
+        lines.pop();
+    }
+    // De-indent by one tab
+    let body: Vec<&str> = lines.iter()
+        .map(|l| l.strip_prefix('\t').unwrap_or(l))
+        .collect();
+    body.join("\n")
 }
