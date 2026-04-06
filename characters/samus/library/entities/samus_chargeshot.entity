@@ -1,0 +1,241 @@
+{
+  "animations": [
+    {
+      "$id": "d36859ae-7623-5bde-8387-84579ce26e76",
+      "layers": [
+        "ad889cda-18cf-5ba8-9847-d1b42f39dd91"
+      ],
+      "name": "projectileSpawn",
+      "pluginMetadata": {}
+    },
+    {
+      "$id": "a669a7d9-7d38-572c-a13d-027b8e01148a",
+      "layers": [
+        "a75d175d-9c9b-57b4-9e2d-f153caf27c48"
+      ],
+      "name": "projectileIdle",
+      "pluginMetadata": {}
+    },
+    {
+      "$id": "110ce75a-9d0f-5bb6-b215-aeebce80fcf0",
+      "layers": [
+        "fd776cb3-6880-5507-85d9-7e7d6cca20ae",
+        "dac41cce-8f59-557b-a073-2ebd7329bc22"
+      ],
+      "name": "projectileDestroy",
+      "pluginMetadata": {}
+    }
+  ],
+  "export": true,
+  "guid": "0a19dc76-12a0-5803-aaa3-0e7b5548ddae",
+  "id": "samuschargeshotProjectile",
+  "keyframes": [
+    {
+      "$id": "108ee5c9-edb6-560e-9389-c99dc643a043",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "92cdcbb7-fc8d-5718-9b26-ca7722362765",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "ef519277-130b-536d-9ce7-98ed252d12d4",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "d1de12f5-e3f0-5657-91bb-5d9cf0d1facd",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "f802951d-f0f2-574a-8025-6ee853604601",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "f6f98288-dbf3-5e4b-8033-cf0f0d8c6580",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "13146ceb-08ad-5d62-8676-99f8d163965a",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "f3b2a88e-363f-5c39-99c2-1c6a13548faf",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "f607a528-64fa-54be-b6ec-f8e364758ce3",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "08dcb9ea-a55b-54bf-963f-e6ba2d5e8176",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "e31e5938-75c5-5ae5-a34a-25c22d8274e8",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "c3607d8c-5e6a-521b-a01d-5f8d6356a326",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "ee244dcf-1ae9-5ccf-8de1-660916552740",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "ee183aaf-c7ef-5914-a5c2-e7dce3bfde5b",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "0de6c035-d914-5c82-84fe-a6af59206870",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "FRAME_SCRIPT"
+    }
+  ],
+  "layers": [
+    {
+      "$id": "a75d175d-9c9b-57b4-9e2d-f153caf27c48",
+      "hidden": false,
+      "keyframes": [
+        "108ee5c9-edb6-560e-9389-c99dc643a043",
+        "92cdcbb7-fc8d-5718-9b26-ca7722362765",
+        "ef519277-130b-536d-9ce7-98ed252d12d4",
+        "d1de12f5-e3f0-5657-91bb-5d9cf0d1facd",
+        "f802951d-f0f2-574a-8025-6ee853604601",
+        "f6f98288-dbf3-5e4b-8033-cf0f0d8c6580",
+        "13146ceb-08ad-5d62-8676-99f8d163965a",
+        "f3b2a88e-363f-5c39-99c2-1c6a13548faf",
+        "f607a528-64fa-54be-b6ec-f8e364758ce3",
+        "08dcb9ea-a55b-54bf-963f-e6ba2d5e8176",
+        "e31e5938-75c5-5ae5-a34a-25c22d8274e8",
+        "c3607d8c-5e6a-521b-a01d-5f8d6356a326"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "ad889cda-18cf-5ba8-9847-d1b42f39dd91",
+      "hidden": false,
+      "keyframes": [
+        "ee244dcf-1ae9-5ccf-8de1-660916552740"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "fd776cb3-6880-5507-85d9-7e7d6cca20ae",
+      "hidden": false,
+      "keyframes": [
+        "ee183aaf-c7ef-5914-a5c2-e7dce3bfde5b"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "dac41cce-8f59-557b-a073-2ebd7329bc22",
+      "hidden": false,
+      "keyframes": [
+        "0de6c035-d914-5c82-84fe-a6af59206870"
+      ],
+      "locked": false,
+      "name": "Frame Script Layer",
+      "pluginMetadata": {},
+      "type": "FRAME_SCRIPT"
+    }
+  ],
+  "paletteMap": null,
+  "pluginMetadata": {
+    "com.fraymakers.FraymakersMetadata": {
+      "objectType": "PROJECTILE",
+      "version": "0.1.1"
+    }
+  },
+  "plugins": [
+    "com.fraymakers.FraymakersMetadata"
+  ],
+  "symbols": [],
+  "tags": [],
+  "terrains": [],
+  "tilesets": [],
+  "version": 14
+}

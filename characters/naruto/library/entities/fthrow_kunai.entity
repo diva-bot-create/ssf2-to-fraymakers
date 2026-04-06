@@ -1,0 +1,131 @@
+{
+  "animations": [
+    {
+      "$id": "8c345136-22c0-5a73-9aaa-7faa586be4d5",
+      "layers": [
+        "9fb9d2b1-6862-5023-b36e-f3bf3c9c6950"
+      ],
+      "name": "projectileSpawn",
+      "pluginMetadata": {}
+    },
+    {
+      "$id": "055e260b-1c2a-59ad-b5b0-781415cf94ad",
+      "layers": [
+        "aa6a0d7b-e91b-59ac-a699-7dd7b45d92e0"
+      ],
+      "name": "projectileIdle",
+      "pluginMetadata": {}
+    },
+    {
+      "$id": "99acd18a-f47d-5f12-8916-84b37fc5da58",
+      "layers": [
+        "728a900e-acd7-5c30-bfcf-933d4893d281",
+        "e289c9cc-747b-5d5a-abde-c18322cd3efa"
+      ],
+      "name": "projectileDestroy",
+      "pluginMetadata": {}
+    }
+  ],
+  "export": true,
+  "guid": "8a0bd263-4c50-5b3f-8cce-26e1a8a984b8",
+  "id": "fthrowkunaiProjectile",
+  "keyframes": [
+    {
+      "$id": "e69157c7-7601-57bd-9bc5-a4175ef02c8e",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "466ff97a-ea08-5774-ac32-e75632673495",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "2df3de69-900e-53da-bf5b-dbea5ddfe034",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "1bedd501-5d1e-5fe8-a886-03d9d28ca790",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "FRAME_SCRIPT"
+    }
+  ],
+  "layers": [
+    {
+      "$id": "aa6a0d7b-e91b-59ac-a699-7dd7b45d92e0",
+      "hidden": false,
+      "keyframes": [
+        "e69157c7-7601-57bd-9bc5-a4175ef02c8e"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "9fb9d2b1-6862-5023-b36e-f3bf3c9c6950",
+      "hidden": false,
+      "keyframes": [
+        "466ff97a-ea08-5774-ac32-e75632673495"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "728a900e-acd7-5c30-bfcf-933d4893d281",
+      "hidden": false,
+      "keyframes": [
+        "2df3de69-900e-53da-bf5b-dbea5ddfe034"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "e289c9cc-747b-5d5a-abde-c18322cd3efa",
+      "hidden": false,
+      "keyframes": [
+        "1bedd501-5d1e-5fe8-a886-03d9d28ca790"
+      ],
+      "locked": false,
+      "name": "Frame Script Layer",
+      "pluginMetadata": {},
+      "type": "FRAME_SCRIPT"
+    }
+  ],
+  "paletteMap": null,
+  "pluginMetadata": {
+    "com.fraymakers.FraymakersMetadata": {
+      "objectType": "PROJECTILE",
+      "version": "0.1.1"
+    }
+  },
+  "plugins": [
+    "com.fraymakers.FraymakersMetadata"
+  ],
+  "symbols": [],
+  "tags": [],
+  "terrains": [],
+  "tilesets": [],
+  "version": 14
+}

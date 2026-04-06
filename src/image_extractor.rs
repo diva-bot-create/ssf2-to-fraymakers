@@ -772,3 +772,201 @@ fn write_png(path: &Path, width: u32, height: u32, rgba: &[u8]) -> Result<()> {
 fn sanitize_name(name: &str) -> String {
     name.replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "_")
 }
+
+// ─── Projectile and menu sprite discovery ───────────────────────────────────────
+
+/// A projectile sprite discovered in the SWF.
+#[derive(Debug, Clone)]
+pub struct DiscoveredProjectile {
+    /// Root projectile sprite ID
+    pub sprite_id: u16,
+    /// Root projectile name (e.g. "mario_fireball")
+    pub name: String,
+    /// Inner animation sprite ID (the 'stance' child), if any
+    pub inner_sprite_id: Option<u16>,
+    /// Inner animation sprite name (e.g. "mario_fla.mario_fireball_mc_210")
+    pub inner_sprite_name: Option<String>,
+    /// Frame count of the inner animation sprite
+    pub inner_frame_count: u16,
+}
+
+/// The head/portrait sprite discovered in the SWF.
+#[derive(Debug, Clone)]
+pub struct DiscoveredHead {
+    /// Sprite ID of the head sprite
+    pub sprite_id: u16,
+    /// Name of the head sprite (e.g. "mario_head")
+    pub name: String,
+    /// The image symbol placed inside (e.g. "mario_dm0")
+    pub image_symbol: Option<String>,
+    /// Shape ID that the head sprite places
+    pub image_shape_id: Option<u16>,
+}
+
+/// Scan the SWF for projectile sprites and the head/portrait sprite.
+///
+/// Projectiles are identified by having an `attack_idle` frame label.
+/// Head sprites are identified by the naming pattern `{char}_head`.
+///
+/// Returns (projectiles, head_sprite)
+pub fn discover_projectiles_and_head(
+    swf_data: &[u8],
+    char_name: &str,
+) -> Result<(Vec<DiscoveredProjectile>, Option<DiscoveredHead>)> {
+    use std::io::Cursor;
+    let swf_buf = swf::decompress_swf(Cursor::new(swf_data)).context("decompress SWF")?;
+    let swf = swf::parse_swf(&swf_buf).context("parse SWF")?;
+
+    // Build SymbolClass map: id → name
+    let mut symbols: BTreeMap<u16, String> = BTreeMap::new();
+    for tag in &swf.tags {
+        if let swf::Tag::SymbolClass(links) = tag {
+            for link in links {
+                let name = link.class_name.to_str_lossy(encoding_rs::WINDOWS_1252).to_string();
+                if !name.is_empty() {
+                    symbols.insert(link.id, name);
+                }
+            }
+        }
+    }
+
+    // Scan DefineSprite tags
+    let mut projectiles: Vec<DiscoveredProjectile> = Vec::new();
+    let mut head: Option<DiscoveredHead> = None;
+    let char_lower = char_name.to_lowercase();
+
+    for tag in &swf.tags {
+        if let swf::Tag::DefineSprite(sprite) = tag {
+            let sprite_name = symbols.get(&sprite.id).cloned().unwrap_or_default();
+            if sprite_name.is_empty() { continue; }
+
+            // Check for head sprite: "{char}_head" or "{char}head" or "jiggly_head" etc.
+            let name_lower = sprite_name.to_lowercase();
+            if name_lower.ends_with("_head") || name_lower.ends_with("head") {
+                // Verify it belongs to this character
+                // Some chars abbreviate: jiggly_head for jigglypuff, etc.
+                let is_char_head = name_lower.starts_with(&char_lower)
+                    || name_lower == format!("{}_head", char_lower)
+                    || name_lower.ends_with("_head")  // Any _head sprite in a char SSF is the char's head
+                    ;
+                if is_char_head {
+                    // Find what image it places.
+                    // First try PlaceObject inside the sprite tags.
+                    let mut image_symbol = None;
+                    let mut image_shape_id = None;
+                    for stag in &sprite.tags {
+                        if let swf::Tag::PlaceObject(po) = stag {
+                            match &po.action {
+                                swf::PlaceObjectAction::Place(id) => {
+                                    image_shape_id = Some(*id);
+                                    image_symbol = symbols.get(id).cloned();
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    // Fallback: try known naming patterns for head portrait images
+                    if image_symbol.is_none() {
+                        let patterns: Vec<String> = vec![
+                            format!("{}_dm0", char_lower),
+                            format!("{}_pa0", char_lower),
+                            format!("{}_dmpa", char_lower),
+                        ];
+                        for pat in &patterns {
+                            if let Some((id, name)) = symbols.iter().find(|(_, n)| n.to_lowercase() == *pat) {
+                                image_symbol = Some(name.clone());
+                                image_shape_id = Some(*id);
+                                log::debug!("Head sprite '{}': used pattern fallback '{}' → id={}", sprite_name, pat, id);
+                                break;
+                            }
+                        }
+                    }
+                    // Last resort: search all symbols for portrait-like names
+                    if image_symbol.is_none() {
+                        for (id, name) in &symbols {
+                            let nl = name.to_lowercase();
+                            // Skip internal sprites and animation frames
+                            if nl.contains("_fla.") || nl.contains("_i") && nl.chars().last().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                                continue;
+                            }
+                            // Match common portrait patterns:
+                            // {char}_pa0, {char}_dmpa, {char}_dm0, {abbr}_PA, {abbr}_cssp2
+                            let is_portrait = nl.ends_with("_pa0") || nl.ends_with("_dmpa")
+                                || nl.ends_with("_dm0") || nl.ends_with("_pa") || nl.ends_with("_pa_nhb")
+                                || nl.contains("_cssp");
+                            if is_portrait {
+                                image_symbol = Some(name.clone());
+                                image_shape_id = Some(*id);
+                                log::debug!("Head sprite '{}': used heuristic fallback → id={} sym={}", sprite_name, id, name);
+                                break;
+                            }
+                        }
+                    }
+                    head = Some(DiscoveredHead {
+                        sprite_id: sprite.id,
+                        name: sprite_name.clone(),
+                        image_symbol,
+                        image_shape_id,
+                    });
+                }
+            }
+
+            // Check for projectile: has 'attack_idle' label
+            let has_attack_idle = sprite.tags.iter().any(|t| {
+                if let swf::Tag::FrameLabel(fl) = t {
+                    fl.label.to_str_lossy(encoding_rs::WINDOWS_1252) == "attack_idle"
+                } else {
+                    false
+                }
+            });
+            if !has_attack_idle { continue; }
+
+            // Skip the root character sprite
+            if name_lower == char_lower { continue; }
+
+            // Find inner 'stance' sprite (PlaceObject with name='stance')
+            let mut inner_sprite_id = None;
+            let mut inner_sprite_name = None;
+            for stag in &sprite.tags {
+                if let swf::Tag::PlaceObject(po) = stag {
+                    let po_name = po.name.as_ref().map(|n| n.to_str_lossy(encoding_rs::WINDOWS_1252).to_string());
+                    if po_name.as_deref() == Some("stance") {
+                        match &po.action {
+                            swf::PlaceObjectAction::Place(id) => {
+                                inner_sprite_id = Some(*id);
+                                inner_sprite_name = symbols.get(id).cloned();
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            // Get inner frame count
+            let inner_frame_count = if let Some(inner_id) = inner_sprite_id {
+                swf.tags.iter().find_map(|t| {
+                    if let swf::Tag::DefineSprite(s) = t {
+                        if s.id == inner_id {
+                            return Some(s.num_frames);
+                        }
+                    }
+                    None
+                }).unwrap_or(1)
+            } else {
+                sprite.num_frames.max(1)
+            };
+
+            projectiles.push(DiscoveredProjectile {
+                sprite_id: sprite.id,
+                name: sprite_name,
+                inner_sprite_id,
+                inner_sprite_name,
+                inner_frame_count,
+            });
+        }
+    }
+
+    Ok((projectiles, head))
+}

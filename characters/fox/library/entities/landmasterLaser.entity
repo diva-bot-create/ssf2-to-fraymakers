@@ -1,0 +1,221 @@
+{
+  "animations": [
+    {
+      "$id": "a8f2e8fa-dd8c-5075-8b9a-3e627f931f88",
+      "layers": [
+        "12a79be0-c4bc-50f3-80ef-605b0e119f84"
+      ],
+      "name": "projectileSpawn",
+      "pluginMetadata": {}
+    },
+    {
+      "$id": "33b29856-25a3-57d4-a96b-0c86f4c26757",
+      "layers": [
+        "b5a790ef-e9ea-5743-8f33-39e7cdd99763"
+      ],
+      "name": "projectileIdle",
+      "pluginMetadata": {}
+    },
+    {
+      "$id": "4999f9bf-2177-57e8-a170-c95e8b704f94",
+      "layers": [
+        "b1e06dbd-be71-5766-aed3-44609710c3d2",
+        "3918579c-0c91-54db-a665-eb1736e4c769"
+      ],
+      "name": "projectileDestroy",
+      "pluginMetadata": {}
+    }
+  ],
+  "export": true,
+  "guid": "11cd6b53-cad6-5362-9213-3bd40d5e2355",
+  "id": "landmasterLaserProjectile",
+  "keyframes": [
+    {
+      "$id": "65dc756d-6554-5f7f-a8e2-72891d1a619f",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "c926bf21-37b7-5130-8272-d3bb6dfbed69",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "b6ed371c-6ac2-5668-b501-cc5a73fb3369",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "a757ea45-e026-5639-ac56-b65a15065f7b",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "f2120e0c-57b0-5db4-9272-c77dfe2685a7",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "65c3bcd7-bee3-585f-8917-8db2b1e31fee",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "f78a441f-4b9a-5a3e-90d6-50f01796dbf5",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "c5c622c6-4e87-5951-bacc-a5d18dbf7fb5",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "313a8af4-b21f-5275-9950-53150d9620cd",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "51872714-dc91-553d-aea6-078e70ad3276",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "f5325543-d64e-5c72-b9f8-6959143dd6b9",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "58f0063e-aa19-5caf-adec-03f4bf5ba34e",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "44c61bbb-b77c-5fc1-9848-9fe7087f54b7",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "FRAME_SCRIPT"
+    }
+  ],
+  "layers": [
+    {
+      "$id": "b5a790ef-e9ea-5743-8f33-39e7cdd99763",
+      "hidden": false,
+      "keyframes": [
+        "65dc756d-6554-5f7f-a8e2-72891d1a619f",
+        "c926bf21-37b7-5130-8272-d3bb6dfbed69",
+        "b6ed371c-6ac2-5668-b501-cc5a73fb3369",
+        "a757ea45-e026-5639-ac56-b65a15065f7b",
+        "f2120e0c-57b0-5db4-9272-c77dfe2685a7",
+        "65c3bcd7-bee3-585f-8917-8db2b1e31fee",
+        "f78a441f-4b9a-5a3e-90d6-50f01796dbf5",
+        "c5c622c6-4e87-5951-bacc-a5d18dbf7fb5",
+        "313a8af4-b21f-5275-9950-53150d9620cd",
+        "51872714-dc91-553d-aea6-078e70ad3276"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "12a79be0-c4bc-50f3-80ef-605b0e119f84",
+      "hidden": false,
+      "keyframes": [
+        "f5325543-d64e-5c72-b9f8-6959143dd6b9"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "b1e06dbd-be71-5766-aed3-44609710c3d2",
+      "hidden": false,
+      "keyframes": [
+        "58f0063e-aa19-5caf-adec-03f4bf5ba34e"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "3918579c-0c91-54db-a665-eb1736e4c769",
+      "hidden": false,
+      "keyframes": [
+        "44c61bbb-b77c-5fc1-9848-9fe7087f54b7"
+      ],
+      "locked": false,
+      "name": "Frame Script Layer",
+      "pluginMetadata": {},
+      "type": "FRAME_SCRIPT"
+    }
+  ],
+  "paletteMap": null,
+  "pluginMetadata": {
+    "com.fraymakers.FraymakersMetadata": {
+      "objectType": "PROJECTILE",
+      "version": "0.1.1"
+    }
+  },
+  "plugins": [
+    "com.fraymakers.FraymakersMetadata"
+  ],
+  "symbols": [],
+  "tags": [],
+  "terrains": [],
+  "tilesets": [],
+  "version": 14
+}

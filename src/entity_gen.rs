@@ -782,3 +782,712 @@ fn extract_function_body(code: &str) -> String {
         .collect();
     body.join("\n")
 }
+
+// ─── Menu entity generation ───────────────────────────────────────────────────
+
+/// Information about a menu image extracted from the SWF.
+#[derive(Debug, Clone)]
+pub struct MenuImageInfo {
+    /// The symbol name of the head/portrait image (e.g. "mario_dm0")
+    pub head_symbol: String,
+    /// Width of the head image in pixels
+    pub head_width: u32,
+    /// Height of the head image in pixels
+    pub head_height: u32,
+    /// Meta GUID for the head image
+    pub head_meta_guid: String,
+}
+
+/// Generate a menu.entity file for the character's UI images.
+///
+/// SSF2 provides one portrait image (from the `_head` sprite, e.g. `mario_dm0`).
+/// We reuse it across all required Fraymakers menu animations:
+///   - `full` — full character portrait (character select screen)
+///   - `css` — character select screen thumbnail (2 layers: foreground + background)
+///   - `icon` — small character icon
+///   - `icon_no_palette` — icon without palette swap
+///   - `stock` — stock icon (lives remaining)
+///   - `hud` / `hud_front` — HUD portrait (default expression)
+///   - `hud_angry` / `hud_angry_front` — HUD portrait (angry)
+///   - `hud_happy` / `hud_happy_front` — HUD portrait (happy)
+///   - `hud_hurt` / `hud_hurt_front` — HUD portrait (hurt)
+///   - `hud_sad` / `hud_sad_front` — HUD portrait (sad)
+///
+/// Since SSF2 only has one portrait, all HUD variants use the same image.
+pub fn generate_menu_entity(
+    char_id: &str,
+    menu_info: &MenuImageInfo,
+) -> String {
+    let mut keyframes: Vec<Value> = Vec::new();
+    let mut layers: Vec<Value> = Vec::new();
+    let mut symbols: Vec<Value> = Vec::new();
+    let mut animations: Vec<Value> = Vec::new();
+
+    let head_guid = &menu_info.head_meta_guid;
+    let img_w = menu_info.head_width as f64;
+    let img_h = menu_info.head_height as f64;
+    let pivot_x = round2(img_w / 2.0);
+    let pivot_y = round2(img_h / 2.0);
+
+    // Helper functions return (sym, kf, layer) tuples; caller pushes them.
+    fn make_image_items(char_id: &str, head_guid: &str, pivot_x: f64, pivot_y: f64,
+                        anim_name: &str, suffix: &str, x: f64, y: f64)
+        -> (Value, Value, Value, String) {
+        let sym_id = uuid(char_id, &format!("menu_sym_{}{}", anim_name, suffix));
+        let kf_id = uuid(char_id, &format!("menu_kf_{}{}", anim_name, suffix));
+        let layer_id = uuid(char_id, &format!("menu_layer_{}{}", anim_name, suffix));
+        let sym = json!({ "$id": sym_id, "alpha": 1, "imageAsset": head_guid,
+            "pivotX": pivot_x, "pivotY": pivot_y, "pluginMetadata": {},
+            "rotation": 0, "scaleX": 1, "scaleY": 1, "type": "IMAGE",
+            "x": round2(x), "y": round2(y) });
+        let kf = json!({ "$id": kf_id, "length": 1, "pluginMetadata": {},
+            "symbol": sym_id, "tweenType": "LINEAR", "tweened": false, "type": "IMAGE" });
+        let layer = json!({ "$id": layer_id, "name": "Image Layer", "type": "IMAGE",
+            "keyframes": [kf_id], "hidden": false, "locked": false, "pluginMetadata": {} });
+        (sym, kf, layer, layer_id)
+    }
+
+    fn make_blank_image(char_id: &str, anim_name: &str, suffix: &str) -> (Value, Value, String) {
+        let kf_id = uuid(char_id, &format!("menu_kf_{}{}_blank", anim_name, suffix));
+        let layer_id = uuid(char_id, &format!("menu_layer_{}{}_blank", anim_name, suffix));
+        let kf = json!({ "$id": kf_id, "length": 1, "pluginMetadata": {},
+            "symbol": Value::Null, "tweenType": "LINEAR", "tweened": false, "type": "IMAGE" });
+        let layer = json!({ "$id": layer_id, "name": "Image Layer", "type": "IMAGE",
+            "keyframes": [kf_id], "hidden": false, "locked": false, "pluginMetadata": {} });
+        (kf, layer, layer_id)
+    }
+
+    fn make_hud_aid(char_id: &str, anim_name: &str, size: f64) -> (Value, Value, Value, String) {
+        let sym_id = uuid(char_id, &format!("menu_hud_aid_sym_{}", anim_name));
+        let kf_id = uuid(char_id, &format!("menu_hud_aid_kf_{}", anim_name));
+        let layer_id = uuid(char_id, &format!("menu_hud_aid_layer_{}", anim_name));
+        let sym = json!({ "$id": sym_id, "alpha": Value::Null, "color": Value::Null,
+            "pivotX": round2(size/2.0), "pivotY": round2(size/2.0), "pluginMetadata": {},
+            "rotation": 0, "scaleX": size, "scaleY": size, "type": "COLLISION_BOX",
+            "x": 0, "y": 0 });
+        let kf = json!({ "$id": kf_id, "length": 1, "pluginMetadata": {},
+            "symbol": sym_id, "tweenType": "LINEAR", "tweened": false, "type": "COLLISION_BOX" });
+        let layer = json!({ "$id": layer_id, "name": "HUD Visual Aid", "type": "COLLISION_BOX",
+            "keyframes": [kf_id], "hidden": false, "locked": false, "pluginMetadata": {} });
+        (sym, kf, layer, layer_id)
+    }
+
+    fn make_blank_script(char_id: &str, anim_name: &str) -> (Value, Value, String) {
+        let kf_id = uuid(char_id, &format!("menu_script_kf_{}", anim_name));
+        let layer_id = uuid(char_id, &format!("menu_script_layer_{}", anim_name));
+        let kf = json!({ "$id": kf_id, "length": 1, "pluginMetadata": {},
+            "symbol": Value::Null, "tweenType": "LINEAR", "tweened": false, "type": "FRAME_SCRIPT" });
+        let layer = json!({ "$id": layer_id, "name": "Frame Script Layer", "type": "FRAME_SCRIPT",
+            "keyframes": [kf_id], "hidden": false, "locked": false, "pluginMetadata": {} });
+        (kf, layer, layer_id)
+    }
+
+    fn make_icon_aid(char_id: &str, anim_name: &str) -> (Value, Value, Value, String) {
+        let sym_id = uuid(char_id, &format!("menu_icon_aid_sym_{}", anim_name));
+        let kf_id = uuid(char_id, &format!("menu_icon_aid_kf_{}", anim_name));
+        let layer_id = uuid(char_id, &format!("menu_icon_aid_layer_{}", anim_name));
+        let sym = json!({ "$id": sym_id, "alpha": Value::Null, "color": Value::Null,
+            "pivotX": 18, "pivotY": 18, "pluginMetadata": {},
+            "rotation": 0, "scaleX": 41, "scaleY": 21, "type": "COLLISION_BOX",
+            "x": 0, "y": 0 });
+        let kf = json!({ "$id": kf_id, "length": 1, "pluginMetadata": {},
+            "symbol": sym_id, "tweenType": "LINEAR", "tweened": false, "type": "COLLISION_BOX" });
+        let layer = json!({ "$id": layer_id, "name": "Size Visual Aid", "type": "COLLISION_BOX",
+            "keyframes": [kf_id], "hidden": false, "locked": false, "pluginMetadata": {} });
+        (sym, kf, layer, layer_id)
+    }
+
+    // Macro to push items returned by helpers
+    macro_rules! push_img {
+        ($anim:expr, $suf:expr, $x:expr, $y:expr) => {{
+            let (s, k, l, lid) = make_image_items(char_id, head_guid, pivot_x, pivot_y, $anim, $suf, $x, $y);
+            symbols.push(s); keyframes.push(k); layers.push(l); lid
+        }}
+    }
+    macro_rules! push_blank_img {
+        ($anim:expr, $suf:expr) => {{
+            let (k, l, lid) = make_blank_image(char_id, $anim, $suf);
+            keyframes.push(k); layers.push(l); lid
+        }}
+    }
+    macro_rules! push_hud_aid {
+        ($anim:expr, $size:expr) => {{
+            let (s, k, l, lid) = make_hud_aid(char_id, $anim, $size);
+            symbols.push(s); keyframes.push(k); layers.push(l); lid
+        }}
+    }
+    macro_rules! push_script {
+        ($anim:expr) => {{
+            let (k, l, lid) = make_blank_script(char_id, $anim);
+            keyframes.push(k); layers.push(l); lid
+        }}
+    }
+    macro_rules! push_icon_aid {
+        ($anim:expr) => {{
+            let (s, k, l, lid) = make_icon_aid(char_id, $anim);
+            symbols.push(s); keyframes.push(k); layers.push(l); lid
+        }}
+    }
+
+    // ── full: big portrait ───────────────────────────────────────────────
+    {
+        let img_layer = push_img!("full", "", -pivot_x, -pivot_y);
+        let blank_layer = push_blank_img!("full", "");
+        animations.push(json!({ "$id": uuid(char_id, "menu_anim_full"),
+            "name": "full", "layers": [img_layer, blank_layer], "pluginMetadata": {} }));
+    }
+
+    // ── css: character select screen (2 image layers) ────────────────────
+    {
+        let fg = push_img!("css", "_fg", -pivot_x, -pivot_y);
+        let bg = push_img!("css", "_bg", -pivot_x, -pivot_y);
+        animations.push(json!({ "$id": uuid(char_id, "menu_anim_css"),
+            "name": "css", "layers": [fg, bg], "pluginMetadata": {} }));
+    }
+
+    // ── icon ─────────────────────────────────────────────────────────────
+    {
+        let img = push_img!("icon", "", 0.0, 0.0);
+        let aid = push_icon_aid!("icon");
+        let script = push_script!("icon");
+        animations.push(json!({ "$id": uuid(char_id, "menu_anim_icon"),
+            "name": "icon", "layers": [img, aid, script], "pluginMetadata": {} }));
+    }
+
+    // ── icon_no_palette ──────────────────────────────────────────────────
+    {
+        let img = push_img!("icon_no_palette", "", 0.0, 0.0);
+        let script = push_script!("icon_no_palette");
+        let aid = push_icon_aid!("icon_no_palette");
+        animations.push(json!({ "$id": uuid(char_id, "menu_anim_icon_no_palette"),
+            "name": "icon_no_palette", "layers": [img, script, aid], "pluginMetadata": {} }));
+    }
+
+    // ── stock ────────────────────────────────────────────────────────────
+    {
+        let aid = push_hud_aid!("stock", 24.0);
+        let img = push_img!("stock", "", -pivot_x, -pivot_y);
+        animations.push(json!({ "$id": uuid(char_id, "menu_anim_stock"),
+            "name": "stock", "layers": [aid, img], "pluginMetadata": {} }));
+    }
+
+    // ── hud variants ────────────────────────────────────────────────────
+    for hud_name in &["hud", "hud_front", "hud_angry", "hud_angry_front",
+                      "hud_happy", "hud_happy_front", "hud_hurt", "hud_hurt_front",
+                      "hud_sad", "hud_sad_front"] {
+        let img = push_img!(hud_name, "", -pivot_x, -pivot_y);
+        let aid = push_hud_aid!(hud_name, 36.0);
+        animations.push(json!({ "$id": uuid(char_id, &format!("menu_anim_{}", hud_name)),
+            "name": *hud_name, "layers": [img, aid], "pluginMetadata": {} }));
+    }
+
+    let entity = json!({
+        "animations": animations,
+        "export": true,
+        "guid": uuid(char_id, "menu_entity_guid"),
+        "id": "menu",
+        "keyframes": keyframes,
+        "layers": layers,
+        "paletteMap": Value::Null,
+        "pluginMetadata": {
+            "com.fraymakers.FraymakersMetadata": {
+                "spritesheetGroup": "menu",
+                "version": "0.3.1"
+            }
+        },
+        "plugins": ["com.fraymakers.FraymakersMetadata"],
+        "symbols": symbols,
+        "tags": ["menu"],
+        "terrains": [],
+        "tilesets": [],
+        "version": 14
+    });
+
+    serde_json::to_string_pretty(&entity).unwrap_or_else(|_| "{}" .to_string())
+}
+
+// ─── Projectile entity generation ─────────────────────────────────────────────
+
+/// Information about a projectile extracted from the SWF.
+#[derive(Debug, Clone)]
+pub struct ProjectileInfo {
+    /// The projectile's symbol name (e.g. "mario_fireball")
+    pub name: String,
+    /// The inner animation sprite name (e.g. "mario_fla.mario_fireball_mc_210")
+    pub inner_sprite_name: Option<String>,
+    /// Frame count of the inner animation sprite
+    pub inner_frame_count: u16,
+    /// Collision boxes from the inner sprite, if any
+    pub boxes: Option<AnimationBoxData>,
+    /// Image frames from the inner sprite (symbol name per frame)
+    pub image_frames: Vec<Option<String>>,
+    /// Meta GUIDs for each unique image used
+    pub image_guids: BTreeMap<String, String>,
+}
+
+/// Generate a projectile.entity file for a single SSF2 projectile.
+///
+/// SSF2 projectile structure:
+///   Root sprite (e.g. `mario_fireball`, 1 frame):
+///     - LABEL 'attack_idle'
+///     - PlaceObject with name='stance' → inner animation sprite
+///   Inner sprite (e.g. `mario_fla.mario_fireball_mc_210`, N frames):
+///     - Collision boxes (hitBox, attackBox)
+///     - Image placements per frame
+///     - Labels (e.g. 'loop')
+///
+/// Fraymakers projectile animations:
+///   - `projectileSpawn` — 1 frame, first frame image
+///   - `projectileIdle` — all frames with hitbox/hurtbox
+///   - `projectileDestroy` — last frame image + blank frame script
+pub fn generate_projectile_entity(
+    char_id: &str,
+    proj: &ProjectileInfo,
+) -> String {
+    let mut keyframes: Vec<Value> = Vec::new();
+    let mut layers: Vec<Value> = Vec::new();
+    let mut symbols: Vec<Value> = Vec::new();
+    let mut animations: Vec<Value> = Vec::new();
+
+    let proj_id = &proj.name;
+    let total_frames = proj.inner_frame_count.max(1) as u32;
+
+    // ── Build image keyframes for idle animation ─────────────────────────
+    let mut idle_image_kf_ids: Vec<String> = Vec::new();
+    for frame in 0..total_frames {
+        let sym_name = proj.image_frames.get(frame as usize).and_then(|s| s.as_ref());
+        let kf_id = uuid(char_id, &format!("proj_{}_idle_img_kf_{}", proj_id, frame));
+        if let Some(sym_name) = sym_name {
+            if let Some(guid) = proj.image_guids.get(sym_name.as_str()) {
+                let sym_id = uuid(char_id, &format!("proj_{}_idle_img_sym_{}", proj_id, frame));
+                symbols.push(json!({
+                    "$id": sym_id,
+                    "alpha": 1,
+                    "imageAsset": guid,
+                    "pivotX": 0,
+                    "pivotY": 0,
+                    "pluginMetadata": {},
+                    "rotation": 0,
+                    "scaleX": 1,
+                    "scaleY": 1,
+                    "type": "IMAGE",
+                    "x": 0,
+                    "y": 0
+                }));
+                keyframes.push(json!({
+                    "$id": kf_id,
+                    "length": 1,
+                    "pluginMetadata": {},
+                    "symbol": sym_id,
+                    "tweenType": "LINEAR",
+                    "tweened": false,
+                    "type": "IMAGE"
+                }));
+            } else {
+                keyframes.push(json!({
+                    "$id": kf_id,
+                    "length": 1,
+                    "pluginMetadata": {},
+                    "symbol": Value::Null,
+                    "tweenType": "LINEAR",
+                    "tweened": false,
+                    "type": "IMAGE"
+                }));
+            }
+        } else {
+            keyframes.push(json!({
+                "$id": kf_id,
+                "length": 1,
+                "pluginMetadata": {},
+                "symbol": Value::Null,
+                "tweenType": "LINEAR",
+                "tweened": false,
+                "type": "IMAGE"
+            }));
+        }
+        idle_image_kf_ids.push(kf_id);
+    }
+
+    let idle_image_layer_id = uuid(char_id, &format!("proj_{}_idle_img_layer", proj_id));
+    layers.push(json!({
+        "$id": idle_image_layer_id,
+        "name": "Image Layer",
+        "type": "IMAGE",
+        "keyframes": idle_image_kf_ids,
+        "hidden": false,
+        "locked": false,
+        "pluginMetadata": {}
+    }));
+
+    // ── Build collision box layers for idle (from inner sprite boxes) ────
+    let mut idle_box_layer_ids: Vec<String> = Vec::new();
+    if let Some(boxes) = &proj.boxes {
+        // Collect all unique instance names across frames
+        let mut instances_in_proj: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for frame_boxes in boxes.frames.values() {
+            for b in frame_boxes {
+                instances_in_proj.insert(b.instance_name.clone());
+            }
+        }
+
+        for inst_name in instances_in_proj.iter() {
+            let box_type = BoxType::from_instance_name(inst_name).unwrap_or(BoxType::Hurtbox);
+            let fm_layer_name = ssf2_box_name_to_fm(inst_name);
+            let fm_box_type = box_type_to_fm(box_type);
+            let color = box_color(box_type);
+            let box_idx = fm_box_index(&fm_layer_name);
+
+            let mut box_kf_ids: Vec<String> = Vec::new();
+            let mut frame_idx: u32 = 0;
+
+            // Collect active frames for this instance
+            let mut active_frames: Vec<(usize, &crate::sprite_parser::FrameBox)> = Vec::new();
+            for f in 0..total_frames {
+                if let Some(frame_boxes) = boxes.frames.get(&(f as u16)) {
+                    if let Some(fb) = frame_boxes.iter().find(|b| &b.instance_name == inst_name) {
+                        active_frames.push((f as usize, fb));
+                    }
+                }
+            }
+
+            let is_point = box_type == crate::sprite_parser::BoxType::GrabHoldBox;
+            let kf_type = if is_point { "POINT" } else { "COLLISION_BOX" };
+
+            // Build keyframes using run-length encoding
+            let mut i = 0;
+            while i < active_frames.len() {
+                let (start_frame, fb) = active_frames[i];
+                let mut run_end = i;
+                while run_end + 1 < active_frames.len() {
+                    let (next_f, next_fb) = active_frames[run_end + 1];
+                    let (cur_f, _) = active_frames[run_end];
+                    let consecutive = next_f == cur_f + 1;
+                    let same_geom = (next_fb.x - fb.x).abs() < 0.01
+                        && (next_fb.y - fb.y).abs() < 0.01
+                        && (next_fb.width - fb.width).abs() < 0.01
+                        && (next_fb.height - fb.height).abs() < 0.01
+                        && (next_fb.rotation - fb.rotation).abs() < 0.01;
+                    if consecutive && same_geom { run_end += 1; } else { break; }
+                }
+                let run_len = (active_frames[run_end].0 - start_frame + 1) as u32;
+
+                // Gap keyframe
+                if start_frame as u32 > frame_idx {
+                    let gap_kf_id = uuid(char_id, &format!("proj_{}_box_gap_{}_{}", proj_id, inst_name, frame_idx));
+                    keyframes.push(json!({
+                        "$id": gap_kf_id,
+                        "type": kf_type,
+                        "length": (start_frame as u32) - frame_idx,
+                        "symbol": Value::Null,
+                        "tweened": false,
+                        "tweenType": "LINEAR",
+                        "pluginMetadata": {}
+                    }));
+                    box_kf_ids.push(gap_kf_id);
+                }
+
+                // Box symbol
+                let sym_id = uuid(char_id, &format!("proj_{}_box_sym_{}_{}", proj_id, inst_name, start_frame));
+                if is_point {
+                    let cx = round2(fb.x + fb.width / 2.0);
+                    let cy = round2(fb.y + fb.height);
+                    symbols.push(json!({
+                        "$id": sym_id,
+                        "alpha": 1,
+                        "color": color,
+                        "pluginMetadata": {},
+                        "rotation": 0,
+                        "type": "POINT",
+                        "x": cx,
+                        "y": cy
+                    }));
+                } else {
+                    let (piv_x, piv_y) = (round2(fb.width / 2.0), round2(fb.height / 2.0));
+                    symbols.push(json!({
+                        "$id": sym_id,
+                        "alpha": 0.5,
+                        "color": color,
+                        "pivotX": piv_x,
+                        "pivotY": piv_y,
+                        "pluginMetadata": {},
+                        "rotation": round2(-fb.rotation),
+                        "scaleX": round2(fb.width),
+                        "scaleY": round2(fb.height),
+                        "type": "COLLISION_BOX",
+                        "x": round2(fb.x),
+                        "y": round2(fb.y)
+                    }));
+                }
+
+                let kf_id = uuid(char_id, &format!("proj_{}_box_kf_{}_{}", proj_id, inst_name, start_frame));
+                keyframes.push(json!({
+                    "$id": kf_id,
+                    "type": kf_type,
+                    "length": run_len,
+                    "symbol": sym_id,
+                    "tweened": false,
+                    "tweenType": "LINEAR",
+                    "pluginMetadata": {}
+                }));
+                box_kf_ids.push(kf_id);
+                frame_idx = start_frame as u32 + run_len;
+                i = run_end + 1;
+            }
+
+            // Tail gap
+            if frame_idx < total_frames {
+                let tail_kf_id = uuid(char_id, &format!("proj_{}_box_tail_{}_{}", proj_id, inst_name, frame_idx));
+                keyframes.push(json!({
+                    "$id": tail_kf_id,
+                    "type": kf_type,
+                    "length": total_frames - frame_idx,
+                    "symbol": Value::Null,
+                    "tweened": false,
+                    "tweenType": "LINEAR",
+                    "pluginMetadata": {}
+                }));
+                box_kf_ids.push(tail_kf_id);
+            }
+
+            if box_kf_ids.is_empty() { continue; }
+
+            let layer_id = uuid(char_id, &format!("proj_{}_box_layer_{}", proj_id, inst_name));
+            if is_point {
+                layers.push(json!({
+                    "$id": layer_id,
+                    "name": fm_layer_name,
+                    "type": "POINT",
+                    "keyframes": box_kf_ids,
+                    "hidden": false,
+                    "locked": false,
+                    "pluginMetadata": {
+                        "com.fraymakers.FraymakersMetadata": {
+                            "pointType": "GRAB_HOLD_POINT"
+                        }
+                    }
+                }));
+            } else {
+                layers.push(json!({
+                    "$id": layer_id,
+                    "name": fm_layer_name,
+                    "type": "COLLISION_BOX",
+                    "keyframes": box_kf_ids,
+                    "hidden": false,
+                    "locked": false,
+                    "defaultAlpha": 0.5,
+                    "defaultColor": color,
+                    "pluginMetadata": {
+                        "com.fraymakers.FraymakersMetadata": {
+                            "collisionBoxType": fm_box_type,
+                            "index": box_idx
+                        }
+                    }
+                }));
+            }
+            idle_box_layer_ids.push(layer_id);
+        }
+    }
+
+    // ── projectileSpawn animation (1 frame, first image) ─────────────────
+    {
+        let (_, _, spawn_img) = if !proj.image_frames.is_empty() && proj.image_frames[0].is_some() {
+            let sym_name = proj.image_frames[0].as_ref().unwrap();
+            let guid = proj.image_guids.get(sym_name.as_str()).cloned().unwrap_or_default();
+            let sym_id = uuid(char_id, &format!("proj_{}_spawn_sym", proj_id));
+            symbols.push(json!({
+                "$id": sym_id,
+                "alpha": 1,
+                "imageAsset": guid,
+                "pivotX": 0,
+                "pivotY": 0,
+                "pluginMetadata": {},
+                "rotation": 0,
+                "scaleX": 1,
+                "scaleY": 1,
+                "type": "IMAGE",
+                "x": 0,
+                "y": 0
+            }));
+            let kf_id = uuid(char_id, &format!("proj_{}_spawn_kf", proj_id));
+            keyframes.push(json!({
+                "$id": kf_id,
+                "length": 1,
+                "pluginMetadata": {},
+                "symbol": sym_id,
+                "tweenType": "LINEAR",
+                "tweened": false,
+                "type": "IMAGE"
+            }));
+            let layer_id = uuid(char_id, &format!("proj_{}_spawn_layer", proj_id));
+            layers.push(json!({
+                "$id": layer_id,
+                "name": "Image Layer",
+                "type": "IMAGE",
+                "keyframes": [kf_id],
+                "hidden": false,
+                "locked": false,
+                "pluginMetadata": {}
+            }));
+            (sym_id, kf_id, layer_id)
+        } else {
+            // Blank spawn frame
+            let kf_id = uuid(char_id, &format!("proj_{}_spawn_kf", proj_id));
+            keyframes.push(json!({
+                "$id": kf_id,
+                "length": 1,
+                "pluginMetadata": {},
+                "symbol": Value::Null,
+                "tweenType": "LINEAR",
+                "tweened": false,
+                "type": "IMAGE"
+            }));
+            let layer_id = uuid(char_id, &format!("proj_{}_spawn_layer", proj_id));
+            layers.push(json!({
+                "$id": layer_id,
+                "name": "Image Layer",
+                "type": "IMAGE",
+                "keyframes": [kf_id],
+                "hidden": false,
+                "locked": false,
+                "pluginMetadata": {}
+            }));
+            (String::new(), kf_id, layer_id)
+        };
+        animations.push(json!({
+            "$id": uuid(char_id, &format!("proj_{}_anim_spawn", proj_id)),
+            "name": "projectileSpawn",
+            "layers": [spawn_img],
+            "pluginMetadata": {}
+        }));
+    }
+
+    // ── projectileIdle animation (all frames + boxes) ────────────────────
+    {
+        let mut idle_layers = vec![idle_image_layer_id.clone()];
+        idle_layers.extend(idle_box_layer_ids);
+        animations.push(json!({
+            "$id": uuid(char_id, &format!("proj_{}_anim_idle", proj_id)),
+            "name": "projectileIdle",
+            "layers": idle_layers,
+            "pluginMetadata": {}
+        }));
+    }
+
+    // ── projectileDestroy animation (last frame + blank script) ──────────
+    {
+        let last_frame = total_frames.saturating_sub(1) as usize;
+        let sym_name = proj.image_frames.get(last_frame).and_then(|s| s.as_ref());
+        let destroy_kf_id = uuid(char_id, &format!("proj_{}_destroy_kf", proj_id));
+        if let Some(sym_name) = sym_name {
+            if let Some(guid) = proj.image_guids.get(sym_name.as_str()) {
+                let sym_id = uuid(char_id, &format!("proj_{}_destroy_sym", proj_id));
+                symbols.push(json!({
+                    "$id": sym_id,
+                    "alpha": 1,
+                    "imageAsset": guid,
+                    "pivotX": 0,
+                    "pivotY": 0,
+                    "pluginMetadata": {},
+                    "rotation": 0,
+                    "scaleX": 1,
+                    "scaleY": 1,
+                    "type": "IMAGE",
+                    "x": 0,
+                    "y": 0
+                }));
+                keyframes.push(json!({
+                    "$id": destroy_kf_id,
+                    "length": 1,
+                    "pluginMetadata": {},
+                    "symbol": sym_id,
+                    "tweenType": "LINEAR",
+                    "tweened": false,
+                    "type": "IMAGE"
+                }));
+            } else {
+                keyframes.push(json!({
+                    "$id": destroy_kf_id,
+                    "length": 1,
+                    "pluginMetadata": {},
+                    "symbol": Value::Null,
+                    "tweenType": "LINEAR",
+                    "tweened": false,
+                    "type": "IMAGE"
+                }));
+            }
+        } else {
+            keyframes.push(json!({
+                "$id": destroy_kf_id,
+                "length": 1,
+                "pluginMetadata": {},
+                "symbol": Value::Null,
+                "tweenType": "LINEAR",
+                "tweened": false,
+                "type": "IMAGE"
+            }));
+        }
+        let destroy_img_layer = uuid(char_id, &format!("proj_{}_destroy_img_layer", proj_id));
+        layers.push(json!({
+            "$id": destroy_img_layer,
+            "name": "Image Layer",
+            "type": "IMAGE",
+            "keyframes": [destroy_kf_id],
+            "hidden": false,
+            "locked": false,
+            "pluginMetadata": {}
+        }));
+
+        let destroy_script_kf = uuid(char_id, &format!("proj_{}_destroy_script_kf", proj_id));
+        keyframes.push(json!({
+            "$id": destroy_script_kf,
+            "length": 1,
+            "pluginMetadata": {},
+            "symbol": Value::Null,
+            "tweenType": "LINEAR",
+            "tweened": false,
+            "type": "FRAME_SCRIPT"
+        }));
+        let destroy_script_layer = uuid(char_id, &format!("proj_{}_destroy_script_layer", proj_id));
+        layers.push(json!({
+            "$id": destroy_script_layer,
+            "name": "Frame Script Layer",
+            "type": "FRAME_SCRIPT",
+            "keyframes": [destroy_script_kf],
+            "hidden": false,
+            "locked": false,
+            "pluginMetadata": {}
+        }));
+
+        animations.push(json!({
+            "$id": uuid(char_id, &format!("proj_{}_anim_destroy", proj_id)),
+            "name": "projectileDestroy",
+            "layers": [destroy_img_layer, destroy_script_layer],
+            "pluginMetadata": {}
+        }));
+    }
+
+    let entity_id = format!("{}Projectile", proj.name.replace('_', ""));
+    let entity = json!({
+        "animations": animations,
+        "export": true,
+        "guid": uuid(char_id, &format!("proj_{}_entity_guid", proj_id)),
+        "id": entity_id,
+        "keyframes": keyframes,
+        "layers": layers,
+        "paletteMap": Value::Null,
+        "pluginMetadata": {
+            "com.fraymakers.FraymakersMetadata": {
+                "objectType": "PROJECTILE",
+                "version": "0.1.1"
+            }
+        },
+        "plugins": ["com.fraymakers.FraymakersMetadata"],
+        "symbols": symbols,
+        "tags": [],
+        "terrains": [],
+        "tilesets": [],
+        "version": 14
+    });
+
+    serde_json::to_string_pretty(&entity).unwrap_or_else(|_| "{}".to_string())
+}

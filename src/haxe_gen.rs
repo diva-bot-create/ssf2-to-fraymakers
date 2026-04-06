@@ -12,7 +12,7 @@ use crate::fraytools_project;
 use crate::palette_gen;
 use crate::uuid_gen::det_uuid;
 
-pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult, costumes_json: Option<&Path>, sounds: &[crate::sound_extractor::SoundEntry]) -> Result<()> {
+pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult, costumes_json: Option<&Path>, sounds: &[crate::sound_extractor::SoundEntry], projectiles: &[crate::image_extractor::DiscoveredProjectile], head_sprite: Option<&crate::image_extractor::DiscoveredHead>) -> Result<()> {
     let char_id = char_name.to_lowercase().replace(" ", "");
     let char_dir = output_dir.join(&char_id);
     let scripts_dir = char_dir.join("library/scripts/Character");
@@ -69,6 +69,62 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
         Err(e) => {
             log::warn!("palette_gen failed (sprites will have no palette): {}", e);
         }
+    }
+
+    // ── menu.entity ────────────────────────────────────────────────────────────────
+    if let Some(head) = head_sprite {
+        if let Some(ref img_sym) = head.image_symbol {
+            // Find the head image in our extracted images
+            let head_image = img_result.images.values().find(|img| &img.symbol_name == img_sym);
+            if let Some(head_img) = head_image {
+                let head_meta_guid = crate::uuid_gen::det_uuid(&format!("{}::meta_{}", char_id, img_sym));
+                let menu_info = entity_gen::MenuImageInfo {
+                    head_symbol: img_sym.clone(),
+                    head_width: head_img.width,
+                    head_height: head_img.height,
+                    head_meta_guid,
+                };
+                fs::write(entities_dir.join("menu.entity"), entity_gen::generate_menu_entity(&char_id, &menu_info))?;
+                log::info!("Generated menu.entity using {} ({}x{})", img_sym, head_img.width, head_img.height);
+            } else {
+                log::warn!("Head image '{}' not found in extracted images, skipping menu.entity", img_sym);
+            }
+        } else {
+            log::warn!("Head sprite '{}' has no image placement, skipping menu.entity", head.name);
+        }
+    } else {
+        log::warn!("No head sprite found, skipping menu.entity");
+    }
+
+    // ── projectile.entity files ───────────────────────────────────────────────────
+    for proj in projectiles {
+        // Get collision boxes from the inner sprite if available
+        let inner_anim_name = proj.inner_sprite_name.as_ref()
+            .and_then(|n| {
+                // Try to find this sprite's boxes in our parsed data
+                // The inner sprite might be keyed by its fla name
+                sprite_boxes.iter()
+                    .find(|(_, data)| {
+                        // Match by checking if any instance data matches
+                        !data.frames.is_empty()
+                    })
+                    .map(|(k, _)| k.clone())
+            });
+
+        // For now, create a basic projectile entity with placeholder
+        // Image frames would need to come from the inner sprite's image placements
+        let proj_info = entity_gen::ProjectileInfo {
+            name: proj.name.clone(),
+            inner_sprite_name: proj.inner_sprite_name.clone(),
+            inner_frame_count: proj.inner_frame_count,
+            boxes: None, // TODO: extract boxes from inner sprite
+            image_frames: vec![], // TODO: extract image frames from inner sprite
+            image_guids: std::collections::BTreeMap::new(),
+        };
+
+        let filename = format!("{}.entity", sanitize_entity_name(&proj.name));
+        fs::write(entities_dir.join(&filename), entity_gen::generate_projectile_entity(&char_id, &proj_info))?;
+        log::info!("Generated projectile entity: {} ({} frames)", filename, proj.inner_frame_count);
     }
 
     // Stats summary for debugging
@@ -739,4 +795,10 @@ fn generate_sound_entries(
     }
 
     Ok(())
+}
+
+/// Convert a projectile name to a valid entity filename.
+/// "mario_fireball" → "mario_fireball"
+fn sanitize_entity_name(name: &str) -> String {
+    name.replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "_")
 }

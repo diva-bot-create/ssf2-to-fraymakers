@@ -1,0 +1,181 @@
+{
+  "animations": [
+    {
+      "$id": "7f1d5591-fc17-504e-bfdb-ec802e7717c0",
+      "layers": [
+        "b968b9ee-75b0-5c9a-90ae-09902af14090"
+      ],
+      "name": "projectileSpawn",
+      "pluginMetadata": {}
+    },
+    {
+      "$id": "107f3ae1-cf68-5233-8d73-baabf53d264b",
+      "layers": [
+        "44ccf92d-ec7b-5f64-a6e3-913f50e35a48"
+      ],
+      "name": "projectileIdle",
+      "pluginMetadata": {}
+    },
+    {
+      "$id": "313e6f09-5b35-57ff-8d1f-603dde815d95",
+      "layers": [
+        "bc548dc7-fac1-5fbe-8bcd-665411158906",
+        "4a1c1320-a861-570c-ad37-5abdb52035ae"
+      ],
+      "name": "projectileDestroy",
+      "pluginMetadata": {}
+    }
+  ],
+  "export": true,
+  "guid": "a289655b-e514-535b-9b5a-70578968f0eb",
+  "id": "linktetherCheckerProjectile",
+  "keyframes": [
+    {
+      "$id": "42758c75-6048-5c3f-9d9f-31f67381a599",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "8302e75d-5839-5773-91db-d32c140ee6fd",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "2ec31c79-4294-5230-8018-e8053411a636",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "9c2b9793-8ec6-5ba0-a037-09a31c2baccc",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "ba4a3bba-075d-5232-80e3-8b6a4dedb92d",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "930a1424-2ed7-5006-9c4a-d4a64d1c4baa",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "dcd87b94-bb54-5d11-824e-94b8a2dd6bc0",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "9eb7d71e-2a64-535b-bf6a-4f0e5390ac5e",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "IMAGE"
+    },
+    {
+      "$id": "67f58be4-54e1-536b-a0d9-014c1d727a54",
+      "length": 1,
+      "pluginMetadata": {},
+      "symbol": null,
+      "tweenType": "LINEAR",
+      "tweened": false,
+      "type": "FRAME_SCRIPT"
+    }
+  ],
+  "layers": [
+    {
+      "$id": "44ccf92d-ec7b-5f64-a6e3-913f50e35a48",
+      "hidden": false,
+      "keyframes": [
+        "42758c75-6048-5c3f-9d9f-31f67381a599",
+        "8302e75d-5839-5773-91db-d32c140ee6fd",
+        "2ec31c79-4294-5230-8018-e8053411a636",
+        "9c2b9793-8ec6-5ba0-a037-09a31c2baccc",
+        "ba4a3bba-075d-5232-80e3-8b6a4dedb92d",
+        "930a1424-2ed7-5006-9c4a-d4a64d1c4baa"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "b968b9ee-75b0-5c9a-90ae-09902af14090",
+      "hidden": false,
+      "keyframes": [
+        "dcd87b94-bb54-5d11-824e-94b8a2dd6bc0"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "bc548dc7-fac1-5fbe-8bcd-665411158906",
+      "hidden": false,
+      "keyframes": [
+        "9eb7d71e-2a64-535b-bf6a-4f0e5390ac5e"
+      ],
+      "locked": false,
+      "name": "Image Layer",
+      "pluginMetadata": {},
+      "type": "IMAGE"
+    },
+    {
+      "$id": "4a1c1320-a861-570c-ad37-5abdb52035ae",
+      "hidden": false,
+      "keyframes": [
+        "67f58be4-54e1-536b-a0d9-014c1d727a54"
+      ],
+      "locked": false,
+      "name": "Frame Script Layer",
+      "pluginMetadata": {},
+      "type": "FRAME_SCRIPT"
+    }
+  ],
+  "paletteMap": null,
+  "pluginMetadata": {
+    "com.fraymakers.FraymakersMetadata": {
+      "objectType": "PROJECTILE",
+      "version": "0.1.1"
+    }
+  },
+  "plugins": [
+    "com.fraymakers.FraymakersMetadata"
+  ],
+  "symbols": [],
+  "tags": [],
+  "terrains": [],
+  "tilesets": [],
+  "version": 14
+}
