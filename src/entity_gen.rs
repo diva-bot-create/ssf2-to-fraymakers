@@ -384,18 +384,34 @@ pub fn generate_entity(
 
                 if active_frames.is_empty() { continue; }
 
+                // Build runs: merge consecutive frames with identical geometry
+                // into one keyframe; a gap in frame numbers means a blank keyframe.
+                // This correctly handles RemoveObject (box absent on frame N even
+                // if it was present on N-1 and reappears on N+1).
                 let mut i = 0;
                 while i < active_frames.len() {
                     let (start_frame, fb) = active_frames[i];
 
-                    let next_frame = active_frames.get(i + 1).map(|(f, _)| *f);
-                    let run_len = if let Some(nf) = next_frame {
-                        (nf - start_frame) as u32
-                    } else {
-                        total.saturating_sub(start_frame as u32).max(1)
-                    };
+                    // Merge consecutive frames with the same box geometry
+                    let mut run_end = i; // inclusive index of last frame in run
+                    while run_end + 1 < active_frames.len() {
+                        let (next_f, next_fb) = active_frames[run_end + 1];
+                        let (cur_f, _) = active_frames[run_end];
+                        // Must be exactly the next frame AND same geometry
+                        let consecutive = next_f == cur_f + 1;
+                        let same_geom = (next_fb.x - fb.x).abs() < 0.01
+                            && (next_fb.y - fb.y).abs() < 0.01
+                            && (next_fb.width - fb.width).abs() < 0.01
+                            && (next_fb.height - fb.height).abs() < 0.01;
+                        if consecutive && same_geom {
+                            run_end += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    let run_len = (active_frames[run_end].0 - start_frame + 1) as u32;
 
-                    // Gap keyframe (no symbol)
+                    // Gap keyframe (blank) before this run
                     if start_frame as u32 > frame_idx {
                         let gap_kf_id = uuid(char_id, &format!("kf_box_gap_{}_{}_{}", anim_name, inst_name, frame_idx));
                         keyframes.push(json!({
@@ -411,10 +427,8 @@ pub fn generate_entity(
                         frame_idx = start_frame as u32;
                     }
 
-                    // Create COLLISION_BOX symbol for this keyframe
+                    // Create COLLISION_BOX symbol for this run
                     let sym_id = uuid(char_id, &format!("sym_box_{}_{}_{}", anim_name, inst_name, start_frame));
-                    // FrayTools uses y-down (negative = above foot), same as SSF2.
-                    // x/y = top-left corner of the box. Direct pass-through.
                     let fm_y = fb.y;
                     symbols.push(json!({
                         "$id": sym_id,
@@ -443,7 +457,7 @@ pub fn generate_entity(
                     }));
                     box_kf_ids.push(kf_id);
                     frame_idx = start_frame as u32 + run_len;
-                    i += 1;
+                    i = run_end + 1;
                 }
 
                 // Tail gap
