@@ -177,21 +177,63 @@ pub fn generate_entity(
         let mut anim_layer_ids: Vec<String> = Vec::new();
 
         // ── 1. LABEL layer ────────────────────────────────────────────────────
+        // Frame 0 always gets the FM animation name as a label.
+        // Additional SSF2 inner sprite labels are placed at their original frame offsets.
         {
             let layer_id = uuid(char_id, &format!("layer_label_{}", anim_name));
-            let kf_id = uuid(char_id, &format!("kf_label_{}", anim_name));
-            keyframes.push(json!({
-                "$id": kf_id,
-                "type": "LABEL",
-                "length": 1,
-                "name": anim_name,
-                "pluginMetadata": {}
-            }));
+            let mut label_kf_ids: Vec<Value> = Vec::new();
+
+            // Collect SSF2 inner labels from sprite_boxes
+            let inner_labels: Vec<(String, u16)> = sprite_boxes.get(anim_name)
+                .map(|sb| sb.frame_labels.clone())
+                .unwrap_or_default();
+
+            // Build sorted list: (frame, label_name). Frame 0 always has the FM anim name.
+            let mut all_labels: Vec<(u16, String)> = vec![(0, anim_name.to_string())];
+            for (lbl, frame) in &inner_labels {
+                // Skip labels at frame 0 (we already have the anim name there)
+                if *frame == 0 { continue; }
+                all_labels.push((*frame, lbl.clone()));
+            }
+            all_labels.sort_by_key(|(f, _)| *f);
+            all_labels.dedup_by_key(|(f, _)| *f);
+
+            // Emit LABEL keyframes with correct lengths to fill the timeline
+            let mut cursor: u32 = 0;
+            for (i, (frame, label)) in all_labels.iter().enumerate() {
+                let f = *frame as u32;
+                // Gap before this label (unlabeled frames)
+                if f > cursor {
+                    let gap_id = uuid(char_id, &format!("kf_label_gap_{}_{}", anim_name, cursor));
+                    keyframes.push(json!({
+                        "$id": gap_id,
+                        "type": "LABEL",
+                        "length": f - cursor,
+                        "name": "",
+                        "pluginMetadata": {}
+                    }));
+                    label_kf_ids.push(gap_id.into());
+                }
+                // This label's keyframe — length extends to next label or end of animation
+                let next_frame = all_labels.get(i + 1).map(|(nf, _)| *nf as u32).unwrap_or(frame_count);
+                let length = (next_frame - f).max(1);
+                let kf_id = uuid(char_id, &format!("kf_label_{}_f{}", anim_name, f));
+                keyframes.push(json!({
+                    "$id": kf_id,
+                    "type": "LABEL",
+                    "length": length,
+                    "name": label,
+                    "pluginMetadata": {}
+                }));
+                label_kf_ids.push(kf_id.into());
+                cursor = f + length;
+            }
+
             layers.push(json!({
                 "$id": layer_id,
                 "name": "Labels",
                 "type": "LABEL",
-                "keyframes": [kf_id],
+                "keyframes": label_kf_ids,
                 "hidden": false,
                 "locked": false,
                 "pluginMetadata": {}
