@@ -948,20 +948,21 @@ fn extract_frame_boxes(
                         let sy = root_xform.sy;
 
                         if box_type == BoxType::ItemBox {
-                            // itemBox (id=991) has its own geometry and can rotate.
-                            // The PlaceObject tx/ty is the center of the item grab area.
+                            // itemBox (id=991): the PlaceObject tx/ty is the hand attachment
+                            // point, which is at the BOTTOM of the shape (origin of id=991).
+                            // The shape hangs upward from this point.
                             let (lcx, lcy, lw, lh, rot) = matrix_to_itembox(&item.matrix);
-                            // Center in world space
-                            let wcx = root_xform.tx + lcx * sx;
-                            let wcy = root_xform.ty + lcy * sy;
+                            // Hand position in world space
+                            let whx = root_xform.tx + lcx * sx;
+                            let why = root_xform.ty + lcy * sy;
                             let ww = lw * sx.abs();
                             let wh = lh * sy.abs();
-                            // Convert center → top-left
+                            // Top-left: hand is at bottom-center, so top = hand_y - height
                             return Some(FrameBox {
                                 box_type,
                                 instance_name: item.instance_name.clone(),
-                                x: wcx - ww / 2.0,
-                                y: wcy - wh / 2.0,
+                                x: whx - ww / 2.0,
+                                y: why - wh,
                                 width: ww,
                                 height: wh,
                                 rotation: rot,

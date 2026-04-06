@@ -428,14 +428,21 @@ pub fn generate_entity(
                         frame_idx = start_frame as u32;
                     }
 
-                    // Create COLLISION_BOX symbol for this run
+                    // Create COLLISION_BOX symbol for this run.
+                    // itemBox rotates around the hand attachment point (bottom-center).
+                    // All other boxes rotate around their center.
                     let sym_id = uuid(char_id, &format!("sym_box_{}_{}_{}", anim_name, inst_name, start_frame));
+                    let (pivot_x, pivot_y) = if box_type == crate::sprite_parser::BoxType::ItemBox {
+                        (round2(fb.width / 2.0), round2(fb.height))  // bottom-center = hand
+                    } else {
+                        (round2(fb.width / 2.0), round2(fb.height / 2.0))  // center
+                    };
                     symbols.push(json!({
                         "$id": sym_id,
                         "alpha": 0.5,
                         "color": color,
-                        "pivotX": round2(fb.width / 2.0),
-                        "pivotY": round2(fb.height / 2.0),
+                        "pivotX": pivot_x,
+                        "pivotY": pivot_y,
                         "pluginMetadata": {},
                         "rotation": round2(fb.rotation),
                         "scaleX": round2(fb.width),
