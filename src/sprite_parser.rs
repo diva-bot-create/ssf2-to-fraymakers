@@ -126,7 +126,130 @@ pub struct AnimationBoxData {
     pub sprite_frame_offset: u16,
 }
 
+/// Root MovieClip placement transform for one xframe animation.
+/// The root character MC places each animation sub-sprite at a specific
+/// offset and scale. These must be applied to all sub-sprite-local coords
+/// (boxes, image pivots) to produce correct world-space positions.
+#[derive(Debug, Clone, Copy)]
+pub struct XframeTransform {
+    /// Root placement offset X in pixels (SSF2 coordinate space)
+    pub tx: f64,
+    /// Root placement offset Y in pixels (SSF2 coordinate space, y-down)
+    pub ty: f64,
+    /// Root placement scaleX
+    pub sx: f64,
+    /// Root placement scaleY
+    pub sy: f64,
+}
+
+impl Default for XframeTransform {
+    fn default() -> Self {
+        Self { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0 }
+    }
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
+
+/// Extract per-animation root-MovieClip placement transforms.
+///
+/// The SSF2 root character sprite (e.g. "mario") places each animation
+/// sub-sprite ("stance") on successive frames with a PlaceObject that
+/// carries a translation (tx, ty) and scale (sx, sy). These transform
+/// all local coordinates inside the sub-sprite into the character's
+/// world space (where y=0 is the foot of the character).
+///
+/// Returns a map: FM animation name → XframeTransform.
+/// For sub-animations (jab1/jab2 etc) the parent animation's transform is used.
+pub fn extract_xframe_transforms(
+    swf_data: &[u8],
+    char_name: &str,
+    ssf2_to_fm: &BTreeMap<String, String>,
+) -> anyhow::Result<BTreeMap<String, XframeTransform>> {
+    let swf_buf = swf::decompress_swf(Cursor::new(swf_data))?;
+    let swf = swf::parse_swf(&swf_buf)?;
+
+    let mut sym_names: BTreeMap<u16, String> = BTreeMap::new();
+    for tag in &swf.tags {
+        if let swf::Tag::SymbolClass(links) = tag {
+            for link in links {
+                let name = link.class_name.to_str_lossy(encoding_rs::WINDOWS_1252).to_string();
+                sym_names.insert(link.id, name);
+            }
+        }
+    }
+
+    let char_lower = char_name.to_lowercase();
+    let mut result: BTreeMap<String, XframeTransform> = BTreeMap::new();
+
+    for tag in &swf.tags {
+        if let swf::Tag::DefineSprite(sprite) = tag {
+            let sym = sym_names.get(&sprite.id).cloned().unwrap_or_default();
+            if sym.to_lowercase() != char_lower { continue; }
+
+            // Walk the root MC, tracking the current xframe label and the last
+            // stance PlaceObject matrix seen.
+            let mut current_frame: u16 = 0;
+            let mut current_ssf2_label: Option<String> = None;
+            // depth → last known matrix for stance
+            let mut stance_matrix: Option<swf::Matrix> = None;
+
+            for stag in &sprite.tags {
+                match stag {
+                    swf::Tag::FrameLabel(fl) => {
+                        let label = fl.label.to_str_lossy(encoding_rs::WINDOWS_1252).to_string();
+                        current_ssf2_label = Some(label);
+                        // Reset stance matrix for this new label frame
+                        stance_matrix = None;
+                    }
+                    swf::Tag::PlaceObject(po) => {
+                        let inst = po.name.as_ref()
+                            .map(|s| String::from_utf8_lossy(s.as_bytes()).to_string())
+                            .unwrap_or_default();
+                        if inst == "stance" {
+                            if let Some(m) = &po.matrix {
+                                stance_matrix = Some(*m);
+                            }
+                        }
+                    }
+                    swf::Tag::ShowFrame => {
+                        // On ShowFrame: record the transform for the current label
+                        if let (Some(label), Some(m)) = (&current_ssf2_label, &stance_matrix) {
+                            let tx = m.tx.get() as f64 / 20.0;
+                            let ty = m.ty.get() as f64 / 20.0;
+                            // Use absolute value of scale — negative = flipped, magnitude is what we want
+                            let sx = m.a.to_f64();
+                            let sy = m.d.to_f64();
+
+                            // Map SSF2 label → FM name
+                            let fm_name = ssf2_to_fm.get(label.as_str())
+                                .cloned()
+                                .or_else(|| static_ssf2_to_fm(label))
+                                .unwrap_or_else(|| label.clone());
+
+                            // Also insert for sub-animations (jab1/jab2/jab3/jab4, taunt_up/taunt_down)
+                            let xform = XframeTransform { tx, ty, sx, sy };
+                            result.entry(fm_name.clone()).or_insert(xform);
+
+                            // Seed sub-anim names with the same transform
+                            for sub in crate::extractor::expand_split_anim(&fm_name) {
+                                result.entry(sub).or_insert(xform);
+                            }
+                        }
+                        current_frame += 1;
+                        // After ShowFrame, clear label so next ShowFrame (same label re-entry) doesn't re-record
+                        current_ssf2_label = None;
+                    }
+                    _ => {}
+                }
+            }
+            let _ = current_frame;
+            break;
+        }
+    }
+
+    log::info!("extract_xframe_transforms: {} animations mapped", result.len());
+    Ok(result)
+}
 
 /// Parse the SWF file and extract per-animation per-frame collision box data.
 /// `ssf2_to_fm` maps SSF2 animation names to Fraymakers animation names.
@@ -156,7 +279,12 @@ pub fn parse_sprite_boxes(
 
     // Build reverse map: FM anim name → SSF2 anim name (for lookup)
     // and a set of all SSF2 anim names we care about
-    let known_ssf2_names: std::collections::HashSet<&str> = ssf2_to_fm.keys().map(|s| s.as_str()).collect();
+    let _known_ssf2_names: std::collections::HashSet<&str> = ssf2_to_fm.keys().map(|s| s.as_str()).collect();
+
+    // Extract root MovieClip placement transforms for each animation
+    let xform_map = extract_xframe_transforms(swf_data, char_name, ssf2_to_fm)
+        .unwrap_or_default();
+    log::info!("Root MC transforms: {} animations", xform_map.len());
 
     // Find all character animation sprites
     // Pattern: "{char}_fla.{AnimName}_{index}" or just "{char}_{animtype}"
@@ -179,21 +307,18 @@ pub fn parse_sprite_boxes(
             };
 
             // Convert SSF2 name → FM name.
-            // ssf2_name might be a raw SSF2 xframe label ('a', 'a_air', etc) OR
-            // a normalized symbol label that maps to one ('jabcombo' → 'a' → 'jab').
-            // The static symbol→SSF2 table in extract_ssf2_anim_name always returns the
-            // SSF2 xframe name ('a'), so we then look that up in the dynamic ssf2_to_fm
-            // map. If not found there (character never calls setXFrame for this anim),
-            // fall back to the static FM mapping table.
             let fm_name = ssf2_to_fm.get(&ssf2_name)
                 .cloned()
                 .or_else(|| static_ssf2_to_fm(&ssf2_name))
                 .unwrap_or_else(|| ssf2_name.clone());
 
+            // Look up root MC transform for this animation
+            let xform = xform_map.get(&fm_name).copied().unwrap_or_default();
+
             // Collect internal frame labels (for sub-animation splitting)
             let frame_labels = extract_frame_labels(sprite);
 
-            let frames = extract_frame_boxes(sprite, &sym_names, box_base_size);
+            let frames = extract_frame_boxes(sprite, &sym_names, box_base_size, xform);
 
             log::debug!("Sprite '{}' → ssf2='{}' fm='{}': {} frames with boxes, {} labels",
                 sym, ssf2_name, fm_name, frames.len(), frame_labels.len());
@@ -778,6 +903,7 @@ fn extract_frame_boxes(
     sprite: &swf::Sprite,
     sym_names: &BTreeMap<u16, String>,
     base_size: f64,
+    root_xform: XframeTransform,
 ) -> BTreeMap<u16, Vec<FrameBox>> {
     // Display list: depth → (char_id, instance_name, matrix)
     let mut display_list: BTreeMap<u16, DisplayItem> = BTreeMap::new();
@@ -807,13 +933,22 @@ fn extract_frame_boxes(
                     })
                     .filter_map(|item| {
                         let box_type = BoxType::from_instance_name(&item.instance_name)?;
-                        // Skip ItemBox in most contexts (it's just item grab range, not a real box)
-                        // Keep for completeness — caller can filter
-                        let (x, y, w, h) = matrix_to_box(&item.matrix, base_size);
+                        let (local_x, local_y, local_w, local_h) = matrix_to_box(&item.matrix, base_size);
+                        // Apply root MC transform: scale local coords, then add root offset.
+                        // root_xform.sx/sy may be negative (flipped); use abs for size.
+                        let sx = root_xform.sx;
+                        let sy = root_xform.sy;
+                        let world_x = root_xform.tx + local_x * sx;
+                        let world_y = root_xform.ty + local_y * sy;
+                        let world_w = (local_w * sx).abs();
+                        let world_h = (local_h * sy).abs();
                         Some(FrameBox {
                             box_type,
                             instance_name: item.instance_name.clone(),
-                            x, y, width: w.abs(), height: h.abs(),
+                            x: world_x,
+                            y: world_y,
+                            width: world_w,
+                            height: world_h,
                         })
                     })
                     .collect();

@@ -24,12 +24,34 @@ pub struct ExtractedImage {
 /// Maps shape/character IDs to bitmap IDs (DefineShape → bitmap fill ID)
 pub type ShapeToBitmapMap = BTreeMap<u16, u16>;
 
+/// Local placement matrix for an image within its sub-sprite (in SSF2 local pixel space).
+/// tx/ty are in pixels (already divided by 20 from twips).
+#[derive(Debug, Clone, Copy)]
+pub struct ImageLocalMatrix {
+    pub tx: f64,
+    pub ty: f64,
+    pub sx: f64,
+    pub sy: f64,
+}
+
+impl Default for ImageLocalMatrix {
+    fn default() -> Self { Self { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0 } }
+}
+
 /// A single image layer placed at a specific depth in one frame.
 #[derive(Debug, Clone)]
 pub struct FrameImageEntry {
     pub depth: u16,
     pub shape_id: u16,
     pub symbol_name: String,
+    /// Local placement matrix within the sub-sprite (before root MC transform)
+    pub local_matrix: ImageLocalMatrix,
+    /// World-space position after applying root MC transform (pixels, SSF2 y-down).
+    /// Use these for Fraymakers IMAGE symbol x/y/scaleX/scaleY (after y-flip).
+    pub world_tx: f64,
+    pub world_ty: f64,
+    pub world_sx: f64,
+    pub world_sy: f64,
 }
 
 /// Per-animation per-frame image references.
@@ -160,8 +182,12 @@ pub fn extract_images(
 
     log::info!("Extracted {} images to {}", images.len(), sprites_dir.display());
 
-    // 3. Build per-animation per-frame image references from DefineSprite tags
-    let mut anim_images = build_anim_frame_images(&swf, char_name, ssf2_to_fm, &symbols, &shape_to_bitmap);
+    // 3. Extract root MC transforms for applying to image positions
+    let xform_map = crate::sprite_parser::extract_xframe_transforms(swf_data, char_name, ssf2_to_fm)
+        .unwrap_or_default();
+
+    // 4. Build per-animation per-frame image references from DefineSprite tags
+    let mut anim_images = build_anim_frame_images(&swf, char_name, ssf2_to_fm, &symbols, &shape_to_bitmap, &xform_map);
     // Apply same fallbacks as sprite_parser for animations with no image data
     apply_image_fallbacks(&mut anim_images);
     log::info!("Animation image mappings: {} animations (after fallbacks)", anim_images.len());
@@ -198,6 +224,7 @@ fn build_anim_frame_images(
     ssf2_to_fm: &BTreeMap<String, String>,
     symbols: &BTreeMap<u16, String>,
     shape_to_bitmap: &ShapeToBitmapMap,
+    xform_map: &BTreeMap<String, crate::sprite_parser::XframeTransform>,
 ) -> BTreeMap<String, AnimFrameImages> {
     use crate::sprite_parser::extract_ssf2_anim_name;
 
@@ -224,9 +251,13 @@ fn build_anim_frame_images(
             let fm_name = ssf2_to_fm.get(&ssf2_name).cloned().unwrap_or_else(|| ssf2_name.clone());
             log::debug!("image_extractor: sprite '{}' → ssf2='{}' fm='{}'", sym, ssf2_name, fm_name);
 
+            // Root MC transform for this animation
+            let root_xf = xform_map.get(&fm_name).copied()
+                .unwrap_or(crate::sprite_parser::XframeTransform::default());
+
             let mut current_frame: u16 = 0;
-            // depth → (shape_id, symbol_name) — the active display list
-            let mut display_list: BTreeMap<u16, (u16, String)> = BTreeMap::new();
+            // depth → (shape_id, symbol_name, local_matrix) — the active display list
+            let mut display_list: BTreeMap<u16, (u16, String, ImageLocalMatrix)> = BTreeMap::new();
             let mut frames: BTreeMap<u16, Vec<FrameImageEntry>> = BTreeMap::new();
 
             for stag in &sprite.tags {
@@ -235,10 +266,22 @@ fn build_anim_frame_images(
                         // Snapshot the display list as this frame's entries
                         if !display_list.is_empty() {
                             let entries: Vec<FrameImageEntry> = display_list.iter()
-                                .map(|(&depth, (id, sym))| FrameImageEntry {
-                                    depth,
-                                    shape_id: *id,
-                                    symbol_name: sym.clone(),
+                                .map(|(&depth, (id, sym, mat))| {
+                                    // Apply root MC transform to get world-space coords
+                                    let world_tx = root_xf.tx + mat.tx * root_xf.sx;
+                                    let world_ty = root_xf.ty + mat.ty * root_xf.sy;
+                                    let world_sx = mat.sx * root_xf.sx;
+                                    let world_sy = mat.sy * root_xf.sy;
+                                    FrameImageEntry {
+                                        depth,
+                                        shape_id: *id,
+                                        symbol_name: sym.clone(),
+                                        local_matrix: *mat,
+                                        world_tx,
+                                        world_ty,
+                                        world_sx,
+                                        world_sy,
+                                    }
                                 })
                                 .collect();
                             frames.insert(current_frame, entries);
@@ -256,6 +299,13 @@ fn build_anim_frame_images(
                         }
 
                         let depth = po.depth;
+                        let local_mat = po.matrix.map(|m| ImageLocalMatrix {
+                            tx: m.tx.get() as f64 / 20.0,
+                            ty: m.ty.get() as f64 / 20.0,
+                            sx: m.a.to_f64(),
+                            sy: m.d.to_f64(),
+                        }).unwrap_or_default();
+
                         match &po.action {
                             swf::PlaceObjectAction::Place(char_id)
                             | swf::PlaceObjectAction::Replace(char_id) => {
@@ -267,10 +317,13 @@ fn build_anim_frame_images(
                                 {
                                     continue;
                                 }
-                                display_list.insert(depth, (*char_id, sym_name));
+                                display_list.insert(depth, (*char_id, sym_name, local_mat));
                             }
                             swf::PlaceObjectAction::Modify => {
-                                // Modify without char id — leave display list entry as-is
+                                // Update matrix of existing entry
+                                if let Some(entry) = display_list.get_mut(&depth) {
+                                    entry.2 = local_mat;
+                                }
                             }
                         }
                     }

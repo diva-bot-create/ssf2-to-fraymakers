@@ -110,25 +110,10 @@ pub fn generate_entity(
         image_guids.insert(img.symbol_name.clone(), meta_guid);
     }
 
-    // ── Build IMAGE symbols ───────────────────────────────────────────────────
-    for (_, img) in &img_result.images {
-        let sym_id = uuid(char_id, &format!("sym_{}", img.symbol_name));
-        let meta_guid = image_guids.get(&img.symbol_name).cloned().unwrap_or_default();
-        symbols.push(json!({
-            "$id": sym_id,
-            "alpha": 1,
-            "imageAsset": meta_guid,
-            "pivotX": 0,
-            "pivotY": 0,
-            "pluginMetadata": {},
-            "rotation": 0,
-            "scaleX": 1,
-            "scaleY": 1,
-            "type": "IMAGE",
-            "x": 0,
-            "y": 0
-        }));
-    }
+    // IMAGE symbols are now created per-placement (per anim/frame) to carry correct
+    // world-space x/y/scaleX/scaleY from the root MC transform + local sub-sprite matrix.
+    // We collect them during the animation loop below.
+    // (The old per-bitmap shared symbol approach is replaced.)
 
     // ── Build frame script lookup ─────────────────────────────────────────────
     let _frame_script_map: BTreeMap<String, String> = data.scripts.iter()
@@ -399,30 +384,77 @@ pub fn generate_entity(
                     while f < total {
                         let entry = anim_imgs.frames.get(&(f as u16))
                             .and_then(|v| v.get(slot));
+
+                        // Key for run-length: same symbol AND same world transform
                         let sym_name = entry.map(|e| e.symbol_name.as_str());
                         let shape_id = entry.map(|e| e.shape_id);
+                        let world_tx = entry.map(|e| round2(e.world_tx)).unwrap_or(0.0);
+                        let world_ty = entry.map(|e| round2(e.world_ty)).unwrap_or(0.0);
+                        let world_sx = entry.map(|e| round2(e.world_sx)).unwrap_or(1.0);
+                        let world_sy = entry.map(|e| round2(e.world_sy)).unwrap_or(1.0);
 
-                        // Run-length encode identical consecutive frames
+                        // Run-length encode consecutive frames with identical symbol + world transform
                         let mut run = 1u32;
                         while f + run < total {
                             let next = anim_imgs.frames.get(&((f + run) as u16))
                                 .and_then(|v| v.get(slot));
-                            if next.map(|e| e.symbol_name.as_str()) == sym_name { run += 1; } else { break; }
+                            let matches = next.map(|e| e.symbol_name.as_str()) == sym_name
+                                && next.map(|e| round2(e.world_tx)) == Some(world_tx).filter(|_| sym_name.is_some())
+                                && next.map(|e| round2(e.world_ty)) == Some(world_ty).filter(|_| sym_name.is_some())
+                                && next.map(|e| round2(e.world_sx)) == Some(world_sx).filter(|_| sym_name.is_some())
+                                && next.map(|e| round2(e.world_sy)) == Some(world_sy).filter(|_| sym_name.is_some());
+                            if matches { run += 1; } else { break; }
                         }
 
                         let kf_id = uuid(char_id, &format!("kf_image_{}_s{}_f{}", anim_name, slot, f));
 
-                        let symbol_ref = shape_id.and_then(|sid| {
+                        // Resolve bitmap and create a per-placement IMAGE symbol with world coords
+                        let bitmap_img = shape_id.and_then(|sid| {
                             let bmp_id = img_result.shape_to_bitmap.get(&sid).copied().unwrap_or(sid);
                             img_result.images.get(&bmp_id)
-                                .map(|img| uuid(char_id, &format!("sym_{}", img.symbol_name)))
                         }).or_else(|| {
                             sym_name.and_then(|sn| {
-                                img_result.images.values()
-                                    .find(|img| img.symbol_name == sn)
-                                    .map(|img| uuid(char_id, &format!("sym_{}", img.symbol_name)))
+                                img_result.images.values().find(|img| img.symbol_name == sn)
                             })
                         });
+
+                        let symbol_ref = if let Some(img) = bitmap_img {
+                            // Create a per-placement symbol (unique per anim/slot/frame)
+                            let per_placement_sym_id = uuid(char_id,
+                                &format!("sym_img_{}_s{}_f{}", anim_name, slot, f));
+                            let meta_guid = image_guids.get(&img.symbol_name)
+                                .cloned().unwrap_or_default();
+                            // FM y-axis is flipped vs SSF2: world_ty (SSF2 y-down top of image)
+                            // In FM, y=0 at foot, y goes up.
+                            // The image tx/ty from SSF2 is the registration point of the image
+                            // (typically top-left in SWF space). In FM we pass the x/y as the
+                            // pivot offset from the character origin.
+                            // SSF2: ty is the top of the image (y-down). FM: y is the bottom (y-up).
+                            // We need the image height to compute the bottom edge, but we don't have
+                            // it in pixels here reliably. Use the pivot at the tx/ty position and
+                            // let FM handle pivot. Store world_ty negated (y-flip) as the FM y.
+                            let fm_x = round2(world_tx);
+                            let fm_y = round2(-world_ty);  // SSF2 y-down → FM y-up
+                            let fm_sx = round2(world_sx.abs());
+                            let fm_sy = round2(world_sy.abs());
+                            symbols.push(json!({
+                                "$id": per_placement_sym_id,
+                                "alpha": 1,
+                                "imageAsset": meta_guid,
+                                "pivotX": 0,
+                                "pivotY": 0,
+                                "pluginMetadata": {},
+                                "rotation": 0,
+                                "scaleX": fm_sx,
+                                "scaleY": fm_sy,
+                                "type": "IMAGE",
+                                "x": fm_x,
+                                "y": fm_y
+                            }));
+                            Some(per_placement_sym_id)
+                        } else {
+                            None
+                        };
 
                         keyframes.push(json!({
                             "$id": kf_id,
