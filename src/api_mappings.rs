@@ -410,10 +410,109 @@ pub fn build_hitbox_prop_map() -> BTreeMap<&'static str, &'static str> {
 //
 // This is handled at the text level in the post-processor.
 
+/// Remove SSF2 readiness guard if-blocks that are always-true in Fraymakers.
+///
+/// SSF2 wraps initialization code with guards like:
+///   `if (SSF2API.isReady()) { ... }`
+///   `if (self && SSF2API.isReady()) { ... }`
+///   `if (SSF2API.isReady() && self) { ... }`
+///
+/// In Fraymakers Script.hx, `self` is always valid and the API is always ready,
+/// so these guards are unnecessary. This function removes the if-wrapper and
+/// dedents the body by one level, effectively inlining the body.
+pub fn remove_readiness_guards(code: &str) -> String {
+    let lines: Vec<&str> = code.lines().collect();
+    let mut out: Vec<String> = Vec::with_capacity(lines.len());
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i];
+        let trimmed = line.trim();
+
+        if is_isready_guard(trimmed) {
+            // Count braces to find the matching close-brace of this if block
+            let mut depth: i32 = 0;
+            let mut found_open = false;
+            let mut body_start = i;
+            let mut j = i;
+
+            'scan: while j < lines.len() {
+                for ch in lines[j].chars() {
+                    match ch {
+                        '{' => {
+                            depth += 1;
+                            if !found_open {
+                                found_open = true;
+                                body_start = j;
+                            }
+                        }
+                        '}' => {
+                            depth -= 1;
+                            if found_open && depth == 0 {
+                                break 'scan;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                j += 1;
+            }
+
+            if found_open && depth == 0 {
+                // Emit body lines (body_start+1 .. j), each dedented by one tab
+                // Add a comment so the reader knows a guard was stripped
+                out.push("// [FM] isReady guard removed — always true in Fraymakers".to_string());
+                for body_line in &lines[body_start + 1..j] {
+                    out.push(strip_one_tab(body_line).to_string());
+                }
+                i = j + 1; // skip the closing `}` line
+                continue;
+            } else {
+                // Couldn't parse — emit original
+                out.push(line.to_string());
+                i += 1;
+                continue;
+            }
+        }
+
+        out.push(line.to_string());
+        i += 1;
+    }
+
+    // Re-join, preserving trailing newline if original had one
+    let mut joined = out.join("\n");
+    if code.ends_with('\n') {
+        joined.push('\n');
+    }
+    joined
+}
+
+/// Returns true if a trimmed line is a SSF2 readiness guard if-statement.
+fn is_isready_guard(trimmed: &str) -> bool {
+    // Must start with `if (` or `if(`
+    if !trimmed.starts_with("if (") && !trimmed.starts_with("if(") {
+        return false;
+    }
+    // Must contain SSF2API.isReady() — the canonical readiness check
+    trimmed.contains("SSF2API.isReady()")
+}
+
+/// Strip one tab (or 4 spaces) from the start of a line.
+fn strip_one_tab(line: &str) -> &str {
+    if line.starts_with('\t') {
+        &line[1..]
+    } else if line.starts_with("    ") {
+        &line[4..]
+    } else {
+        line
+    }
+}
+
 /// Apply text-level SSF2→FM API translations to decompiled Haxe code.
 /// This is a post-processing step run on the output of the decompiler.
 pub fn translate_ssf2_to_fm(code: &str) -> String {
-    let mut result = code.to_string();
+    // First: strip SSF2API.isReady() guard blocks entirely (they're always-true in FM)
+    let mut result = remove_readiness_guards(code);
 
     // ── self.self → self ──
     // SSF2 sub-MC closures capture the character as "self.self"
@@ -541,17 +640,68 @@ mod tests {
 
     #[test]
     fn test_basic_translations() {
-        let input = r#"self.self.endAttack();
-SSF2API.print("hello");
-self.self.updateAttackBoxStats(1, { damage: 5, direction: 45, power: 10 });
-SSF2API.isReady()
-self.self.refreshAttackID();"#;
+        let input = concat!(
+            "self.self.endAttack();\n",
+            "SSF2API.print(\"hello\");\n",
+            "self.self.updateAttackBoxStats(1, { damage: 5, direction: 45, power: 10 });\n",
+            "self.self.refreshAttackID();",
+        );
 
         let output = translate_ssf2_to_fm(input);
-        assert!(output.contains("self.endAnimation()"));
-        assert!(output.contains("Engine.log(\"hello\")"));
-        assert!(output.contains("self.updateHitboxStats(1, { damage: 5, angle: 45, baseKnockback: 10 })"));
-        assert!(output.contains("true"));
-        assert!(output.contains("self.reactivateHitboxes()"));
+        assert!(output.contains("self.endAnimation()"), "endAttack not translated");
+        assert!(output.contains("Engine.log(\"hello\")"), "print not translated");
+        assert!(output.contains("self.updateHitboxStats"), "updateAttackBoxStats not translated");
+        assert!(output.contains("angle: 45"), "direction: not renamed to angle:");
+        assert!(output.contains("baseKnockback: 10"), "power: not renamed");
+        assert!(output.contains("self.reactivateHitboxes()"), "refreshAttackID not translated");
+    }
+
+    #[test]
+    fn test_isready_guard_removed() {
+        let input = concat!(
+            "function a__frame0() {\n",
+            "\tif (SSF2API.isReady()) {\n",
+            "\t\tself.looped = false;\n",
+            "\t\tself.playsound = SSF2API.random();\n",
+            "\t}\n",
+            "\treturn;\n",
+            "}",
+        );
+        let output = translate_ssf2_to_fm(input);
+        // The if-block wrapper should be gone
+        assert!(!output.contains("SSF2API.isReady()"), "guard not removed");
+        assert!(!output.contains("if ("), "if block should be stripped");
+        // Body should be inlined (one tab dedented)
+        assert!(output.contains("self.looped = false;"), "body not inlined");
+        assert!(output.contains("Random.getFloat"), "random not translated");
+    }
+
+    #[test]
+    fn test_self_and_isready_guard_removed() {
+        let input = concat!(
+            "\tif (self && SSF2API.isReady()) {\n",
+            "\t\tself.x = 10;\n",
+            "\t}",
+        );
+        let output = translate_ssf2_to_fm(input);
+        assert!(!output.contains("SSF2API.isReady()"), "guard not removed");
+        assert!(output.contains("self.x = 10;"), "body not inlined");
+    }
+
+    #[test]
+    fn test_nested_isready_guard() {
+        // Guard with nested braces inside
+        let input = concat!(
+            "\tif (SSF2API.isReady()) {\n",
+            "\t\tif (x > 0) {\n",
+            "\t\t\tself.y = 1;\n",
+            "\t\t}\n",
+            "\t}",
+        );
+        let output = translate_ssf2_to_fm(input);
+        assert!(!output.contains("SSF2API.isReady()"), "outer guard not removed");
+        // inner if should survive
+        assert!(output.contains("if (x > 0)"), "inner if should survive");
+        assert!(output.contains("self.y = 1;"), "body not inlined");
     }
 }
