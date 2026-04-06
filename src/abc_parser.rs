@@ -92,6 +92,7 @@ pub struct AbcFile {
 pub struct Multiname {
     pub kind: u8,
     pub name_idx: u32,
+    pub ns_idx: u32,
     pub name: String, // resolved from string pool
 }
 
@@ -316,11 +317,11 @@ pub fn parse(data: &[u8]) -> Result<AbcFile> {
 
     // Namespaces
     let ns_count = r.read_u30()? as usize;
-    let mut _namespaces = vec![(0u8, 0u32)];
+    let mut namespaces: Vec<String> = vec![String::new()];
     for _ in 1..ns_count {
-        let kind = r.read_u8()?;
+        let _kind = r.read_u8()?;
         let name_idx = r.read_u30()?;
-        _namespaces.push((kind, name_idx));
+        namespaces.push(strings.get(name_idx as usize).cloned().unwrap_or_default());
     }
 
     // Namespace sets
@@ -334,41 +335,42 @@ pub fn parse(data: &[u8]) -> Result<AbcFile> {
 
     // Multinames
     let mn_count = r.read_u30()? as usize;
-    let mut multinames = vec![Multiname { kind: 0, name_idx: 0, name: String::new() }];
+    let mut multinames = vec![Multiname { kind: 0, name_idx: 0, ns_idx: 0, name: String::new() }];
     for _ in 1..mn_count {
         let kind = r.read_u8()?;
         let mn = match kind {
             0x07 | 0x0D => { // QName, QNameA
-                let _ns = r.read_u30()?;
+                let ns = r.read_u30()?;
                 let name_idx = r.read_u30()?;
                 let name = strings.get(name_idx as usize).cloned().unwrap_or_default();
-                Multiname { kind, name_idx, name }
+                Multiname { kind, name_idx, ns_idx: ns, name }
             }
             0x0F | 0x10 => { // RTQName, RTQNameA
-                Multiname { kind, name_idx: 0, name: String::new() }
+                let name_idx = r.read_u30()?;
+                Multiname { kind, name_idx, ns_idx: 0, name: strings.get(name_idx as usize).cloned().unwrap_or_default() }
             }
             0x11 | 0x12 => { // RTQNameL, RTQNameLA
-                Multiname { kind, name_idx: 0, name: String::new() }
+                Multiname { kind, name_idx: 0, ns_idx: 0, name: String::new() }
             }
             0x09 | 0x0E => { // Multiname, MultinameA
                 let name_idx = r.read_u30()?;
                 let _ns_set = r.read_u30()?;
                 let name = strings.get(name_idx as usize).cloned().unwrap_or_default();
-                Multiname { kind, name_idx, name }
+                Multiname { kind, name_idx, ns_idx: 0, name }
             }
             0x1B | 0x1C => { // MultinameL, MultinameLA
                 let _ns_set = r.read_u30()?;
-                Multiname { kind, name_idx: 0, name: String::new() }
+                Multiname { kind, name_idx: 0, ns_idx: 0, name: String::new() }
             }
             0x1D => { // TypeName (generic)
                 let _qname = r.read_u30()?;
                 let param_count = r.read_u30()? as usize;
                 for _ in 0..param_count { r.read_u30()?; }
-                Multiname { kind, name_idx: 0, name: String::new() }
+                Multiname { kind, name_idx: 0, ns_idx: 0, name: String::new() }
             }
             _ => {
                 log::warn!("Unknown multiname kind: 0x{:02X}", kind);
-                Multiname { kind, name_idx: 0, name: String::new() }
+                Multiname { kind, name_idx: 0, ns_idx: 0, name: String::new() }
             }
         };
         multinames.push(mn);
@@ -431,7 +433,20 @@ pub fn parse(data: &[u8]) -> Result<AbcFile> {
         }
         let name = multinames.get(name_idx as usize).map(|m| m.name.clone()).unwrap_or_default();
         let super_name = multinames.get(super_name_idx as usize).map(|m| m.name.clone()).unwrap_or_default();
-        classes.push(Class { name, super_name, instance_methods, class_methods: vec![], constructor_idx });
+        // Also resolve namespace-qualified name for _fla.* classes
+        let ns_name = if let Some(mn) = multinames.get(name_idx as usize) {
+            if mn.kind == 0x07 || mn.kind == 0x0D {
+                // QName: namespace_idx is stored, get namespace string
+                let ns_idx = mn.ns_idx as usize;
+                if ns_idx < namespaces.len() && !namespaces[ns_idx].is_empty() {
+                    format!("{}.{}", namespaces[ns_idx], mn.name)
+                } else {
+                    mn.name.clone()
+                }
+            } else { mn.name.clone() }
+        } else { name.clone() };
+        let full_name = if ns_name != name && ns_name.contains("_fla.") { ns_name } else { name.clone() };
+        classes.push(Class { name: full_name, super_name, instance_methods, class_methods: vec![], constructor_idx });
     }
 
     // Class infos (static traits)
@@ -705,18 +720,17 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
     let main_class = abc.classes.iter()
         // 1. Exact case-insensitive match
         .find(|c| c.name.to_lowercase() == char_lower)
-        // 2. Best-fit: non-Ext, non-fla class whose name contains char_lower as a prefix
-        //    AND has the most frame* methods (to avoid projectile/helper classes)
+        // 2. Last resort: whichever non-Ext, non-fla, non-proj class has the MOST frame* methods.
+        //    Handles cases like captainfalcon.ssf -> class 'falcon', chibirobo.ssf -> 'chibirobo', etc.
         .or_else(|| {
             abc.classes.iter()
                 .filter(|c| {
                     let cn = c.name.to_lowercase();
                     !cn.ends_with("ext") && !cn.contains("_fla") && !cn.contains("api")
-                        && !cn.contains("proj") && !cn.contains("helper")
-                        // name must be exactly char_lower with possible CamelCase only
-                        && cn == char_lower
+                        && !cn.contains("proj") && !cn.contains("helper") && !cn.contains("_hud")
                 })
                 .max_by_key(|c| c.instance_methods.iter().filter(|t| t.name.starts_with("frame")).count())
+                .filter(|c| c.instance_methods.iter().any(|t| t.name.starts_with("frame")))
         });
     if let Some(mc) = main_class {
         log::info!("Main class '{}': {} frame methods", mc.name, mc.instance_methods.len());
@@ -767,6 +781,170 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
         if !xframe_map.is_empty() {
             log::info!("Found {} xframe mappings in script-level traits", xframe_map.len());
         }
+    }
+
+    // --- Extract sub-MC frame scripts ---
+    // SSF2 animation MovieClips (e.g. captainfalcon_fla.JabCombo_47) register per-frame
+    // logic via addFrameScript(N, closure) inside their class iinit.
+    // Each class name encodes the main-timeline frame number as a suffix (e.g. _47).
+    // We map that back to an animation name via xframe_map (e.g. frame47 → "a").
+    //
+    // Find the addFrameScript multiname index
+    let afs_mn_idx = abc.multinames.iter().position(|mn| mn.name == "addFrameScript");
+    if let Some(afs_idx) = afs_mn_idx {
+        // Encode afs_idx as u30 for pattern matching
+        let mut afs_enc = Vec::new();
+        let mut v = afs_idx as u32;
+        loop { if v < 0x80 { afs_enc.push(v as u8); break; } afs_enc.push((v as u8 & 0x7F) | 0x80); v >>= 7; }
+        let callpropvoid_afs: Vec<u8> = std::iter::once(0x4Fu8).chain(afs_enc.iter().copied()).collect();
+        let callproperty_afs: Vec<u8> = std::iter::once(0x46u8).chain(afs_enc.iter().copied()).collect();
+
+        // Build ssf2→fm map for extract_ssf2_anim_name lookups
+        let xframe_fm_map: BTreeMap<String, String> = xframe_map.values()
+            .map(|ssf2| (ssf2.clone(), ssf2.clone())) // identity for now, haxe_gen does FM translation
+            .collect();
+
+        let fla_classes: Vec<&Class> = abc.classes.iter()
+            .filter(|c| c.name.contains("_fla."))
+            .collect();
+        log::info!("Found {} _fla. sub-MC classes", fla_classes.len());
+        if fla_classes.is_empty() {
+            // Dump first 10 class names for debugging
+            let names: Vec<&str> = abc.classes.iter().take(20).map(|c| c.name.as_str()).collect();
+            log::info!("First 20 class names: {:?}", names);
+        }
+        for class in &abc.classes {
+            // Only process captainfalcon_fla.* style sub-MC classes
+            if !class.name.contains("_fla.") { continue; }
+
+            // Map sub-MC class name → SSF2 animation name using the same mapping
+            // as sprite_parser (e.g. "JabCombo" → "a", "NAir" → "a_air")
+            let ssf2_anim = crate::sprite_parser::extract_ssf2_anim_name(
+                &class.name, &char_lower, &xframe_fm_map
+            );
+            let Some(anim_name) = ssf2_anim else {
+                log::debug!("Sub-MC '{}': no animation name mapping, skipping", class.name);
+                continue;
+            };
+
+            // Get iinit body
+            let Some(iinit_body) = body_by_method.get(&class.constructor_idx) else {
+                log::debug!("Sub-MC '{}': no body for constructor_idx {}", class.name, class.constructor_idx);
+                continue;
+            };
+            let bc = &iinit_body.bytecode;
+            log::debug!("Sub-MC '{}': iinit {} bytes, anim='{}'", class.name, bc.len(), anim_name);
+
+            // Quick scan: does this iinit contain addFrameScript at all?
+            let has_afs = bc.windows(callpropvoid_afs.len()).any(|w| w == callpropvoid_afs.as_slice())
+                || bc.windows(callproperty_afs.len()).any(|w| w == callproperty_afs.as_slice());
+            if !has_afs {
+                log::debug!("Sub-MC '{}': no addFrameScript call in iinit", class.name);
+            }
+
+            // Scan iinit for addFrameScript(frameNum, closure) pairs
+            // Pattern: pushbyte/pushshort <N>, newfunction <method_idx>, callpropvoid(addFrameScript, 2)
+            let mut i = 0usize;
+            while i < bc.len() {
+                // Match callpropvoid(addFrameScript, argc=2)
+                if (bc[i..].starts_with(&callpropvoid_afs) || bc[i..].starts_with(&callproperty_afs)) {
+                    // Check arg count = 2 after the multiname
+                    let after_mn = i + callpropvoid_afs.len();
+                    let mut tmp = after_mn;
+                    if let Some(argc) = read_u30_at(bc, &mut tmp) {
+                        if argc >= 2 && argc % 2 == 0 {
+                            // addFrameScript is variadic: addFrameScript(f0, fn0, f1, fn1, ...)
+                            // SSF2 pattern: pushbyte N, getlocal0, getproperty MN (bound method ref)
+                            // OR: pushbyte N, newfunction M (inline closure)
+                            let scan_start = 0usize; // scan entire iinit
+                            let mut pairs: Vec<(u32, String, Option<u32>)> = Vec::new(); // (frame, method_name, method_idx)
+                            let mut j = scan_start;
+                            let mut pending_frame: Option<u32> = None;
+                            while j < i {
+                                if bc[j] == OP_PUSHBYTE && j + 1 < bc.len() {
+                                    pending_frame = Some(bc[j + 1] as u32);
+                                    j += 2;
+                                } else if bc[j] == OP_PUSHSHORT {
+                                    let mut k = j + 1;
+                                    if let Some(v) = read_u30_at(bc, &mut k) {
+                                        pending_frame = Some(v);
+                                        j = k;
+                                    } else { j += 1; }
+                                } else if bc[j] == OP_PUSHINT {
+                                    let mut k = j + 1;
+                                    if let Some(v) = read_u30_at(bc, &mut k) {
+                                        let int_val = abc.ints.get(v as usize).copied().unwrap_or(0);
+                                        pending_frame = Some(int_val as u32);
+                                        j = k;
+                                    } else { j += 1; }
+                                } else if bc[j] == OP_GETPROPERTY {
+                                    let mut k = j + 1;
+                                    if let Some(mn_idx) = read_u30_at(bc, &mut k) {
+                                        if let Some(frame) = pending_frame.take() {
+                                            let method_name = abc.multinames.get(mn_idx as usize)
+                                                .map(|m| m.name.clone()).unwrap_or_default();
+                                            // Find the method_idx for this method name in this class
+                                            let midx = class.instance_methods.iter()
+                                                .find(|t| t.name == method_name)
+                                                .map(|t| t.method_idx);
+                                            pairs.push((frame, method_name, midx));
+                                        }
+                                        j = k;
+                                    } else { j += 1; }
+                                } else if bc[j] == 0x40 { // newfunction
+                                    let mut k = j + 1;
+                                    if let Some(midx) = read_u30_at(bc, &mut k) {
+                                        if let Some(frame) = pending_frame.take() {
+                                            pairs.push((frame, format!("closure_{}", midx), Some(midx)));
+                                        }
+                                        j = k;
+                                    } else { j += 1; }
+                                } else {
+                                    // Skip other opcodes (getlocal0, etc.) without clearing pending_frame
+                                    j += 1;
+                                }
+                            }
+
+                            log::debug!("Sub-MC '{}' anim='{}': addFrameScript argc={}, found {} pairs",
+                                class.name, anim_name, argc, pairs.len());
+
+                            for (sub_f, method_name, midx) in &pairs {
+                                let body = midx.and_then(|mi| abc.method_bodies.iter().find(|b| b.method_idx == mi));
+                                if let Some(closure_body) = body {
+                                    let param_count = abc.methods.get(*midx.as_ref().unwrap() as usize)
+                                        .map(|m| m.param_count as usize).unwrap_or(0);
+                                    let params: Vec<String> = (0..param_count)
+                                        .map(|pi| format!("arg{}", pi)).collect();
+                                    let code = decompiler::decompile_method(
+                                        closure_body, abc,
+                                        &format!("{}__frame{}", anim_name, sub_f),
+                                        &params
+                                    );
+                                    let script_key = format!("{}__frame{}", anim_name, sub_f);
+                                    frame_scripts.entry(script_key).or_insert_with(Vec::new)
+                                        .push(FrameAction {
+                                            frame: *sub_f,
+                                            action: code,
+                                            args: vec![],
+                                        });
+                                } else {
+                                    log::debug!("  frame {} method '{}': no body found", sub_f, method_name);
+                                }
+                            }
+
+                            i = tmp; // advance past the call
+                            continue;
+                        }
+                    }
+                }
+                i += 1;
+            }
+        }
+
+        // Count only sub-MC entries (keys containing "__frame")
+        let sub_mc_count = frame_scripts.keys().filter(|k| k.contains("__frame")).count();
+        let total_fs = frame_scripts.len();
+        log::info!("Sub-MC frame scripts extracted: {} new entries (total frame_scripts now: {})", sub_mc_count, total_fs);
     }
 
     // --- Fallback: scan ALL method bodies for xframe mappings ---
@@ -2016,3 +2194,4 @@ fn decode_costume_objects(code: &[u8], abc: &AbcFile) -> BTreeMap<String, Vec<Co
 }
 
 
+// DEBUG REMOVED
