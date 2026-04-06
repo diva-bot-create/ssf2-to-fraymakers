@@ -9,5 +9,6 @@ __pycache__/
 # Added by cargo
 
 /target
-characters/mario/sprites/
-characters/
+# Generated binary/image assets inside character output — track .hx, .json, .entity etc but not media
+characters/*/library/sprites/
+characters/*/library/sounds/
