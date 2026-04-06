@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSF2 → Fraymakers Converter</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>SSF2 → Fraymakers Converter</h1>
+            <p>Convert Super Smash Flash 2 characters to Fraymakers format</p>
+        </header>
+
+        <main>
+            <section class="input-section">
+                <div class="drop-zone" id="dropZone">
+                    <div class="drop-content">
+                        <div class="drop-icon">📁</div>
+                        <h2>Drop SSF file here</h2>
+                        <p>or</p>
+                        <button class="file-button" id="fileButton">Click to select</button>
+                        <input type="file" id="fileInput" accept=".ssf" style="display: none;">
+                    </div>
+                </div>
+            </section>
+
+            <section class="status-section" id="statusSection" style="display: none;">
+                <div class="status-card">
+                    <h3 id="statusTitle">Loading...</h3>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p id="statusMessage">Processing SSF file...</p>
+                    <div class="result-info" id="resultInfo"></div>
+                </div>
+            </section>
+
+            <section class="output-section" id="outputSection" style="display: none;">
+                <div class="output-card">
+                    <h3>✓ Conversion Complete</h3>
+                    <div id="outputContent"></div>
+                    <button class="reset-button" id="resetButton">Convert Another</button>
+                </div>
+            </section>
+
+            <section class="error-section" id="errorSection" style="display: none;">
+                <div class="error-card">
+                    <h3>✗ Error</h3>
+                    <p id="errorMessage"></p>
+                    <button class="reset-button" id="resetErrorButton">Try Again</button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>SSF2 Converter v0.1 | <a href="https://github.com/diva-bot-create/ssf2-to-fraymakers">GitHub</a></p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
