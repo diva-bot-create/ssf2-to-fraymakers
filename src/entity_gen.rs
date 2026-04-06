@@ -22,24 +22,7 @@ use std::collections::BTreeMap;
 // ─── UUID helpers ─────────────────────────────────────────────────────────────
 
 fn det_uuid(seed: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut h = DefaultHasher::new();
-    seed.hash(&mut h);
-    let v = h.finish();
-
-    let seed2: String = seed.chars().rev().collect();
-    let mut h2 = DefaultHasher::new();
-    seed2.hash(&mut h2);
-    let v2 = h2.finish();
-
-    format!("{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
-        (v >> 32) as u32,
-        (v >> 16) as u16,
-        (v & 0xfff) as u16,
-        ((v2 >> 48) & 0x3fff | 0x8000) as u16,
-        v2 & 0xffffffffffff_u64)
+    crate::uuid_gen::det_uuid(seed)
 }
 
 fn uuid(char_id: &str, context: &str) -> String {
