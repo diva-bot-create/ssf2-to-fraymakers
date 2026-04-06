@@ -602,13 +602,27 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
         }
     }
 
-    // Find the XxxExt class (e.g. MarioExt) — holds getOwnStats + getAttackStats
-    let ext_class_name = format!("{}Ext", 
+    // Find the XxxExt class (e.g. MarioExt) — holds getOwnStats + getAttackStats.
+    // SSF2 class names don't always match the filename: CaptainFalcon → CaptainExt,
+    // ChibiRobo → ChibiExt, GameAndWatch → gameandwatchExt, etc.
+    // Strategy: try exact match, then prefix match on Ext classes, then any single Ext class.
+    let char_lower = char_name.to_lowercase();
+    let ext_class_name = format!("{}Ext",
         char_name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default()
         + &char_name[1..]);
+    let ext_classes: Vec<&Class> = abc.classes.iter()
+        .filter(|c| c.name.ends_with("Ext") && c.name != "SSF2CharacterExt")
+        .collect();
     let char_class = abc.classes.iter()
+        // 1. Exact match: MarioExt
         .find(|c| c.name == ext_class_name)
-        .or_else(|| abc.classes.iter().find(|c| c.name.ends_with("Ext") && c.name.to_lowercase().contains(&char_name.to_lowercase())));
+        // 2. Case-insensitive contains: captainext contains "captain" (prefix of captainfalcon)
+        .or_else(|| ext_classes.iter().copied().find(|c| {
+            let cn = c.name.to_lowercase().replace("ext", "");
+            char_lower.starts_with(&cn) || cn.starts_with(&char_lower)
+        }))
+        // 3. Only one non-base Ext class in the file
+        .or_else(|| if ext_classes.len() == 1 { Some(ext_classes[0]) } else { None });
 
     log::info!("Character Ext class: {:?}", char_class.map(|c| &c.name));
 
@@ -683,8 +697,27 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
         }
     }
 
-    // --- Also scan the main `mario` class for frame scripts ---
-    let main_class = abc.classes.iter().find(|c| c.name.to_lowercase() == char_name.to_lowercase());
+    // --- Also scan the main character class for frame scripts ---
+    // The class name matches the filename for most chars but not all:
+    // captainfalcon.ssf -> class 'captainfalcon'
+    // gameandwatch.ssf -> class 'gameAndWatch'
+    // Pick the class whose name most closely matches char_name AND has the most frame* methods.
+    let main_class = abc.classes.iter()
+        // 1. Exact case-insensitive match
+        .find(|c| c.name.to_lowercase() == char_lower)
+        // 2. Best-fit: non-Ext, non-fla class whose name contains char_lower as a prefix
+        //    AND has the most frame* methods (to avoid projectile/helper classes)
+        .or_else(|| {
+            abc.classes.iter()
+                .filter(|c| {
+                    let cn = c.name.to_lowercase();
+                    !cn.ends_with("ext") && !cn.contains("_fla") && !cn.contains("api")
+                        && !cn.contains("proj") && !cn.contains("helper")
+                        // name must be exactly char_lower with possible CamelCase only
+                        && cn == char_lower
+                })
+                .max_by_key(|c| c.instance_methods.iter().filter(|t| t.name.starts_with("frame")).count())
+        });
     if let Some(mc) = main_class {
         log::info!("Main class '{}': {} frame methods", mc.name, mc.instance_methods.len());
         for t in &mc.instance_methods {
@@ -703,6 +736,121 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
                 action: code,
                 args: vec![],
             }]);
+        }
+    }
+
+    // --- Also scan script-level traits for frame* methods ---
+    // In SSF2, the character's main MovieClip frame scripts are compiled as
+    // script-level (top-level) functions, NOT as class instance methods.
+    // These appear in abc.scripts[*].traits, not in any class.
+    if xframe_map.is_empty() || frame_scripts.is_empty() {
+        for script in &abc.scripts {
+            for t in &script.traits {
+                if !t.name.starts_with("frame") { continue; }
+                let Some(body) = body_by_method.get(&t.method_idx) else { continue };
+                if let Some(anim_name) = extract_xframe_name(&body.bytecode, abc) {
+                    xframe_map.entry(t.name.clone()).or_insert(anim_name);
+                }
+                if !frame_scripts.contains_key(&t.name) {
+                    let params: Vec<String> = if let Some(method) = abc.methods.get(body.method_idx as usize) {
+                        (0..method.param_count).map(|i| format!("arg{}", i)).collect()
+                    } else { vec![] };
+                    let code = decompiler::decompile_method(body, abc, &t.name, &params);
+                    frame_scripts.insert(t.name.clone(), vec![FrameAction {
+                        frame: 0,
+                        action: code,
+                        args: vec![],
+                    }]);
+                }
+            }
+        }
+        if !xframe_map.is_empty() {
+            log::info!("Found {} xframe mappings in script-level traits", xframe_map.len());
+        }
+    }
+
+    // --- Fallback: scan ALL method bodies for xframe mappings ---
+    // In SSF2, setproperty(self.xframe = "a") appears inside anonymous timeline
+    // frame methods linked via SymbolClass, not named class traits. These are
+    // compile-time closures with no discoverable name via trait scanning.
+    // Strategy: scan every method body, collect pushstring values that immediately
+    // precede setproperty(xframe), and build the full ssf2 animation name set.
+    if xframe_map.is_empty() {
+        // Find the xframe multiname index
+        let xframe_mn_idx = abc.multinames.iter().enumerate()
+            .find(|(_, mn)| mn.name == "xframe")
+            .map(|(i, _)| i);
+
+        // Also check ALL multinames named 'xframe' (might be QName and Multiname variants)
+        let xframe_mn_indices: Vec<usize> = abc.multinames.iter().enumerate()
+            .filter(|(_, mn)| mn.name == "xframe")
+            .map(|(i, _)| i)
+            .collect();
+        log::debug!("xframe multiname indices: {:?}", xframe_mn_indices);
+
+        if let Some(xf_idx) = xframe_mn_idx {
+            // Build patterns for ALL xframe multiname indices
+            let mut all_patterns: Vec<Vec<u8>> = Vec::new();
+            for idx in &xframe_mn_indices {
+                let mut enc = Vec::new();
+                let mut v = *idx as u32;
+                loop {
+                    if v < 0x80 { enc.push(v as u8); break; }
+                    enc.push((v as u8 & 0x7F) | 0x80);
+                    v >>= 7;
+                }
+                // setproperty = 0x61, initproperty = 0x68, setlex = nope
+                all_patterns.push(std::iter::once(0x61u8).chain(enc.iter().copied()).collect());
+                all_patterns.push(std::iter::once(0x68u8).chain(enc.iter().copied()).collect());
+            }
+            let _ = xf_idx; // suppress warning
+            let setprop_pattern = all_patterns[0].clone(); // for compat, keep first
+
+            let mut seen_anims: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+            for body in &abc.method_bodies {
+                let bc = &body.bytecode;
+                // Scan for setproperty/initproperty(xframe) using all known multiname indices
+                let mut i = 0usize;
+                while i < bc.len() {
+                    let matched = all_patterns.iter().any(|p| bc[i..].starts_with(p));
+                    if matched {
+                        // Scan backwards from i for the most recent pushstring
+                        let mut j = i.saturating_sub(1);
+                        while j > 0 {
+                            if bc[j] == 0x2C {
+                                // pushstring: decode u30 idx
+                                let mut k = j + 1;
+                                if let Some(si) = read_u30_at(bc, &mut k) {
+                                    if let Some(s) = abc.strings.get(si as usize) {
+                                        if !s.is_empty() && s.len() < 40
+                                            && s.chars().all(|c| c.is_alphanumeric() || c == '_')
+                                        {
+                                            seen_anims.insert(s.clone());
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                            j -= 1;
+                        }
+                        let pat_len = all_patterns.iter().find(|p| bc[i..].starts_with(p.as_slice())).map(|p| p.len()).unwrap_or(1);
+                        i += pat_len;
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+
+            if !seen_anims.is_empty() {
+                log::info!("xframe fallback: found {} SSF2 animation names across all method bodies", seen_anims.len());
+                // We can't map frame*→anim name one-to-one here (no frame method names),
+                // but we CAN populate the extractor's ssf2_to_fm table used by sprite_parser.
+                // Emit a synthetic mapping: ssf2_name → ssf2_name (identity) so the sprite
+                // parser can at least match sprites. Real FM name mapping uses the static table.
+                for anim in &seen_anims {
+                    xframe_map.entry(format!("__all_{}", anim)).or_insert(anim.clone());
+                }
+            }
         }
     }
 
