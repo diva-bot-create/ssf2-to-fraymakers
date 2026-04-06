@@ -136,7 +136,7 @@ The BASE_SIZE is measured from the actual shape bounds using the `dump_shape_bou
 In SSF2, `touchBox` defines where a grabbed opponent is held (grab animations, throws).
 Fraymakers uses a **`POINT` layer** (not `COLLISION_BOX`) named `grabholdpoint0`.
 The layer `pluginMetadata` uses `pointType: "GRAB_HOLD_POINT"` (not `collisionBoxType`).
-The symbol is type `POINT` with just `x` and `y` (center of the touchBox area).
+The symbol is type `POINT` with just `x` and `y` (bottom-center of the touchBox area — where the opponent's feet anchor).
 Verified from the official Fraymakers character template `grab_hold` animation.
 
 #### ItemBox Special Case

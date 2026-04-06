@@ -443,9 +443,11 @@ pub fn generate_entity(
                     let sym_id = uuid(char_id, &format!("sym_box_{}_{}_{}", anim_name, inst_name, start_frame));
 
                     if is_point {
-                        // POINT symbol: just x/y (center of the touchBox)
+                        // POINT symbol: bottom-center of the touchBox.
+                        // In SSF2, touchBox marks the hold region; the grab hold
+                        // position is at the bottom-center (where the opponent's feet anchor).
                         let cx = round2(fb.x + fb.width / 2.0);
-                        let cy = round2(fb.y + fb.height / 2.0);
+                        let cy = round2(fb.y + fb.height);
                         symbols.push(json!({
                             "$id": sym_id,
                             "alpha": 1,
