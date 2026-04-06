@@ -574,14 +574,190 @@ pub fn translate_ssf2_to_fm(code: &str) -> String {
     result = result.replace(".addEffectToList(", "/* TODO: addEffectToList */ ");
 
     // ── Hitbox property renames in object literals ──
-    result = result.replace("direction:", "angle:");
-    result = result.replace("power:", "baseKnockback:");
-    result = result.replace("kbGrowth:", "knockbackGrowth:");
-    result = result.replace("kbConstant:", "baseKnockback:");
-    result = result.replace("hitStun:", "hitstun:");
-    result = result.replace("selfHitStun:", "selfHitstop:");
+    // SSF2 name          → FM HitboxStats field
+    result = result.replace("direction:",    "angle:");
+    result = result.replace("power:",         "baseKnockback:");
+    result = result.replace("kbGrowth:",      "knockbackGrowth:");
+    result = result.replace("kbConstant:",    "knockbackGrowth:");  // SSF2 kbConstant = flat KB growth
+    result = result.replace("hitStun:",       "hitstop:");          // SSF2 hitStun = frames of hitStop on attacker
+    result = result.replace("selfHitStun:",   "selfHitstop:");
+    result = result.replace("hitLag:",        "hitstun:");          // SSF2 hitLag = frames target is stunned
+    result = result.replace("selfHitLag:",    "selfHitstop:");
+
+    // ── endAnimation on last frame: strip it ──
+    // FM animations naturally end when the last frame plays. endAnimation() on the final
+    // frame of a sub-MC is redundant and causes a double-end. Strip it.
+    result = strip_last_frame_end_animation(&result);
+
+    // ── Comment out SSF2 calls with no FM equivalent ──
+    // These would cause compile errors in Fraymakers. They're left as commented stubs
+    // so modders know what logic existed and can implement alternatives.
+    result = comment_out_unknown_calls(&result);
 
     result
+}
+
+/// Strip `self.endAnimation()` calls that appear alone on a line inside the
+/// last-numbered frame function of each animation group.
+///
+/// Pattern: a function named `<anim>__frame<N>` where no higher-numbered frame
+/// function exists for that animation in the same script. In that case endAnimation
+/// is redundant — FM already ends the animation when the final frame completes.
+pub fn strip_last_frame_end_animation(code: &str) -> String {
+    // Collect all (anim_prefix, max_frame_num) seen across all functions
+    let mut max_frames: std::collections::BTreeMap<String, u32> = std::collections::BTreeMap::new();
+    let frame_fn_re = simple_frame_fn_re();
+
+    for (prefix, frame_num) in iter_frame_fns(code, &frame_fn_re) {
+        let entry = max_frames.entry(prefix.to_string()).or_insert(0);
+        if frame_num > *entry {
+            *entry = frame_num;
+        }
+    }
+
+    // Now process line by line: when inside a last-frame function and we see
+    // a line that is ONLY `self.endAnimation();`, replace with a comment.
+    let lines: Vec<&str> = code.lines().collect();
+    let mut out: Vec<String> = Vec::with_capacity(lines.len());
+    let mut in_last_frame = false;
+
+    for line in &lines {
+        let trimmed = line.trim();
+        // Check if this line opens a last-frame function
+        if let Some((prefix, frame_num)) = parse_frame_fn_header(trimmed, &frame_fn_re) {
+            in_last_frame = max_frames.get(&prefix).copied() == Some(frame_num);
+        } else if trimmed == "}" {
+            // Leaving any function
+            in_last_frame = false;
+        }
+
+        if in_last_frame && trimmed == "self.endAnimation();" {
+            // Strip it — FM animation ends naturally on the last frame
+            out.push(format!(
+                "{}// [FM] endAnimation removed — redundant on last frame",
+                &line[..line.len() - trimmed.len()]
+            ));
+        } else {
+            out.push(line.to_string());
+        }
+    }
+
+    let mut joined = out.join("\n");
+    if code.ends_with('\n') { joined.push('\n'); }
+    joined
+}
+
+// Simple &str-based frame function pattern matching (avoids regex dep)
+struct FrameFnPattern;
+fn simple_frame_fn_re() -> FrameFnPattern { FrameFnPattern }
+
+fn iter_frame_fns<'a>(code: &'a str, _pat: &FrameFnPattern) -> impl Iterator<Item=(String, u32)> + 'a {
+    code.lines().filter_map(|line| parse_frame_fn_header(line.trim(), &FrameFnPattern))
+}
+
+fn parse_frame_fn_header(trimmed: &str, _pat: &FrameFnPattern) -> Option<(String, u32)> {
+    // Match: function <prefix>__frame<N>()
+    if !trimmed.starts_with("function ") { return None; }
+    let rest = &trimmed["function ".len()..];
+    let paren = rest.find('(')?;
+    let name = &rest[..paren];
+    // Must contain __frame
+    let frame_pos = name.rfind("__frame")?;
+    let prefix = name[..frame_pos].to_string();
+    let frame_str = &name[frame_pos + "__frame".len()..];
+    let frame_num: u32 = frame_str.parse().ok()?;
+    Some((prefix, frame_num))
+}
+
+/// Comment out entire statements containing SSF2-only method calls that have
+/// no Fraymakers equivalent. Leaves a note so modders know what was there.
+///
+/// Only whole statements (lines ending with `;`) are commented. Lines that are
+/// part of conditionals or assignments that contain an unknown call are prefixed
+/// with `// [SSF2-only] ` so they don't compile but remain readable.
+pub fn comment_out_unknown_calls(code: &str) -> String {
+    // Methods that exist in SSF2 but not in the Fraymakers API.
+    // Calls to these must be commented out to avoid compile errors.
+    const COMMENT_METHODS: &[&str] = &[
+        // Effects / visuals
+        ".attachEffect(",
+        ".clearEffectsOnStateChange(",
+        ".addEffectToList(",   // already partially handled above, catch remainder
+        // Projectiles (need CustomGameObject — manual port)
+        ".fireProjectile(",
+        ".getCurrentProjectile(",
+        // Grab helpers (different grab model in FM)
+        ".getGrabbedOpponent(",
+        ".releaseOpponent(",
+        ".swapDepthsWithGrabbedOpponent(",
+        // State transitions (FM uses toState(CState.X))
+        ".gotoAndStop(",
+        ".toLand(",
+        ".toHeavyLand(",
+        ".toHelpless(",
+        ".jumpToContinue(",
+        // Ground/platform queries (FM uses isOnFloor() / structure system)
+        ".checkGround(",
+        ".isOnGround(",
+        ".unnattachFromGround(",
+        // Attack helpers
+        ".killAttackboxes(",
+        ".checkAtkilled(",
+        ".updateAttackStats(",
+        ".setLandingLag(",
+        ".setIntangibility(",
+        // Movement helpers
+        ".resetJumps(",
+        ".resetMovement(",
+        ".safeMove(",
+        // Item / misc
+        ".pickupItem(",
+        ".tossItem(",
+        ".getItem(",
+        ".getMC(",
+        ".getExecTime(",
+        ".getNearestLedge(",
+        ".getCPULevel(",
+        ".isCPU(",
+        ".getMetalStatus(",
+        ".isForcedCrash(",
+        ".inUpperLeftWarningBounds(",
+        ".stancePlayFrame(",
+        // Sound (FM uses content IDs not SWF asset IDs — manual port)
+        ".playAttackSound(",
+        ".playSound(",
+        // Timeline navigation (no timeline in FM)
+        ".stop(",
+    ];
+
+    let lines: Vec<&str> = code.lines().collect();
+    let mut out = Vec::with_capacity(lines.len());
+
+    for line in &lines {
+        let trimmed = line.trim();
+        // Skip lines already commented out
+        if trimmed.starts_with("//") {
+            out.push(line.to_string());
+            continue;
+        }
+        // Check if this line contains an unknown call
+        let has_unknown = COMMENT_METHODS.iter().any(|m| line.contains(m));
+        if has_unknown {
+            // Determine a useful tag based on which method it is
+            let tag = COMMENT_METHODS.iter()
+                .find(|m| line.contains(*m))
+                .map(|m| m.trim_matches('.').trim_matches('('))
+                .unwrap_or("SSF2-only");
+            let indent = &line[..line.len() - line.trim_start().len()];
+            out.push(format!("{}// [SSF2-only: {}] {}", indent, tag, trimmed));
+        } else {
+            out.push(line.to_string());
+        }
+    }
+
+    let mut joined = out.join("\n");
+    if code.ends_with('\n') { joined.push('\n'); }
+    joined
 }
 
 /// Load SSF2→FM method mappings from the JSON file at `mappings/api_methods.json`
