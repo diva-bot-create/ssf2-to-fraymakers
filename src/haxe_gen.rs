@@ -50,6 +50,8 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
     }
     log::info!("Generated {} .meta sidecar files", meta_count);
 
+    let mut palette_collection_guid: Option<String> = None;
+    let mut palette_base_map_id: Option<String> = None;
     // ── Palette / costumes ──────────────────────────────────────────────────
     match palette_gen::generate_palettes_and_remap(&char_id, char_name, &sprites_dir, costumes_json) {
         Ok(pal) => {
@@ -65,6 +67,8 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
                 &pal.collection_guid, &pal.base_map_id,
             );
             fs::write(entities_dir.join("Character.entity"), entity_json)?;
+            palette_collection_guid = Some(pal.collection_guid.clone());
+            palette_base_map_id = Some(pal.base_map_id.clone());
         }
         Err(e) => {
             log::warn!("palette_gen failed (sprites will have no palette): {}", e);
@@ -84,7 +88,17 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
                     head_height: head_img.height,
                     head_meta_guid,
                 };
-                fs::write(entities_dir.join("menu.entity"), entity_gen::generate_menu_entity(&char_id, &menu_info))?;
+                let mut menu_json = entity_gen::generate_menu_entity(&char_id, &menu_info);
+                // Fill in paletteMap if available
+                if let (Some(ref cg), Some(ref pm)) = (&palette_collection_guid, &palette_base_map_id) {
+                    let mut menu_val: serde_json::Value = serde_json::from_str(&menu_json).unwrap_or(serde_json::json!({}));
+                    menu_val["paletteMap"] = serde_json::json!({
+                        "paletteCollection": cg,
+                        "paletteMap": pm
+                    });
+                    menu_json = serde_json::to_string_pretty(&menu_val).unwrap_or(menu_json);
+                }
+                fs::write(entities_dir.join("menu.entity"), menu_json)?;
                 log::info!("Generated menu.entity using {} ({}x{})", img_sym, head_img.width, head_img.height);
             } else {
                 log::warn!("Head image '{}' not found in extracted images, skipping menu.entity", img_sym);
