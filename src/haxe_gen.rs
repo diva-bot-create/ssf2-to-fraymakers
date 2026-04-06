@@ -568,6 +568,9 @@ fn generate_script(data: &CharacterData, char_id: &str) -> String {
     // Jab chain transition logic
     out.push_str(&generate_jab_scripts());
 
+    // Full-script post-pass: fix paired setIntangibility calls
+    out = crate::api_mappings::fix_intangibility_pairs(&out);
+
     out
 }
 

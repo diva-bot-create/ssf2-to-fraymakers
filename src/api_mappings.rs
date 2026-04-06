@@ -553,6 +553,32 @@ pub fn translate_ssf2_to_fm(code: &str) -> String {
     result = result.replace(".getXSpeed()", ".getXVelocity()");
     result = result.replace(".getYSpeed()", ".getYVelocity()");
 
+    // ── State transitions ──
+    // SSF2 had dedicated helpers; FM uses toState(CState.X)
+    result = result.replace(".toLand()", ".toState(CState.LAND)");
+    result = result.replace(".toHelpless()", ".toState(CState.FALL_SPECIAL)");
+    // toHeavyLand → LAND for now; annotated TODO for land_heavy animation override
+    result = result.replace(
+        ".toHeavyLand()",
+        ".toState(CState.LAND) //TODO: create land_heavy anim & change to toState(CState.LAND, \"land_heavy\")",
+    );
+
+    // ── Jump / landing reset ──
+    // SSF2 resetJumps() → FM preLand() (resets jumps, airdash, fastfall)
+    result = result.replace(".resetJumps()", ".preLand()");
+
+    // ── Velocity reset ──
+    result = result.replace(".resetMovement()", ".setXVelocity(0); self.setYVelocity(0)");
+    result = result.replace(".safeMove(", ".move(");
+
+    // ── Ground detection ──
+    result = result.replace(".isOnGround()", ".isOnFloor()");
+    result = result.replace(".checkGround()", ".attachToFloor()");
+
+    // ── Landing lag / autocancel ──
+    result = result.replace(".setLandingLag(true)", ".updateAnimationStats({ autoCancel: true })");
+    result = result.replace(".setLandingLag(false)", ".updateAnimationStats({ autoCancel: false })");
+
     // ── SSF2 global variable pattern ──
     // self.setGlobalVariable("key", val) → self.setCustomVar("key", val) or metadata
     result = result.replace(".setGlobalVariable(", ".updateAnimationStatsMetadata(/* TODO: setGlobalVariable */ ");
@@ -592,6 +618,8 @@ pub fn translate_ssf2_to_fm(code: &str) -> String {
     // ── Comment out SSF2 calls with no FM equivalent ──
     // These would cause compile errors in Fraymakers. They're left as commented stubs
     // so modders know what logic existed and can implement alternatives.
+    // NOTE: setIntangibility is NOT in this list — it's handled by the full-script
+    // fix_intangibility_pairs() pass in haxe_gen after all scripts are assembled.
     result = comment_out_unknown_calls(&result);
 
     result
@@ -669,6 +697,117 @@ fn parse_frame_fn_header(trimmed: &str, _pat: &FrameFnPattern) -> Option<(String
     Some((prefix, frame_num))
 }
 
+/// Fix `setIntangibility` pairs across the full assembled Script.hx.
+///
+/// SSF2 pattern:
+///   `anim__frame1`:  self.setIntangibility(true);
+///   `anim__frame20`: self.setIntangibility(false);
+///
+/// FM equivalent: a single `applyGlobalBodyStatus(BodyStatus.INTANGIBLE, N)` call
+/// where N = (false_frame - true_frame). The false call is removed entirely.
+///
+/// This is a full-script pass (not per-frame-body) because we need to look
+/// across multiple frame functions to compute the duration.
+pub fn fix_intangibility_pairs(full_script: &str) -> String {
+    // 1. Collect all (anim_prefix, frame_num, line_index) for setIntangibility calls
+    let lines: Vec<&str> = full_script.lines().collect();
+    let pat = FrameFnPattern;
+
+    // Track current function context while scanning
+    let mut current_prefix: Option<String> = None;
+    let mut current_frame: u32 = 0;
+
+    // (prefix, frame, line_idx, is_true)
+    let mut calls: Vec<(String, u32, usize, bool)> = Vec::new();
+
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if let Some((pfx, fnum)) = parse_frame_fn_header(trimmed, &pat) {
+            current_prefix = Some(pfx);
+            current_frame = fnum;
+        }
+        if trimmed == "}" {
+            // Don't clear prefix here — frame functions can contain inner braces
+        }
+        if let Some(ref pfx) = current_prefix {
+            if trimmed == "self.setIntangibility(true);" {
+                calls.push((pfx.clone(), current_frame, idx, true));
+            } else if trimmed == "self.setIntangibility(false);" {
+                calls.push((pfx.clone(), current_frame, idx, false));
+            }
+        }
+    }
+
+    // 2. Pair each true with its nearest following false in the same prefix.
+    // Sort calls by (prefix, frame_num) so numeric order is used, not textual.
+    calls.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+    let mut replacements: Vec<(usize, String)> = Vec::new(); // (line_idx, new_line)
+    let mut removed: std::collections::HashSet<usize> = std::collections::HashSet::new();
+
+    for (i, (pfx, true_frame, true_line, is_true)) in calls.iter().enumerate() {
+        if !is_true { continue; }
+        // Find the next false call in the same animation (by frame number, already sorted)
+        if let Some((_, false_frame, false_line, _)) = calls[i+1..].iter()
+            .find(|(p, _, _, is_t)| p == pfx && !is_t)
+        {
+            let duration = false_frame.saturating_sub(*true_frame);
+            let indent = &lines[*true_line][..lines[*true_line].len() - lines[*true_line].trim_start().len()];
+            replacements.push((
+                *true_line,
+                format!("{}self.applyGlobalBodyStatus(BodyStatus.INTANGIBLE, {});", indent, duration),
+            ));
+            removed.insert(*false_line);
+        } else {
+            // No matching false — use 0 as duration and leave a TODO
+            let indent = &lines[*true_line][..lines[*true_line].len() - lines[*true_line].trim_start().len()];
+            replacements.push((
+                *true_line,
+                format!("{}self.applyGlobalBodyStatus(BodyStatus.INTANGIBLE, 0 /*TODO: calculate duration*/); //[FM] no matching setIntangibility(false) found", indent),
+            ));
+        }
+    }
+
+    // 3. Collect all unmatched false calls (no preceding true in this script)
+    let mut unmatched_false: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    for (_, _, false_line, is_true) in &calls {
+        if !is_true && !removed.contains(false_line) {
+            // This false was never consumed by a true
+            unmatched_false.insert(*false_line);
+        }
+    }
+
+    // 4. Rebuild, applying replacements and removing/commenting paired false calls
+    let replace_map: std::collections::HashMap<usize, String> =
+        replacements.into_iter().collect();
+
+    let mut out: Vec<String> = Vec::with_capacity(lines.len());
+    for (idx, line) in lines.iter().enumerate() {
+        if removed.contains(&idx) {
+            // Paired false — duration already encoded in the true
+            out.push(format!(
+                "{}// [FM] setIntangibility(false) removed — duration encoded above",
+                &line[..line.len() - line.trim_start().len()]
+            ));
+        } else if unmatched_false.contains(&idx) {
+            // Unpaired false — intangibility set outside this script (e.g. by state entry)
+            let indent = &line[..line.len() - line.trim_start().len()];
+            out.push(format!(
+                "{}// [SSF2-only: setIntangibility] {} //TODO: intangibility set outside this script",
+                indent, line.trim()
+            ));
+        } else if let Some(replacement) = replace_map.get(&idx) {
+            out.push(replacement.clone());
+        } else {
+            out.push(line.to_string());
+        }
+    }
+
+    let mut joined = out.join("\n");
+    if full_script.ends_with('\n') { joined.push('\n'); }
+    joined
+}
+
 /// Comment out entire statements containing SSF2-only method calls that have
 /// no Fraymakers equivalent. Leaves a note so modders know what was there.
 ///
@@ -690,26 +829,25 @@ pub fn comment_out_unknown_calls(code: &str) -> String {
         ".getGrabbedOpponent(",
         ".releaseOpponent(",
         ".swapDepthsWithGrabbedOpponent(",
-        // State transitions (FM uses toState(CState.X))
-        ".gotoAndStop(",
-        ".toLand(",
-        ".toHeavyLand(",
-        ".toHelpless(",
-        ".jumpToContinue(",
-        // Ground/platform queries (FM uses isOnFloor() / structure system)
-        ".checkGround(",
-        ".isOnGround(",
-        ".unnattachFromGround(",
+        // State transitions (not yet translated — passed as event listeners)
+        ".gotoAndStop(",        // timeline nav; no FM equivalent
+        ".jumpToContinue(",     // SSF2 jump-to-continue loop; no FM equivalent
+        // NOTE: .toLand( / .toHeavyLand( / .toHelpless( are translated above
+        // to self.toState(CState.X). Only comment if they survived untranslated
+        // (e.g. when used as event-listener references like addEventListener(..., self.toLand))
+        // Ground/platform
+        ".unnattachFromGround(",  // FM uses unattachFromFloor() — close but not identical
         // Attack helpers
-        ".killAttackboxes(",
-        ".checkAtkilled(",
-        ".updateAttackStats(",
-        ".setLandingLag(",
-        ".setIntangibility(",
-        // Movement helpers
-        ".resetJumps(",
-        ".resetMovement(",
-        ".safeMove(",
+        ".killAttackboxes(",    // no FM equivalent
+        ".checkAtkilled(",      // no FM equivalent
+        ".updateAttackStats(",  // use updateAnimationStats/updateHitboxStats instead
+        // NOTE: .setLandingLag( → updateAnimationStats({autoCancel}), translated above
+        // NOTE: .setIntangibility( → applyGlobalBodyStatus, handled in fix_intangibility_pairs
+        // NOTE: .resetJumps( → .preLand(), translated above
+        // NOTE: .resetMovement( → setXVelocity(0)/setYVelocity(0), translated above
+        // NOTE: .safeMove( → .move(, translated above
+        // NOTE: .isOnGround( → .isOnFloor(), translated above
+        // NOTE: .checkGround( → .attachToFloor(), translated above
         // Item / misc
         ".pickupItem(",
         ".tossItem(",
