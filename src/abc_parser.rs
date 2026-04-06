@@ -193,6 +193,7 @@ impl<'a> Reader<'a> {
         Self { data, pos: 0 }
     }
 
+    #[allow(dead_code)]
     fn remaining(&self) -> usize {
         self.data.len().saturating_sub(self.pos)
     }
@@ -212,6 +213,7 @@ impl<'a> Reader<'a> {
         Ok(lo | (hi << 8))
     }
 
+    #[allow(dead_code)]
     fn read_u32(&mut self) -> Result<u32> {
         let lo = self.read_u16()? as u32;
         let hi = self.read_u16()? as u32;
@@ -264,6 +266,7 @@ impl<'a> Reader<'a> {
         Ok(s)
     }
 
+    #[allow(dead_code)]
     fn skip(&mut self, n: usize) -> Result<()> {
         if self.pos + n > self.data.len() {
             return Err(anyhow!("skip: {} out of bounds at {}", n, self.pos));
@@ -523,7 +526,7 @@ pub fn parse(data: &[u8]) -> Result<AbcFile> {
     Ok(AbcFile { strings, ints, uints, doubles, multinames, methods, classes, scripts, method_bodies })
 }
 
-fn parse_trait(r: &mut Reader, strings: &[String], multinames: &[Multiname]) -> Result<Trait> {
+fn parse_trait(r: &mut Reader, _strings: &[String], multinames: &[Multiname]) -> Result<Trait> {
     let name_idx = r.read_u30()?;
     let kind_byte = r.read_u8()?;
     let kind = kind_byte & 0x0F;
@@ -620,7 +623,7 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
 
     // Build method name lookup: method_idx → name
     let mut method_names: BTreeMap<u32, String> = BTreeMap::new();
-    for (body_idx, body) in abc.method_bodies.iter().enumerate() {
+    for (_body_idx, body) in abc.method_bodies.iter().enumerate() {
         if let Some(method) = abc.methods.get(body.method_idx as usize) {
             if !method.name.is_empty() {
                 method_names.insert(body.method_idx, method.name.clone());
@@ -861,7 +864,7 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
             let mut i = 0usize;
             while i < bc.len() {
                 // Match callpropvoid(addFrameScript, argc=2)
-                if (bc[i..].starts_with(&callpropvoid_afs) || bc[i..].starts_with(&callproperty_afs)) {
+                if bc[i..].starts_with(&callpropvoid_afs) || bc[i..].starts_with(&callproperty_afs) {
                     // Check arg count = 2 after the multiname
                     let after_mn = i + callpropvoid_afs.len();
                     let mut tmp = after_mn;
@@ -996,7 +999,7 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
                 all_patterns.push(std::iter::once(0x68u8).chain(enc.iter().copied()).collect());
             }
             let _ = xf_idx; // suppress warning
-            let setprop_pattern = all_patterns[0].clone(); // for compat, keep first
+            let _setprop_pattern = all_patterns[0].clone(); // for compat, keep first
 
             let mut seen_anims: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
             for body in &abc.method_bodies {
@@ -1094,7 +1097,7 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
 enum StackVal {
     Str(String),
     Num(f64),
-    Bool(bool),
+    Bool(()),  // unused field — kept for stack value compatibility
     Null,
     /// A parsed object literal from newobject
     Obj(BTreeMap<String, StackVal>),
@@ -1149,8 +1152,8 @@ fn extract_attack_objects(bytecode: &[u8], abc: &AbcFile) -> BTreeMap<String, At
                     stack.push(StackVal::Num(v));
                 }
             }
-            OP_PUSHTRUE  => stack.push(StackVal::Bool(true)),
-            OP_PUSHFALSE => stack.push(StackVal::Bool(false)),
+            OP_PUSHTRUE  => stack.push(StackVal::Bool(())),
+            OP_PUSHFALSE => stack.push(StackVal::Bool(())),
             OP_PUSHNULL | OP_PUSHNAN => stack.push(StackVal::Null),
 
             OP_NEWOBJECT => {
@@ -1195,7 +1198,7 @@ fn extract_attack_objects(bytecode: &[u8], abc: &AbcFile) -> BTreeMap<String, At
             OP_NEWARRAY => {
                 if let Some(count) = read_u30_at(bytecode, &mut i) {
                     let drain = stack.len().min(count as usize);
-                    let items: Vec<_> = if stack.len() >= drain {
+                    let _items: Vec<_> = if stack.len() >= drain {
                         stack.drain(stack.len() - drain..).collect()
                     } else { vec![] };
                     stack.push(StackVal::Unknown);
@@ -1203,7 +1206,7 @@ fn extract_attack_objects(bytecode: &[u8], abc: &AbcFile) -> BTreeMap<String, At
             }
 
             OP_CALLPROPERTY | OP_CALLPROPVOID => {
-                let mn_idx = read_u30_at(bytecode, &mut i).unwrap_or(0);
+                let _mn_idx = read_u30_at(bytecode, &mut i).unwrap_or(0);
                 let arg_count = read_u30_at(bytecode, &mut i).unwrap_or(0) as usize;
                 let drain = stack.len().min(arg_count + 1);
                 stack.drain(stack.len() - drain..);
@@ -1354,8 +1357,8 @@ fn extract_stats_from_body(bytecode: &[u8], abc: &AbcFile) -> Option<CharStats> 
                     stack.push(StackVal::Num(abc.uints.get(idx as usize).copied().unwrap_or(0) as f64));
                 }
             }
-            OP_PUSHTRUE  => stack.push(StackVal::Bool(true)),
-            OP_PUSHFALSE => stack.push(StackVal::Bool(false)),
+            OP_PUSHTRUE  => stack.push(StackVal::Bool(())),
+            OP_PUSHFALSE => stack.push(StackVal::Bool(())),
             OP_PUSHNULL | OP_PUSHNAN => stack.push(StackVal::Null),
             OP_NEWOBJECT => {
                 if let Some(count) = read_u30_at(bytecode, &mut i) {
@@ -1495,6 +1498,7 @@ fn extract_ssf2_stats(bytecode: &[u8], abc: &AbcFile) -> Option<CharStats> {
     }
 }
 
+#[allow(dead_code)]
 fn extract_largest_numeric_object(bytecode: &[u8], abc: &AbcFile) -> Option<CharStats> {
     let mut stack: Vec<StackVal> = Vec::new();
     let mut best: Option<BTreeMap<String, f64>> = None;
@@ -1509,8 +1513,8 @@ fn extract_largest_numeric_object(bytecode: &[u8], abc: &AbcFile) -> Option<Char
             OP_PUSHSHORT  => { if let Some(v) = read_u30_at(bytecode, &mut i) { stack.push(StackVal::Num(v as i16 as f64)); } }
             OP_PUSHINT    => { if let Some(idx) = read_u30_at(bytecode, &mut i) { stack.push(StackVal::Num(abc.ints.get(idx as usize).copied().unwrap_or(0) as f64)); } }
             OP_PUSHUINT   => { if let Some(idx) = read_u30_at(bytecode, &mut i) { stack.push(StackVal::Num(abc.uints.get(idx as usize).copied().unwrap_or(0) as f64)); } }
-            OP_PUSHTRUE   => stack.push(StackVal::Bool(true)),
-            OP_PUSHFALSE  => stack.push(StackVal::Bool(false)),
+            OP_PUSHTRUE   => stack.push(StackVal::Bool(())),
+            OP_PUSHFALSE  => stack.push(StackVal::Bool(())),
             OP_PUSHNULL | OP_PUSHNAN => stack.push(StackVal::Null),
             OP_NEWOBJECT => {
                 if let Some(count) = read_u30_at(bytecode, &mut i) {
@@ -1551,6 +1555,7 @@ fn extract_largest_numeric_object(bytecode: &[u8], abc: &AbcFile) -> Option<Char
     best.map(|values| CharStats { values })
 }
 
+#[allow(dead_code)]
 fn extract_frame_actions(bytecode: &[u8], abc: &AbcFile) -> Vec<FrameAction> {
     let mut actions = Vec::new();
     let mut i = 0;
@@ -1573,7 +1578,7 @@ fn extract_frame_actions(bytecode: &[u8], abc: &AbcFile) -> Vec<FrameAction> {
             }
             OP_CALLPROPVOID | OP_CALLPROPERTY => {
                 if let Some(mn_idx) = read_u30_at(bytecode, &mut i) {
-                    let arg_count = read_u30_at(bytecode, &mut i).unwrap_or(0);
+                    let _arg_count = read_u30_at(bytecode, &mut i).unwrap_or(0);
                     let name = abc.multinames.get(mn_idx as usize).map(|m| m.name.clone()).unwrap_or_default();
                     if !name.is_empty() {
                         actions.push(FrameAction {
@@ -1672,6 +1677,7 @@ fn normalize_attack_name(s: &str) -> String {
 }
 
 /// Does this object look like SSF2 attack hitbox data?
+#[allow(dead_code)]
 fn is_attack_object(obj: &BTreeMap<String, f64>) -> bool {
     if obj.is_empty() { return false; }
     let attack_keys = ["damage", "direction", "power", "kbConstant", "weightKB",
@@ -1680,6 +1686,7 @@ fn is_attack_object(obj: &BTreeMap<String, f64>) -> bool {
 }
 
 /// Does this object look like character physics stats?
+#[allow(dead_code)]
 fn is_stats_object(obj: &BTreeMap<String, f64>) -> bool {
     if obj.is_empty() { return false; }
     let stat_keys = ["weight", "gravity", "fallSpeed", "fastFallSpeed",
@@ -1788,8 +1795,8 @@ pub fn extract_costume_data(abc: &AbcFile) -> Vec<CostumeData> {
                 let i = ru30!() as usize;
                 stack.push(StackVal::Num(abc.doubles.get(i).copied().unwrap_or(0.0)));
             }
-            0x26 => stack.push(StackVal::Bool(true)),
-            0x27 => stack.push(StackVal::Bool(false)),
+            0x26 => stack.push(StackVal::Bool(())),
+            0x27 => stack.push(StackVal::Bool(())),
             0x20 | 0x28 => stack.push(StackVal::Null),
             0x56 => { // newarray(n)
                 let n = ru30!() as usize;
@@ -1950,8 +1957,8 @@ pub fn extract_costume_data_from_apply_palette(abc: &AbcFile) -> Option<Vec<Cost
             0x02 | 0x82 | 0x73 | 0x74 | 0x75 | 0x76 | 0x70 => {}
             0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA8 | 0xA9 | 0xAA | 0xA5 | 0xA6 | 0xA7 => { stack.pop(); if stack.is_empty() { stack.push(StackVal::Null); } }
             0x90 | 0x96 | 0xAB | 0xB1 => { if !stack.is_empty() { *stack.last_mut().unwrap() = StackVal::Null; } }
-            0x26 => stack.push(StackVal::Bool(true)),
-            0x27 => stack.push(StackVal::Bool(false)),
+            0x26 => stack.push(StackVal::Bool(())),
+            0x27 => stack.push(StackVal::Bool(())),
             0x20 | 0x28 => stack.push(StackVal::Null),
             _ => {}
         }

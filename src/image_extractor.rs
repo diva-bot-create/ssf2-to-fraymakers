@@ -233,7 +233,7 @@ fn build_anim_frame_images(
     char_name: &str,
     ssf2_to_fm: &BTreeMap<String, String>,
     symbols: &BTreeMap<u16, String>,
-    shape_to_bitmap: &ShapeToBitmapMap,
+    _shape_to_bitmap: &ShapeToBitmapMap,
     xform_map: &BTreeMap<String, crate::sprite_parser::XframeTransform>,
 ) -> BTreeMap<String, AnimFrameImages> {
     use crate::sprite_parser::extract_ssf2_anim_name;
@@ -732,7 +732,7 @@ fn decode_lossless(bmp: &swf::DefineBitsLossless) -> Result<Vec<u8>> {
 
 /// Decode DefineBitsJpeg3 → (width, height, RGBA pixels)
 fn decode_jpeg3(jpeg: &swf::DefineBitsJpeg3) -> Result<(u32, u32, Vec<u8>)> {
-    use image::io::Reader as ImageReader;
+    use image::ImageReader;
     use std::io::Cursor;
 
     let reader = ImageReader::new(Cursor::new(&jpeg.data))

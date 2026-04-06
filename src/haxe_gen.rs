@@ -6,7 +6,7 @@
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
-use crate::extractor::{CharacterData, Attack, Hitbox, CharacterStats};
+use crate::extractor::{CharacterData, Hitbox};
 use crate::entity_gen;
 use crate::fraytools_project;
 use crate::palette_gen;
@@ -495,7 +495,7 @@ fn generate_animation_stats(data: &CharacterData) -> String {
 
 // ─── Script.hx ───────────────────────────────────────────────────────────────
 
-fn generate_script(data: &CharacterData, char_id: &str) -> String {
+fn generate_script(data: &CharacterData, _char_id: &str) -> String {
     let mut out = format!(
         "// API Script for {} — converted from SSF2\n\
         // Frame scripts are embedded in the entity file (FRAME_SCRIPT layers).\n\

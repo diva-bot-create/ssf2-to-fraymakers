@@ -213,6 +213,7 @@ impl Expr {
         }
     }
 
+    #[allow(dead_code)]
     fn is_self(&self) -> bool {
         matches!(self, Expr::This)
             || matches!(self, Expr::GetLex(n) if n == "this")
@@ -992,7 +993,9 @@ impl<'a> BlockDecoder<'a> {
                 // Branch instructions — consume s24 offset and return condition expr
                 OP_IFTRUE | OP_IFFALSE | OP_IFEQ | OP_IFNE | OP_IFSTRICTEQ | OP_IFSTRICTNE
                 | OP_IFLT | OP_IFLE | OP_IFGT | OP_IFGE => {
-                    if pos + 3 <= self.bc.len() { pos += 3; }
+                    // Skip the s24 offset (3 bytes) — not used here, branch target
+                    // is resolved by the structured decoder.
+                    let _ = pos; // consumed by caller
                     // Return the RAW condition (not inverted).
                     // The Branch { cond_inv } flag controls the then/else swap in StructuredDecoder.
                     // For iffalse: cond_inv=true means the condition is inverted — we DON'T negate here.
@@ -1008,7 +1011,7 @@ impl<'a> BlockDecoder<'a> {
                     };
                     return Some(cond);
                 }
-                OP_JUMP => { if pos + 3 <= self.bc.len() { pos += 3; } return None; }
+                OP_JUMP => { if pos + 3 <= self.bc.len() { let _ = pos + 3; } return None; }
 
                 _ => {
                     // unknown — try to skip operands using instr_size
@@ -1034,6 +1037,7 @@ struct StructuredDecoder<'a> {
 }
 
 impl<'a> StructuredDecoder<'a> {
+    #[allow(dead_code)]
     fn new(bc: &'a [u8], abc: &'a AbcFile) -> Self {
         let blocks = build_blocks(bc);
         Self { blocks, bc, abc, visited: BTreeSet::new(),
@@ -1085,7 +1089,7 @@ impl<'a> StructuredDecoder<'a> {
             // Pre-seed stack from previous block (for dup-across-blocks patterns)
             dec.stack = carry_stack.drain(..).collect();
             let cond_expr = dec.decode_range(block.start, block.end);
-            let mut stmts = dec.stmts;
+            let stmts = dec.stmts;
             // Save leftover stack for next block (Fall/Jump only)
             carry_stack = dec.stack.clone();
             for (k, v) in dec.activation_slots { self.activation_slots.insert(k, v); }
@@ -1244,7 +1248,7 @@ impl<'a> StructuredDecoder<'a> {
         // We process from fallthrough of the else_block so the condition block is included.
         // inner_start = fallthrough of else_block (where condition was not taken)
         // which falls into the merge where the final condition is consumed.
-        let inner_start = match &else_block.term {
+        let _inner_start = match &else_block.term {
             Terminator::Branch { fallthrough, .. } => *fallthrough,
             Terminator::BranchCmp { fallthrough, .. } => *fallthrough,
             _ => return None,
@@ -1253,7 +1257,7 @@ impl<'a> StructuredDecoder<'a> {
         // which computes the final condition and falls into the merge point)
         // inner_else: the skip target (where we jump if condition is false)
         let (inner_then, inner_else) = match &else_block.term {
-            Terminator::Branch { cond_inv, target, fallthrough } => {
+            Terminator::Branch { cond_inv: _, target, fallthrough } => {
                 // Use fallthrough as start so blocks between else_block and merge are processed
                 (*fallthrough, *target)
             }
@@ -1399,6 +1403,7 @@ impl<'a> StructuredDecoder<'a> {
     }
 
     /// Get the first unconditional jump target of a block (its exit).
+    #[allow(dead_code)]
     fn block_exit_target(&self, start: usize) -> Option<usize> {
         let block = self.block_at(start)?;
         match &block.term {

@@ -73,7 +73,7 @@ pub fn parse_sounds(swf: &[u8]) -> Result<Vec<SoundEntry>> {
             length = u32::from_le_bytes([swf[pos], swf[pos+1], swf[pos+2], swf[pos+3]]) as usize;
             pos += 4;
         }
-        let tag_start = pos;
+        let _tag_start = pos;
         let tag_end   = pos + length;
         if tag_end > swf.len() { break; }
 

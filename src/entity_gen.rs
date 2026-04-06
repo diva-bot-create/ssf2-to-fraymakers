@@ -15,7 +15,7 @@
 
 use crate::extractor::CharacterData;
 use crate::sprite_parser::{AnimationBoxData, BoxType};
-use crate::image_extractor::{AnimFrameImages, ImageExtractionResult};
+use crate::image_extractor::ImageExtractionResult;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
@@ -437,7 +437,7 @@ pub fn generate_entity(
                             "pluginMetadata": {}
                         }));
                         box_kf_ids.push(gap_kf_id);
-                        frame_idx = start_frame as u32;
+                        // frame_idx updated at end of loop body
                     }
 
                     let sym_id = uuid(char_id, &format!("sym_box_{}_{}_{}", anim_name, inst_name, start_frame));

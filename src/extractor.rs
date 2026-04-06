@@ -403,7 +403,8 @@ fn render_frame_script(_method_name: &str, actions: &[crate::abc_parser::FrameAc
 }
 
 /// Extract a clean animation name from a symbol like "mario_fla.NAir_40"
-fn extract_animation_name(sym_name: &str, char_name: &str) -> Option<String> {
+#[allow(dead_code)]
+fn extract_animation_name(sym_name: &str, _char_name: &str) -> Option<String> {
     // Skip non-animation symbols
     if sym_name.contains('.') {
         // "mario_fla.NAir_40" → "NAir_40"

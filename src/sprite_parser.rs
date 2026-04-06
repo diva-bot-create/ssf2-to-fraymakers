@@ -622,7 +622,7 @@ fn find_collision_box_base_size(swf: &swf::Swf, sym_names: &BTreeMap<u16, String
 /// Uses the ssf2_to_fm map to validate/match against known animation names.
 pub fn extract_ssf2_anim_name(
     sym: &str,
-    char_lower: &str,
+    _char_lower: &str,
     ssf2_to_fm: &BTreeMap<String, String>,
 ) -> Option<String> {
     // Symbol format: "{char}_fla.{AnimLabel}_{index}"
@@ -1100,9 +1100,9 @@ fn matrix_to_itembox(m: &swf::Matrix) -> (f64, f64, f64, f64, f64) {
     // It's placed with scale controlling overall size and b/c matrix for rotation.
     // We extract: scale magnitude → size, atan2(b, a) → rotation.
     let sx = m.a.to_f64();
-    let sy = m.d.to_f64();
+    let _sy = m.d.to_f64();
     let bx = m.b.to_f64();
-    let by = m.c.to_f64();
+    let _by = m.c.to_f64();
 
     // Rotation from the matrix (degrees, CCW positive in SWF = CW positive visually)
     let rotation_rad = bx.atan2(sx);  // atan2(b, a) gives rotation
