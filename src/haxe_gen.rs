@@ -25,6 +25,12 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
     fs::write(scripts_dir.join("AnimationStats.hx"), generate_animation_stats(data))?;
     fs::write(scripts_dir.join("Script.hx"),         generate_script(data, &char_id))?;
 
+    // .meta sidecar files for character scripts
+    fs::write(scripts_dir.join("HitboxStats.hx.meta"),    script_meta(&format!("{}HitboxStats", char_id),    &det_uuid(&format!("{}::HitboxStats::meta", char_id)),    false))?;
+    fs::write(scripts_dir.join("CharacterStats.hx.meta"), script_meta(&format!("{}CharacterStats", char_id), &det_uuid(&format!("{}::CharacterStats::meta", char_id)), false))?;
+    fs::write(scripts_dir.join("AnimationStats.hx.meta"), script_meta(&format!("{}AnimationStats", char_id), &det_uuid(&format!("{}::AnimationStats::meta", char_id)), false))?;
+    fs::write(scripts_dir.join("Script.hx.meta"),         script_meta(&format!("{}Script", char_id),         &det_uuid(&format!("{}::Script::meta", char_id)),         false))?;
+
     // .fraytools project file
     fs::write(char_dir.join(format!("{}.fraytools", char_name)), fraytools_project::generate_fraytools_project(char_name))?;
 
@@ -164,6 +170,61 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
         }
         fs::write(entities_dir.join(&filename), proj_json)?;
         log::info!("Generated projectile entity: {} ({} frames)", filename, proj.inner_frame_count);
+
+        // ── projectile script files ──────────────────────────────────────────
+        let entity_id = proj.name.replace('_', "");
+        let proj_scripts_dir = char_dir.join(format!("library/scripts/Projectile_{}", proj.name));
+        fs::create_dir_all(&proj_scripts_dir)?;
+
+        fs::write(
+            proj_scripts_dir.join("ProjectileScript.hx"),
+            generate_projectile_script(&char_id, &entity_id),
+        )?;
+        fs::write(
+            proj_scripts_dir.join("ProjectileScript.hx.meta"),
+            script_meta(
+                &format!("{}ProjectileScript", entity_id),
+                &det_uuid(&format!("{}::{}::ProjectileScript::meta", char_id, proj.name)),
+                true,
+            ),
+        )?;
+        fs::write(
+            proj_scripts_dir.join("ProjectileAnimationStats.hx"),
+            generate_projectile_animation_stats(),
+        )?;
+        fs::write(
+            proj_scripts_dir.join("ProjectileAnimationStats.hx.meta"),
+            script_meta(
+                &format!("{}ProjectileAnimationStats", entity_id),
+                &det_uuid(&format!("{}::{}::ProjectileAnimationStats::meta", char_id, proj.name)),
+                false,
+            ),
+        )?;
+        fs::write(
+            proj_scripts_dir.join("ProjectileStats.hx"),
+            generate_projectile_stats(&char_id, &entity_id),
+        )?;
+        fs::write(
+            proj_scripts_dir.join("ProjectileStats.hx.meta"),
+            script_meta(
+                &format!("{}ProjectileStats", entity_id),
+                &det_uuid(&format!("{}::{}::ProjectileStats::meta", char_id, proj.name)),
+                false,
+            ),
+        )?;
+        fs::write(
+            proj_scripts_dir.join("ProjectileHitboxStats.hx"),
+            generate_projectile_hitbox_stats(&char_id, &entity_id, &proj_info),
+        )?;
+        fs::write(
+            proj_scripts_dir.join("ProjectileHitboxStats.hx.meta"),
+            script_meta(
+                &format!("{}ProjectileHitboxStats", entity_id),
+                &det_uuid(&format!("{}::{}::ProjectileHitboxStats::meta", char_id, proj.name)),
+                false,
+            ),
+        )?;
+        log::info!("Generated projectile scripts for {}", proj.name);
     }
 
     // Stats summary for debugging
@@ -856,4 +917,149 @@ fn generate_sound_entries(
 /// "mario_fireball" → "mario_fireball"
 fn sanitize_entity_name(name: &str) -> String {
     name.replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "_")
+}
+
+// ─── Projectile script generators ─────────────────────────────────────────────
+
+/// Generate a .hx.meta sidecar for a script file.
+/// `is_projectile_script` adds FraymakersMetadata plugin block.
+fn script_meta(id: &str, guid: &str, is_projectile: bool) -> String {
+    let plugin_meta = if is_projectile {
+        serde_json::json!({
+            "com.fraymakers.FraymakersMetadata": {
+                "objectType": "PROJECTILE",
+                "version": "0.1.1"
+            }
+        })
+    } else {
+        serde_json::json!({})
+    };
+    let plugins: Vec<&str> = if is_projectile { vec!["com.fraymakers.FraymakersMetadata"] } else { vec![] };
+    serde_json::to_string_pretty(&serde_json::json!({
+        "export": true,
+        "guid": guid,
+        "id": id,
+        "language": if is_projectile { "hscript" } else { "" },
+        "pluginMetadata": plugin_meta,
+        "plugins": plugins,
+        "tags": [],
+        "version": 1
+    })).unwrap_or_default()
+}
+
+/// ProjectileScript.hx — handles lifecycle events (initialize, hit, ground, destroy).
+fn generate_projectile_script(char_id: &str, entity_id: &str) -> String {
+    format!(r#"// Projectile script for {entity_id} — converted from SSF2
+// TODO: tune X_SPEED / Y_SPEED and gravity to match SSF2 behaviour.
+
+var X_SPEED = 8;
+var Y_SPEED = 0;
+
+function initialize() {{
+    self.addEventListener(EntityEvent.COLLIDE_FLOOR, onGroundHit, {{ persistent: true }});
+    self.addEventListener(GameObjectEvent.HIT_DEALT,  onHit,       {{ persistent: true }});
+
+    self.setCostumeIndex(self.getOwner().getCostumeIndex());
+    Common.enableReflectionListener({{ mode: "X", replaceOwner: true }});
+
+    self.setState(PState.ACTIVE);
+    self.setXSpeed(X_SPEED);
+    self.setYSpeed(Y_SPEED);
+}}
+
+function onGroundHit(event) {{
+    self.removeEventListener(EntityEvent.COLLIDE_FLOOR, onGroundHit);
+    self.removeEventListener(GameObjectEvent.HIT_DEALT,  onHit);
+    self.toState(PState.DESTROYING);
+}}
+
+function onHit(event) {{
+    self.removeEventListener(EntityEvent.COLLIDE_FLOOR, onGroundHit);
+    self.removeEventListener(GameObjectEvent.HIT_DEALT,  onHit);
+    self.toState(PState.DESTROYING);
+}}
+
+function update() {{
+    // Projectile moves via setXSpeed/setYSpeed set in initialize().
+    // Add custom movement logic here if needed.
+}}
+"#,
+        entity_id = entity_id,
+    )
+}
+
+/// ProjectileAnimationStats.hx — endType for each projectile animation.
+fn generate_projectile_animation_stats() -> String {
+    r#"// Animation stats for projectile
+{
+    projectileSpawn:   {{ endType: AnimationEndType.NONE }},
+    projectileIdle:    {{ endType: AnimationEndType.NONE }},
+    projectileDestroy: {{ xSpeedConservation: 0, ySpeedConservation: 0, resetId: false }}
+}
+"#.replace("{{ ", "{ ").replace(" }}", " }")
+        .replace("{{", "{").replace("}}", "}")
+}
+
+/// ProjectileStats.hx — physics, geometry, and state → animation mapping.
+fn generate_projectile_stats(char_id: &str, entity_id: &str) -> String {
+    let content_id = format!("{}Projectile", entity_id);
+    format!(r#"// Projectile stats for {entity_id}
+{{
+    spriteContent: self.getResource().getContent("{content_id}"),
+    stateTransitionMapOverrides: [
+        PState.ACTIVE => {{
+            animation: "projectileIdle"
+        }},
+        PState.DESTROYING => {{
+            animation: "projectileDestroy"
+        }}
+    ],
+    gravity: 0.7,
+    shadows: true,
+    friction: 0,
+    groundSpeedCap: 11,
+    aerialSpeedCap: 11,
+    aerialFriction: 0,
+    terminalVelocity: 20,
+    floorHeadPosition: 15,
+    floorHipWidth: 16,
+    floorHipXOffset: 0,
+    floorHipYOffset: 0,
+    floorFootPosition: 0,
+    aerialHeadPosition: 15,
+    aerialHipWidth: 16,
+    aerialHipXOffset: 0,
+    aerialHipYOffset: 0,
+    aerialFootPosition: 0
+}}
+"#,
+        entity_id = entity_id,
+        content_id = content_id,
+    ).replace("{{", "{").replace("}}", "}")
+}
+
+/// ProjectileHitboxStats.hx — hitbox entries extracted from the SSF2 attack data.
+/// Emits one `hitbox0` entry under `projectileIdle` using the first attack that
+/// references this projectile, if any.
+fn generate_projectile_hitbox_stats(
+    char_id: &str,
+    entity_id: &str,
+    proj: &entity_gen::ProjectileInfo,
+) -> String {
+    // Try to pull the first hitbox from the collision boxes
+    // proj.boxes is Option<AnimationBoxData>: frames → Vec<FrameBox>
+    // For now emit a sensible default (damage 6, knockback like the template)
+    // since full per-hitbox attack data cross-referencing isn't wired up yet.
+    format!(r#"// Hitbox stats for {entity_id}
+// TODO: tune damage, knockback, and angle to match SSF2.
+{{
+    projectileSpawn: {{}},
+    projectileIdle: {{
+        hitbox0: {{ damage: 6, knockbackGrowth: 30, baseKnockback: 65, angle: 0, reversibleAngle: true, directionalInfluence: false, reflectable: true }}
+    }},
+    projectileDestroy: {{}}
+}}
+"#,
+        entity_id = entity_id,
+    ).replace("{{", "{").replace("}}", "}")
 }

@@ -1,13 +1,10 @@
 {
   "export": true,
-  "guid": "546b19bd-9c8e-4a09-916a-5af178260adc",
-  "id": "HitboxStats",
+  "guid": "b7df29be-de30-5e39-9e83-1a1a83f28ce4",
+  "id": "marioHitboxStats",
   "language": "",
-  "pluginMetadata": {
-  },
-  "plugins": [
-  ],
-  "tags": [
-  ],
+  "pluginMetadata": {},
+  "plugins": [],
+  "tags": [],
   "version": 1
 }

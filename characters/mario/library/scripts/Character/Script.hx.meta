@@ -1,13 +1,10 @@
 {
   "export": true,
-  "guid": "f915c95b-621c-40c6-8807-039a927998c7",
-  "id": "Script",
+  "guid": "fa1573b6-21ac-53f6-a7e0-a94a0deb3186",
+  "id": "marioScript",
   "language": "",
-  "pluginMetadata": {
-  },
-  "plugins": [
-  ],
-  "tags": [
-  ],
+  "pluginMetadata": {},
+  "plugins": [],
+  "tags": [],
   "version": 1
 }

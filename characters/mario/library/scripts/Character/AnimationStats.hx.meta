@@ -1,13 +1,10 @@
 {
   "export": true,
-  "guid": "3fefa4b4-369d-47d7-ad62-38234714e2a3",
-  "id": "AnimationStats",
+  "guid": "77e50120-f1da-5799-8be6-ae641a5118e4",
+  "id": "marioAnimationStats",
   "language": "",
-  "pluginMetadata": {
-  },
-  "plugins": [
-  ],
-  "tags": [
-  ],
+  "pluginMetadata": {},
+  "plugins": [],
+  "tags": [],
   "version": 1
 }

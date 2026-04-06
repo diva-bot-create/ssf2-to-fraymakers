@@ -1,13 +1,10 @@
 {
   "export": true,
-  "guid": "06e439fe-0ac1-4664-a9ed-c15b057c1746",
-  "id": "CharacterStats",
+  "guid": "74c7ee5e-323a-5e40-bac2-289b437325c1",
+  "id": "marioCharacterStats",
   "language": "",
-  "pluginMetadata": {
-  },
-  "plugins": [
-  ],
-  "tags": [
-  ],
+  "pluginMetadata": {},
+  "plugins": [],
+  "tags": [],
   "version": 1
 }
