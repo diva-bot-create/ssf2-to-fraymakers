@@ -1,0 +1,246 @@
+{
+  "_comment": "SSF2->Fraymakers animation split decisions for mario. Each entry has the full label sequence from SSF2. 'action' can be: 'split' (needs separate FM animations), 'loop_tail' (last segment loops, handled in AnimationStats), 'ignore_tail' (trailing labels are control-flow only, no split needed), 'already_split' (the splitter already broke this into separate animations), 'keep' (single-label, no action needed).",
+
+  "aerial_back": {
+    "labels": [{"label": "aerial_back", "frames": 23}, {"label": "continue", "frames": 6}],
+    "action": "ignore_tail",
+    "reason": "'continue' is landing-lag / endlag that just plays out — same as other aerials, no separate FM anim needed"
+  },
+  "aerial_down": {
+    "labels": [{"label": "aerial_down", "frames": 20}, {"label": "continue", "frames": 7}],
+    "action": "ignore_tail",
+    "reason": "same endlag pattern as other aerials"
+  },
+  "aerial_forward": {
+    "labels": [{"label": "aerial_forward", "frames": 30}, {"label": "continue", "frames": 8}],
+    "action": "ignore_tail",
+    "reason": "same endlag pattern"
+  },
+  "aerial_neutral": {
+    "labels": [{"label": "aerial_neutral", "frames": 21}, {"label": "continue", "frames": 5}],
+    "action": "ignore_tail",
+    "reason": "same endlag pattern"
+  },
+  "aerial_up": {
+    "labels": [{"label": "aerial_up", "frames": 16}, {"label": "continue", "frames": 5}],
+    "action": "ignore_tail",
+    "reason": "same endlag pattern"
+  },
+  "buried": {
+    "labels": [{"label": "buried", "frames": 3}, {"label": "loop", "frames": 2}],
+    "action": "loop_tail",
+    "reason": "intro then loop — AnimationStats endType=LOOP on frame 3"
+  },
+  "carry": {
+    "labels": [{"label": "carry", "frames": 16}, {"label": "dashgrab", "frames": 21}, {"label": "grabbed", "frames": 2}, {"label": "attack", "frames": 11}],
+    "action": "split",
+    "reason": "dashgrab is a separate entry animation; grabbed/attack are pump sub-states. FM needs: grab (standing), dash_grab, grab_hold, grab_pummel",
+    "proposed_splits": [
+      {"fm_name": "grab", "ssf2_label": "carry", "frames": 16},
+      {"fm_name": "dash_grab", "ssf2_label": "dashgrab", "frames": 21},
+      {"fm_name": "grab_hold", "ssf2_label": "grabbed", "frames": 2},
+      {"fm_name": "grab_pummel", "ssf2_label": "attack", "frames": 11}
+    ]
+  },
+  "crouch": {
+    "labels": [{"label": "crouch", "frames": 3}, {"label": "loop", "frames": 2}],
+    "action": "loop_tail",
+    "reason": "crouch_in then crouch_loop — AnimationStats endType=LOOP at frame 3"
+  },
+  "defeat": {
+    "labels": [{"label": "defeat", "frames": 8}, {"label": "done1", "frames": 2}, {"label": "hurt2", "frames": 8}, {"label": "done2", "frames": 2}, {"label": "hurt3", "frames": 8}, {"label": "done3", "frames": 2}, {"label": "downed", "frames": 10}, {"label": "shock", "frames": 10}, {"label": "ball", "frames": 10}],
+    "action": "ignore_tail",
+    "reason": "hurt sub-states are driven by game engine damage type; Fraymakers handles this internally via hurt animation variants, not by frame labels"
+  },
+  "dizzy": {
+    "labels": [{"label": "dizzy", "frames": 1}, {"label": "loop", "frames": 37}],
+    "action": "loop_tail",
+    "reason": "1-frame intro then loop — AnimationStats endType=LOOP"
+  },
+  "fly": {
+    "labels": [{"label": "fly", "frames": 18}, {"label": "done", "frames": 2}, {"label": "backflip", "frames": 25}, {"label": "done2", "frames": 2}],
+    "action": "split",
+    "reason": "backflip is a distinct tumble/fly-back animation. FM needs tumble (regular knockback) and tumble_backflip (reverse hit) as separate",
+    "proposed_splits": [
+      {"fm_name": "tumble", "ssf2_label": "fly", "frames": 20},
+      {"fm_name": "tumble_backflip", "ssf2_label": "backflip", "frames": 27}
+    ]
+  },
+  "grab": {
+    "labels": [{"label": "grab", "frames": 16}, {"label": "dashgrab", "frames": 21}, {"label": "grabbed", "frames": 2}, {"label": "attack", "frames": 11}],
+    "action": "split",
+    "reason": "same as 'carry' — grab and carry share the same inner sprite in SSF2",
+    "proposed_splits": [
+      {"fm_name": "grab", "ssf2_label": "grab", "frames": 16},
+      {"fm_name": "dash_grab", "ssf2_label": "dashgrab", "frames": 21},
+      {"fm_name": "grab_hold", "ssf2_label": "grabbed", "frames": 2},
+      {"fm_name": "grab_pummel", "ssf2_label": "attack", "frames": 11}
+    ]
+  },
+  "hurt": {
+    "labels": [{"label": "hurt", "frames": 8}, {"label": "done1", "frames": 2}, {"label": "hurt2", "frames": 8}, {"label": "done2", "frames": 2}, {"label": "hurt3", "frames": 8}, {"label": "done3", "frames": 2}, {"label": "downed", "frames": 10}, {"label": "shock", "frames": 10}, {"label": "ball", "frames": 10}],
+    "action": "ignore_tail",
+    "reason": "hurt sub-states (shock, ball, downed) are SSF2-internal; Fraymakers engine drives hurt variants independently"
+  },
+  "idle": {
+    "labels": [{"label": "idle", "frames": 36}, {"label": "bored", "frames": 69}, {"label": "uncrouch", "frames": 3}],
+    "action": "split",
+    "reason": "'bored' is the idle taunt/fidget; 'uncrouch' is stand-up from crouch. FM needs separate animations",
+    "proposed_splits": [
+      {"fm_name": "idle", "ssf2_label": "idle", "frames": 36},
+      {"fm_name": "idle_bored", "ssf2_label": "bored", "frames": 69},
+      {"fm_name": "crouch_out", "ssf2_label": "uncrouch", "frames": 3}
+    ]
+  },
+  "item_float": {
+    "labels": [{"label": "item_float", "frames": 36}, {"label": "bored", "frames": 69}, {"label": "uncrouch", "frames": 3}],
+    "action": "ignore_tail",
+    "reason": "item_float shares the idle sprite — bored/uncrouch are idle variants, not item-float variants. Keep as one animation"
+  },
+  "item_homerun": {
+    "labels": [{"label": "item_homerun", "frames": 30}, {"label": "attack", "frames": 16}],
+    "action": "ignore_tail",
+    "reason": "windup then active frames — standard smash pattern, no split needed"
+  },
+  "item_screw": {
+    "labels": [{"label": "item_screw", "frames": 19}, {"label": "fallLoop", "frames": 32}],
+    "action": "loop_tail",
+    "reason": "screw attack then falling loop — AnimationStats endType=LOOP at frame 19"
+  },
+  "item_smash": {
+    "labels": [{"label": "item_smash", "frames": 4}, {"label": "charging", "frames": 41}, {"label": "attack", "frames": 21}],
+    "action": "split",
+    "reason": "charging is a distinct hold state. FM needs item_smash (windup/release) + item_smash_charge (held)",
+    "proposed_splits": [
+      {"fm_name": "item_smash_charge", "ssf2_label": "charging", "frames": 41},
+      {"fm_name": "item_smash", "ssf2_label": "item_smash+attack", "frames": 25}
+    ]
+  },
+  "item_throw": {
+    "labels": [{"label": "item_throw", "frames": 11}, {"label": "toss_down", "frames": 12}, {"label": "toss_up", "frames": 12}, {"label": "toss_forward", "frames": 12}],
+    "action": "split",
+    "reason": "each toss direction is a separate Fraymakers animation",
+    "proposed_splits": [
+      {"fm_name": "item_throw_back", "ssf2_label": "item_throw", "frames": 11},
+      {"fm_name": "item_throw_down", "ssf2_label": "toss_down", "frames": 12},
+      {"fm_name": "item_throw_up", "ssf2_label": "toss_up", "frames": 12},
+      {"fm_name": "item_throw_forward", "ssf2_label": "toss_forward", "frames": 12}
+    ]
+  },
+  "item_throw_air": {
+    "labels": [{"label": "item_throw_air", "frames": 11}, {"label": "toss_down", "frames": 12}, {"label": "toss_up", "frames": 12}, {"label": "toss_forward", "frames": 12}],
+    "action": "split",
+    "reason": "same as item_throw but aerial — each direction needs its own FM animation",
+    "proposed_splits": [
+      {"fm_name": "item_throw_air_back", "ssf2_label": "item_throw_air", "frames": 11},
+      {"fm_name": "item_throw_air_down", "ssf2_label": "toss_down", "frames": 12},
+      {"fm_name": "item_throw_air_up", "ssf2_label": "toss_up", "frames": 12},
+      {"fm_name": "item_throw_air_forward", "ssf2_label": "toss_forward", "frames": 12}
+    ]
+  },
+  "jump": {
+    "labels": [{"label": "jump", "frames": 2}, {"label": "jump", "frames": 23}, {"label": "done", "frames": 2}, {"label": "backflip", "frames": 22}, {"label": "done2", "frames": 2}],
+    "action": "split",
+    "reason": "'backflip' is reverse-jump (jumped while running backward). FM needs jump and jump_back as separate",
+    "proposed_splits": [
+      {"fm_name": "jump", "ssf2_label": "jump", "frames": 25},
+      {"fm_name": "jump_back", "ssf2_label": "backflip", "frames": 24}
+    ]
+  },
+  "jump_aerial": {
+    "labels": [{"label": "jump_aerial", "frames": 18}, {"label": "done", "frames": 2}, {"label": "backflip", "frames": 25}, {"label": "done2", "frames": 2}],
+    "action": "split",
+    "reason": "same as jump — backflip is double-jump while moving backward",
+    "proposed_splits": [
+      {"fm_name": "jump_aerial", "ssf2_label": "jump_aerial", "frames": 20},
+      {"fm_name": "jump_aerial_back", "ssf2_label": "backflip", "frames": 27}
+    ]
+  },
+  "ladder": {
+    "labels": [{"label": "ladder", "frames": 36}, {"label": "bored", "frames": 69}, {"label": "uncrouch", "frames": 3}],
+    "action": "ignore_tail",
+    "reason": "ladder shares idle sprite — bored/uncrouch are idle variants, irrelevant here"
+  },
+  "ledge_hang": {
+    "labels": [{"label": "ledge_hang", "frames": 3}, {"label": "loop", "frames": 4}],
+    "action": "loop_tail",
+    "reason": "snap-to-ledge then loop — AnimationStats endType=LOOP at frame 3"
+  },
+  "ledge_lean": {
+    "labels": [{"label": "ledge_lean", "frames": 3}, {"label": "loop", "frames": 4}],
+    "action": "loop_tail",
+    "reason": "same as ledge_hang"
+  },
+  "respawn": {
+    "labels": [{"label": "respawn", "frames": 36}, {"label": "bored", "frames": 69}, {"label": "uncrouch", "frames": 3}],
+    "action": "ignore_tail",
+    "reason": "respawn shares idle sprite — bored/uncrouch are idle variants, not part of respawn"
+  },
+  "run": {
+    "labels": [{"label": "run", "frames": 15}, {"label": "dash", "frames": 6}, {"label": "turn", "frames": 12}],
+    "action": "split",
+    "reason": "'dash' is initial dash (before full run), 'turn' is run-turnaround. FM needs run, dash, and run_turn",
+    "proposed_splits": [
+      {"fm_name": "run", "ssf2_label": "run", "frames": 15},
+      {"fm_name": "dash", "ssf2_label": "dash", "frames": 6},
+      {"fm_name": "run_turn", "ssf2_label": "turn", "frames": 12}
+    ]
+  },
+  "screenko": {
+    "labels": [{"label": "screenko", "frames": 8}, {"label": "done1", "frames": 2}, {"label": "hurt2", "frames": 8}, {"label": "done2", "frames": 2}, {"label": "hurt3", "frames": 8}, {"label": "done3", "frames": 2}, {"label": "downed", "frames": 10}, {"label": "shock", "frames": 10}, {"label": "ball", "frames": 10}],
+    "action": "ignore_tail",
+    "reason": "screen KO shares hurt sprite — tail is SSF2-internal hurt routing"
+  },
+  "shield": {
+    "labels": [{"label": "shield", "frames": 4}, {"label": "pause", "frames": 2}],
+    "action": "loop_tail",
+    "reason": "shield intro then shield-hold loop at 'pause'"
+  },
+  "special": {
+    "labels": [{"label": "special", "frames": 36}, {"label": "bored", "frames": 69}, {"label": "uncrouch", "frames": 3}],
+    "action": "ignore_tail",
+    "reason": "special shares idle sprite — bored/uncrouch are idle variants"
+  },
+  "special_up": {
+    "labels": [{"label": "special_up", "frames": 19}, {"label": "fallLoop", "frames": 32}],
+    "action": "split",
+    "reason": "super jump punch windup then helpless fall — FM needs special_up and helpless (or special_up_fall)",
+    "proposed_splits": [
+      {"fm_name": "special_up", "ssf2_label": "special_up", "frames": 19},
+      {"fm_name": "helpless", "ssf2_label": "fallLoop", "frames": 32}
+    ]
+  },
+  "special_up_air": {
+    "labels": [{"label": "special_up_air", "frames": 21}, {"label": "loop", "frames": 3}],
+    "action": "loop_tail",
+    "reason": "aerial super jump punch then small loop tail — AnimationStats endType=LOOP"
+  },
+  "starko": {
+    "labels": [{"label": "starko", "frames": 8}, {"label": "done1", "frames": 2}, {"label": "hurt2", "frames": 8}, {"label": "done2", "frames": 2}, {"label": "hurt3", "frames": 8}, {"label": "done3", "frames": 2}, {"label": "downed", "frames": 10}, {"label": "shock", "frames": 10}, {"label": "ball", "frames": 10}],
+    "action": "ignore_tail",
+    "reason": "star KO shares hurt sprite — same SSF2-internal routing, ignore"
+  },
+  "strong_forward": {
+    "labels": [{"label": "strong_forward", "frames": 2}, {"label": "charging", "frames": 41}, {"label": "attack", "frames": 22}],
+    "action": "split",
+    "reason": "charging is a hold state. FM needs strong_forward_charge (held) and strong_forward (release)",
+    "proposed_splits": [
+      {"fm_name": "strong_forward_charge", "ssf2_label": "charging", "frames": 41},
+      {"fm_name": "strong_forward", "ssf2_label": "strong_forward+attack", "frames": 24}
+    ]
+  },
+  "strong_up": {
+    "labels": [{"label": "strong_up", "frames": 4}, {"label": "charging", "frames": 41}, {"label": "attack", "frames": 21}],
+    "action": "split",
+    "reason": "same charging pattern as strong_forward",
+    "proposed_splits": [
+      {"fm_name": "strong_up_charge", "ssf2_label": "charging", "frames": 41},
+      {"fm_name": "strong_up", "ssf2_label": "strong_up+attack", "frames": 25}
+    ]
+  },
+  "stunned": {
+    "labels": [{"label": "stunned", "frames": 8}, {"label": "done1", "frames": 2}, {"label": "hurt2", "frames": 8}, {"label": "done2", "frames": 2}, {"label": "hurt3", "frames": 8}, {"label": "done3", "frames": 2}, {"label": "downed", "frames": 10}, {"label": "shock", "frames": 10}, {"label": "ball", "frames": 10}],
+    "action": "ignore_tail",
+    "reason": "stun shares hurt sprite — tail is SSF2-internal, ignore"
+  }
+}
