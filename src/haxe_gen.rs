@@ -10,6 +10,7 @@ use crate::extractor::{CharacterData, Attack, Hitbox, CharacterStats};
 use crate::entity_gen;
 use crate::fraytools_project;
 use crate::palette_gen;
+use crate::uuid_gen::det_uuid;
 
 pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite_boxes: &std::collections::BTreeMap<String, crate::sprite_parser::AnimationBoxData>, img_result: &crate::image_extractor::ImageExtractionResult, costumes_json: Option<&Path>, sounds: &[crate::sound_extractor::SoundEntry]) -> Result<()> {
     let char_id = char_name.to_lowercase().replace(" ", "");
@@ -739,7 +740,9 @@ fn generate_sound_entries(
         if !ogg_path.exists() { continue; }
 
         let content_id = format!("{}::{}", char_name, safe_name);
+        let guid = det_uuid(&format!("{}::sound_meta_{}", char_name, safe_name));
         let meta = serde_json::json!({
+            "guid": guid,
             "id":   content_id,
             "type": "audio"
         });
