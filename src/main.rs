@@ -70,9 +70,19 @@ fn main() -> Result<()> {
     log::info!("Character: {}", char_name);
 
     // Extract character data (ABC: attacks, stats, frame scripts, xframe map)
-    let char_data = extractor::extract(&swf, &char_name)?;
+    let mut char_data = extractor::extract(&swf, &char_name)?;
     log::info!("Extracted: {} attacks, {} animations, {} ssf2→fm mappings",
         char_data.attacks.len(), char_data.animations.len(), char_data.ssf2_to_fm_anim.len());
+
+    // Extract median xframe scale from root character MovieClip
+    let (base_scale_x, base_scale_y) = sprite_parser::extract_xframe_scale(&swf_data, &char_name)
+        .unwrap_or_else(|e| {
+            log::warn!("extract_xframe_scale failed: {}, defaulting to 1.0", e);
+            (1.0, 1.0)
+        });
+    char_data.stats.base_scale_x = base_scale_x;
+    char_data.stats.base_scale_y = base_scale_y;
+    log::info!("Character base scale: scaleX={:.4}, scaleY={:.4}", base_scale_x, base_scale_y);
 
     // Extract per-frame collision box geometry from DefineSprite tags
     let sprite_boxes = sprite_parser::parse_sprite_boxes(&swf_data, &char_name, &char_data.ssf2_to_fm_anim)

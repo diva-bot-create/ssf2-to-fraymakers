@@ -905,3 +905,97 @@ fn matrix_to_box(m: &swf::Matrix, base_size: f64) -> (f64, f64, f64, f64) {
 
     (x, y, w, h)
 }
+
+// ─── Root MovieClip xframe scale extraction ──────────────────────────────────
+
+/// Extract the median scaleX and scaleY from the root character MovieClip's
+/// xframe PlaceObject entries (the `stance` sub-sprites placed on each frame).
+///
+/// SSF2 characters have a root DefineSprite whose SymbolClass name matches the
+/// character name exactly (e.g. "mario"). Each frame of this sprite places
+/// animation sub-sprites via PlaceObject with instance name "stance".
+/// The matrix on these PlaceObjects contains the visual scale of the character.
+///
+/// We use the median (absolute value) to ignore outliers like "flying" (near-zero
+/// to hide the sprite) or "frozen"/"egg" (oversized).
+///
+/// Returns `(median_scale_x, median_scale_y)`, or `(1.0, 1.0)` if no data found.
+pub fn extract_xframe_scale(
+    swf_data: &[u8],
+    char_name: &str,
+) -> anyhow::Result<(f64, f64)> {
+    let swf_buf = swf::decompress_swf(Cursor::new(swf_data))?;
+    let swf = swf::parse_swf(&swf_buf)?;
+
+    let mut sym_names: BTreeMap<u16, String> = BTreeMap::new();
+    for tag in &swf.tags {
+        if let swf::Tag::SymbolClass(links) = tag {
+            for link in links {
+                let name = link.class_name.to_str_lossy(encoding_rs::WINDOWS_1252).to_string();
+                sym_names.insert(link.id, name);
+            }
+        }
+    }
+
+    let char_lower = char_name.to_lowercase();
+    let mut scale_xs: Vec<f64> = Vec::new();
+    let mut scale_ys: Vec<f64> = Vec::new();
+
+    for tag in &swf.tags {
+        if let swf::Tag::DefineSprite(sprite) = tag {
+            let sym = sym_names.get(&sprite.id).cloned().unwrap_or_default();
+            // Match the root character sprite (exact name match, not _fla. sub-sprites)
+            if sym.to_lowercase() != char_lower { continue; }
+
+            log::info!("Found root character MovieClip: id={} sym='{}' ({} frames)",
+                sprite.id, sym, sprite.num_frames);
+
+            for stag in &sprite.tags {
+                if let swf::Tag::PlaceObject(po) = stag {
+                    let inst = po.name.as_ref()
+                        .map(|s| String::from_utf8_lossy(s.as_bytes()).to_string())
+                        .unwrap_or_default();
+                    // Only collect scale from "stance" placements (the xframe sub-sprites)
+                    if inst != "stance" { continue; }
+
+                    if let Some(m) = &po.matrix {
+                        let sx = m.a.to_f64().abs();
+                        let sy = m.d.to_f64().abs();
+                        // Skip near-zero scales (hidden sprites, e.g. "flying")
+                        if sx > 0.01 && sy > 0.01 {
+                            scale_xs.push(sx);
+                            scale_ys.push(sy);
+                        }
+                    } else {
+                        // No matrix = identity
+                        scale_xs.push(1.0);
+                        scale_ys.push(1.0);
+                    }
+                }
+            }
+            break; // Only one root sprite per character
+        }
+    }
+
+    if scale_xs.is_empty() {
+        log::warn!("No xframe stance placements found for '{}', defaulting to 1.0", char_name);
+        return Ok((1.0, 1.0));
+    }
+
+    scale_xs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    scale_ys.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    let med_x = median_f64(&scale_xs);
+    let med_y = median_f64(&scale_ys);
+
+    log::info!("xframe scale for '{}': median scaleX={:.4}, scaleY={:.4} ({} samples)",
+        char_name, med_x, med_y, scale_xs.len());
+
+    Ok((med_x, med_y))
+}
+
+fn median_f64(sorted: &[f64]) -> f64 {
+    let n = sorted.len();
+    if n == 0 { return 0.0; }
+    if n % 2 == 1 { sorted[n / 2] } else { (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0 }
+}

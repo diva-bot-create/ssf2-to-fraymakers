@@ -256,8 +256,8 @@ fn generate_character_stats(data: &CharacterData, char_id: &str) -> String {
         {{\n\
         \tspriteContent: self.getResource().getContent(\"{}\"),\n\n\
         \t//GENERIC STATS\n\
-        \tbaseScaleX: 1.0,\n\
-        \tbaseScaleY: 1.0,\n\
+        \tbaseScaleX: {},\n\
+        \tbaseScaleY: {},\n\
         \tweight: {}{},\n\
         \tgravity: {}{},\n\
         \tshortHopSpeed: {} /*TODO: set manually*/,\n\
@@ -339,6 +339,7 @@ fn generate_character_stats(data: &CharacterData, char_id: &str) -> String {
         \tkoVoiceSilenceRate: 0,\n\
         }}\n",
         data.name, char_id,
+        fmt(s.base_scale_x), fmt(s.base_scale_y),
         fmt(weight), todo(weight),
         fmt(gravity), todo(gravity),
         fmt(jump_speed * 0.55), // short hop ~55% of full jump
