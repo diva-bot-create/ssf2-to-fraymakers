@@ -40,7 +40,8 @@ fn box_type_to_fm(bt: BoxType) -> &'static str {
         BoxType::ShieldBox  => "REFLECT_BOX",
         BoxType::ReflectBox => "REFLECT_BOX",
         BoxType::AbsorbBox  => "COUNTER_BOX",
-        BoxType::LedgeBox   => "LEDGE_GRAB_BOX",
+        BoxType::LedgeBox    => "LEDGE_GRAB_BOX",
+        BoxType::GrabHoldBox  => "GRAB_HOLD_BOX",
     }
 }
 
@@ -87,6 +88,8 @@ fn ssf2_box_name_to_fm(inst_name: &str) -> String {
             format!("absorbbox{}", index),
         p if p.starts_with("ledgebox") || p.starts_with("ledgegrab") =>
             format!("ledgegrabbox{}", index),
+        p if p.starts_with("touchbox") =>
+            format!("grabHoldPoint{}", index),
         _ => format!("{}{}", prefix_lower.trim_end_matches('_'), index),
     }
 }
@@ -112,7 +115,8 @@ fn box_color(bt: BoxType) -> &'static str {
         BoxType::ShieldBox  => "0x48f748",
         BoxType::ReflectBox => "0x48f748",
         BoxType::AbsorbBox  => "0x42ecff",
-        BoxType::LedgeBox   => "0xbababa",
+        BoxType::LedgeBox    => "0xbababa",
+        BoxType::GrabHoldBox => "0x9999ff",  // light blue
     }
 }
 

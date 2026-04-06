@@ -49,6 +49,8 @@ pub enum BoxType {
     AbsorbBox,
     /// Ledge grab box
     LedgeBox,
+    /// Grab hold point (where grabbed opponent is held)
+    GrabHoldBox,
 }
 
 impl BoxType {
@@ -71,6 +73,8 @@ impl BoxType {
             Some(BoxType::AbsorbBox)
         } else if lower.starts_with("ledgebox") || lower.starts_with("ledgegrab") {
             Some(BoxType::LedgeBox)
+        } else if lower.starts_with("touchbox") {
+            Some(BoxType::GrabHoldBox)
         } else if lower.ends_with("box") {
             // generic fallback — treat unknown *box as hurtbox
             Some(BoxType::Hurtbox)
@@ -89,6 +93,7 @@ impl BoxType {
             BoxType::ReflectBox => "REFLECT_BOX",
             BoxType::AbsorbBox => "ABSORB_BOX",
             BoxType::LedgeBox  => "LEDGE_BOX",
+            BoxType::GrabHoldBox => "GRAB_HOLD_BOX",
         }
     }
 }
