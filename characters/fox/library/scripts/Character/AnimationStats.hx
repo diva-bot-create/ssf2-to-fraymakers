@@ -2,7 +2,6 @@
 // Many values are automatically set by the Common class.
 // Entries here override those defaults.
 {
-	//MOTIONS
 	stand: {},
 	stand_turn: {},
 	walk_in: {},
@@ -23,8 +22,6 @@
 	crouch_in: {},
 	crouch_loop: {},
 	crouch_out: {},
-
-	//AIRDASHES
 	airdash_up: {},
 	airdash_down: {},
 	airdash_forward: {},
@@ -35,8 +32,6 @@
 	airdash_back_down: {},
 	airdash_freefall: {},
 	airdash_freefall_whiff: {},
-
-	//DEFENSE
 	shield_in: {},
 	shield_loop: {},
 	shield_hurt: {},
@@ -46,12 +41,8 @@
 	parry_fail: {},
 	roll: {},
 	spot_dodge: {},
-
-	//ASSIST CALL
 	assist_call: {},
 	assist_call_air: {},
-
-	//LIGHT ATTACKS
 	jab1: {},
 	jab2: {},
 	jab3: {},
@@ -59,8 +50,6 @@
 	tilt_forward: {},
 	tilt_up: {},
 	tilt_down: {},
-
-	//STRONG ATTACKS
 	strong_forward_in: {},
 	strong_forward_charge: {},
 	strong_forward_attack: {},
@@ -70,22 +59,16 @@
 	strong_down_in: {},
 	strong_down_charge: {},
 	strong_down_attack: {},
-
-	//AERIAL ATTACKS
 	aerial_neutral: {landAnimation:"aerial_neutral_land"},
 	aerial_forward: {landAnimation:"aerial_forward_land"},
 	aerial_back: {landAnimation:"aerial_back_land"},
 	aerial_up: {landAnimation:"aerial_up_land"},
 	aerial_down: {landAnimation:"aerial_down_land", xSpeedConservation: 0.5, ySpeedConservation: 0.5, gravityMultiplier:0, allowMovement: false},
-
-	//AERIAL ATTACK LANDING
 	aerial_neutral_land: {},
 	aerial_forward_land: {},
 	aerial_back_land: {},
 	aerial_up_land: {},
 	aerial_down_land: {xSpeedConservation: 0},
-
-	//SPECIAL ATTACKS
 	special_neutral: {},
 	special_neutral_air: {},
 	special_up: {leaveGroundCancel:false, xSpeedConservation:0.5, ySpeedConservation:0.5, allowMovement: true, nextState:CState.FALL_SPECIAL},
@@ -98,16 +81,12 @@
 	special_down_air_endlag: {landType:LandType.LINK_FRAMES, landAnimation:"special_down"},
 	special_side: {allowFastFall: false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: "land_heavy", singleUse:true},
 	special_side_air: {allowFastFall: false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: "land_heavy", singleUse:true},
-
-	//THROWS
 	grab: {},
 	grab_hold: {},
 	throw_forward: {},
 	throw_back: {},
 	throw_up: {},
 	throw_down: {},
-
-	//HURT ANIMATIONS
 	hurt_light_low: {},
 	hurt_light_middle: {},
 	hurt_light_high: {},
@@ -115,15 +94,11 @@
 	hurt_heavy: {},
 	hurt_thrown: {},
 	tumble: {},
-
-	//CRASH
 	crash_bounce: {},
 	crash_loop: {},
 	crash_get_up: {},
 	crash_attack: {},
 	crash_roll: {},
-
-	//LEDGE
 	ledge_in: {},
 	ledge_loop: {},
 	ledge_roll_in: {},
@@ -134,8 +109,65 @@
 	ledge_attack: {},
 	ledge_jump_in: {},
 	ledge_jump: {},
-
-	//MISC
 	revival: {},
-	emote: {}
+	emote: {},
+
+	//SSF2 SPLIT ANIMATIONS
+	airdodge: {},
+	buried: {},
+	carry: {},
+	crouch: {},
+	defeat: {},
+	dizzy: {},
+	egg: {},
+	entry: {},
+	fall: {},
+	frozen: {},
+	getup_attack: {},
+	hurt: {},
+	idle: {endType:AnimationEndType.LOOP},
+	item_dash_attack: {},
+	item_fan: {},
+	item_float: {},
+	item_homerun: {},
+	item_jab: {},
+	item_pickup: {},
+	item_raise: {},
+	item_screw: {},
+	helpless: {endType:AnimationEndType.LOOP},
+	item_shoot: {},
+	item_smash_in: {},
+	item_smash_charge: {endType:AnimationEndType.LOOP},
+	item_smash: {},
+	item_throw: {},
+	item_throw_air: {},
+	item_tilt: {},
+	jab4: {},
+	jump: {},
+	jump_aerial: {},
+	knockdown: {},
+	ladder: {},
+	ledge_hang: {},
+	ledge_lean: {},
+	respawn: {},
+	screenko: {},
+	select_screen: {},
+	shield: {},
+	sidestep: {},
+	sleep: {},
+	special: {},
+	star_ko: {},
+	starko: {},
+	strong_forward: {},
+	strong_up: {},
+	stunned: {},
+	swim: {},
+	taunt: {},
+	taunt_down: {},
+	taunt_up: {},
+	tech: {},
+	tech_roll: {},
+	victory: {},
+	walk: {},
+	wall_stick: {},
 }

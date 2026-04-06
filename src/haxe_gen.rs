@@ -22,7 +22,8 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
 
     fs::write(scripts_dir.join("HitboxStats.hx"),   generate_hitbox_stats(data, &char_id))?;
     fs::write(scripts_dir.join("CharacterStats.hx"), generate_character_stats(data, &char_id))?;
-    fs::write(scripts_dir.join("AnimationStats.hx"), generate_animation_stats(data))?;
+    let splits = crate::anim_splitter::split_animations(&data.animations, sprite_boxes);
+    fs::write(scripts_dir.join("AnimationStats.hx"), generate_animation_stats(data, &splits))?;
     fs::write(scripts_dir.join("Script.hx"),         generate_script(data, &char_id))?;
 
     // .meta sidecar files for character scripts
@@ -540,140 +541,180 @@ fn generate_character_stats(data: &CharacterData, char_id: &str) -> String {
 
 // ─── AnimationStats.hx ───────────────────────────────────────────────────────
 
-fn generate_animation_stats(data: &CharacterData) -> String {
-    // Use the full template list so all animations have entries.
-    // SSF2 has matching animations for most of these.
-    format!(
+fn generate_animation_stats(data: &CharacterData, splits: &[crate::anim_splitter::SplitAnim]) -> String {
+    use std::collections::BTreeSet;
+
+    // ── Base FM template: animations with hand-tuned properties ──────────────
+    // These are the standard Fraymakers character-template entries.
+    // Order and grouping match the official template.
+    let template: Vec<(&str, &str)> = vec![
+        // MOTIONS
+        ("stand", ""),
+        ("stand_turn", ""),
+        ("walk_in", ""),
+        ("walk_loop", ""),
+        ("walk_out", ""),
+        ("dash", ""),
+        ("run", ""),
+        ("run_turn", ""),
+        ("skid", ""),
+        ("jump_squat", ""),
+        ("jump_in", ""),
+        ("jump_midair", ""),
+        ("jump_out", ""),
+        ("fall_loop", ""),
+        ("fall_special", ""),
+        ("land_light", ""),
+        ("land_heavy", ""),
+        ("crouch_in", ""),
+        ("crouch_loop", ""),
+        ("crouch_out", ""),
+        // AIRDASHES
+        ("airdash_up", ""),
+        ("airdash_down", ""),
+        ("airdash_forward", ""),
+        ("airdash_back", ""),
+        ("airdash_forward_up", ""),
+        ("airdash_forward_down", ""),
+        ("airdash_back_up", ""),
+        ("airdash_back_down", ""),
+        ("airdash_freefall", ""),
+        ("airdash_freefall_whiff", ""),
+        // DEFENSE
+        ("shield_in", ""),
+        ("shield_loop", ""),
+        ("shield_hurt", ""),
+        ("shield_out", ""),
+        ("parry_in", ""),
+        ("parry_success", ""),
+        ("parry_fail", ""),
+        ("roll", ""),
+        ("spot_dodge", ""),
+        // ASSIST CALL
+        ("assist_call", ""),
+        ("assist_call_air", ""),
+        // LIGHT ATTACKS
+        ("jab1", ""),
+        ("jab2", ""),
+        ("jab3", ""),
+        ("dash_attack", "xSpeedConservation: 1"),
+        ("tilt_forward", ""),
+        ("tilt_up", ""),
+        ("tilt_down", ""),
+        // STRONG ATTACKS
+        ("strong_forward_in", ""),
+        ("strong_forward_charge", ""),
+        ("strong_forward_attack", ""),
+        ("strong_up_in", ""),
+        ("strong_up_charge", ""),
+        ("strong_up_attack", ""),
+        ("strong_down_in", ""),
+        ("strong_down_charge", ""),
+        ("strong_down_attack", ""),
+        // AERIAL ATTACKS
+        ("aerial_neutral", "landAnimation:\"aerial_neutral_land\""),
+        ("aerial_forward", "landAnimation:\"aerial_forward_land\""),
+        ("aerial_back", "landAnimation:\"aerial_back_land\""),
+        ("aerial_up", "landAnimation:\"aerial_up_land\""),
+        ("aerial_down", "landAnimation:\"aerial_down_land\", xSpeedConservation: 0.5, ySpeedConservation: 0.5, gravityMultiplier:0, allowMovement: false"),
+        // AERIAL ATTACK LANDING
+        ("aerial_neutral_land", ""),
+        ("aerial_forward_land", ""),
+        ("aerial_back_land", ""),
+        ("aerial_up_land", ""),
+        ("aerial_down_land", "xSpeedConservation: 0"),
+        // SPECIAL ATTACKS
+        ("special_neutral", ""),
+        ("special_neutral_air", ""),
+        ("special_up", "leaveGroundCancel:false, xSpeedConservation:0.5, ySpeedConservation:0.5, allowMovement: true, nextState:CState.FALL_SPECIAL"),
+        ("special_up_air", "leaveGroundCancel:false, xSpeedConservation:0.5, ySpeedConservation:0.5, nextState:CState.FALL_SPECIAL, landType:LandType.TOUCH"),
+        ("special_down", "allowFastFall:false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, xSpeedConservation:0, ySpeedConservation:0"),
+        ("special_down_loop", "endType:AnimationEndType.LOOP"),
+        ("special_down_endlag", ""),
+        ("special_down_air", "allowFastFall:false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, xSpeedConservation:0, ySpeedConservation:0, landType:LandType.LINK_FRAMES, landAnimation:\"special_down\""),
+        ("special_down_air_loop", "endType:AnimationEndType.LOOP, landType:LandType.LINK_FRAMES, landAnimation:\"special_down_loop\""),
+        ("special_down_air_endlag", "landType:LandType.LINK_FRAMES, landAnimation:\"special_down\""),
+        ("special_side", "allowFastFall: false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: \"land_heavy\", singleUse:true"),
+        ("special_side_air", "allowFastFall: false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: \"land_heavy\", singleUse:true"),
+        // THROWS
+        ("grab", ""),
+        ("grab_hold", ""),
+        ("throw_forward", ""),
+        ("throw_back", ""),
+        ("throw_up", ""),
+        ("throw_down", ""),
+        // HURT ANIMATIONS
+        ("hurt_light_low", ""),
+        ("hurt_light_middle", ""),
+        ("hurt_light_high", ""),
+        ("hurt_medium", ""),
+        ("hurt_heavy", ""),
+        ("hurt_thrown", ""),
+        ("tumble", ""),
+        // CRASH
+        ("crash_bounce", ""),
+        ("crash_loop", ""),
+        ("crash_get_up", ""),
+        ("crash_attack", ""),
+        ("crash_roll", ""),
+        // LEDGE
+        ("ledge_in", ""),
+        ("ledge_loop", ""),
+        ("ledge_roll_in", ""),
+        ("ledge_roll", ""),
+        ("ledge_climb_in", ""),
+        ("ledge_climb", ""),
+        ("ledge_attack_in", ""),
+        ("ledge_attack", ""),
+        ("ledge_jump_in", ""),
+        ("ledge_jump", ""),
+        // MISC
+        ("revival", ""),
+        ("emote", ""),
+    ];
+
+    // Collect template names for dedup
+    let template_names: BTreeSet<&str> = template.iter().map(|(n, _)| *n).collect();
+
+    let mut out = format!(
         "// Animation stats for {} — converted from SSF2\n\
-        // Many values are automatically set by the Common class.\n\
-        // Entries here override those defaults.\n\
-        {{\n\
-        \t//MOTIONS\n\
-        \tstand: {{}},\n\
-        \tstand_turn: {{}},\n\
-        \twalk_in: {{}},\n\
-        \twalk_loop: {{}},\n\
-        \twalk_out: {{}},\n\
-        \tdash: {{}},\n\
-        \trun: {{}},\n\
-        \trun_turn: {{}},\n\
-        \tskid: {{}},\n\
-        \tjump_squat: {{}},\n\
-        \tjump_in: {{}},\n\
-        \tjump_midair: {{}},\n\
-        \tjump_out: {{}},\n\
-        \tfall_loop: {{}},\n\
-        \tfall_special: {{}},\n\
-        \tland_light: {{}},\n\
-        \tland_heavy: {{}},\n\
-        \tcrouch_in: {{}},\n\
-        \tcrouch_loop: {{}},\n\
-        \tcrouch_out: {{}},\n\n\
-        \t//AIRDASHES\n\
-        \tairdash_up: {{}},\n\
-        \tairdash_down: {{}},\n\
-        \tairdash_forward: {{}},\n\
-        \tairdash_back: {{}},\n\
-        \tairdash_forward_up: {{}},\n\
-        \tairdash_forward_down: {{}},\n\
-        \tairdash_back_up: {{}},\n\
-        \tairdash_back_down: {{}},\n\
-        \tairdash_freefall: {{}},\n\
-        \tairdash_freefall_whiff: {{}},\n\n\
-        \t//DEFENSE\n\
-        \tshield_in: {{}},\n\
-        \tshield_loop: {{}},\n\
-        \tshield_hurt: {{}},\n\
-        \tshield_out: {{}},\n\
-        \tparry_in: {{}},\n\
-        \tparry_success: {{}},\n\
-        \tparry_fail: {{}},\n\
-        \troll: {{}},\n\
-        \tspot_dodge: {{}},\n\n\
-        \t//ASSIST CALL\n\
-        \tassist_call: {{}},\n\
-        \tassist_call_air: {{}},\n\n\
-        \t//LIGHT ATTACKS\n\
-        \tjab1: {{}},\n\
-        \tjab2: {{}},\n\
-        \tjab3: {{}},\n\
-        \tdash_attack: {{xSpeedConservation: 1}},\n\
-        \ttilt_forward: {{}},\n\
-        \ttilt_up: {{}},\n\
-        \ttilt_down: {{}},\n\n\
-        \t//STRONG ATTACKS\n\
-        \tstrong_forward_in: {{}},\n\
-        \tstrong_forward_charge: {{}},\n\
-        \tstrong_forward_attack: {{}},\n\
-        \tstrong_up_in: {{}},\n\
-        \tstrong_up_charge: {{}},\n\
-        \tstrong_up_attack: {{}},\n\
-        \tstrong_down_in: {{}},\n\
-        \tstrong_down_charge: {{}},\n\
-        \tstrong_down_attack: {{}},\n\n\
-        \t//AERIAL ATTACKS\n\
-        \taerial_neutral: {{landAnimation:\"aerial_neutral_land\"}},\n\
-        \taerial_forward: {{landAnimation:\"aerial_forward_land\"}},\n\
-        \taerial_back: {{landAnimation:\"aerial_back_land\"}},\n\
-        \taerial_up: {{landAnimation:\"aerial_up_land\"}},\n\
-        \taerial_down: {{landAnimation:\"aerial_down_land\", xSpeedConservation: 0.5, ySpeedConservation: 0.5, gravityMultiplier:0, allowMovement: false}},\n\n\
-        \t//AERIAL ATTACK LANDING\n\
-        \taerial_neutral_land: {{}},\n\
-        \taerial_forward_land: {{}},\n\
-        \taerial_back_land: {{}},\n\
-        \taerial_up_land: {{}},\n\
-        \taerial_down_land: {{xSpeedConservation: 0}},\n\n\
-        \t//SPECIAL ATTACKS\n\
-        \tspecial_neutral: {{}},\n\
-        \tspecial_neutral_air: {{}},\n\
-        \tspecial_up: {{leaveGroundCancel:false, xSpeedConservation:0.5, ySpeedConservation:0.5, allowMovement: true, nextState:CState.FALL_SPECIAL}},\n\
-        \tspecial_up_air: {{leaveGroundCancel:false, xSpeedConservation:0.5, ySpeedConservation:0.5, nextState:CState.FALL_SPECIAL, landType:LandType.TOUCH}},\n\
-        \tspecial_down: {{allowFastFall:false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, xSpeedConservation:0, ySpeedConservation:0}},\n\
-        \tspecial_down_loop: {{endType:AnimationEndType.LOOP}},\n\
-        \tspecial_down_endlag: {{}},\n\
-        \tspecial_down_air: {{allowFastFall:false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, xSpeedConservation:0, ySpeedConservation:0, landType:LandType.LINK_FRAMES, landAnimation:\"special_down\"}},\n\
-        \tspecial_down_air_loop: {{endType:AnimationEndType.LOOP, landType:LandType.LINK_FRAMES, landAnimation:\"special_down_loop\"}},\n\
-        \tspecial_down_air_endlag: {{landType:LandType.LINK_FRAMES, landAnimation:\"special_down\"}},\n\
-        \tspecial_side: {{allowFastFall: false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: \"land_heavy\", singleUse:true}},\n\
-        \tspecial_side_air: {{allowFastFall: false, allowTurnOnFirstFrame: true, leaveGroundCancel:false, landType:LandType.TOUCH, landAnimation: \"land_heavy\", singleUse:true}},\n\n\
-        \t//THROWS\n\
-        \tgrab: {{}},\n\
-        \tgrab_hold: {{}},\n\
-        \tthrow_forward: {{}},\n\
-        \tthrow_back: {{}},\n\
-        \tthrow_up: {{}},\n\
-        \tthrow_down: {{}},\n\n\
-        \t//HURT ANIMATIONS\n\
-        \thurt_light_low: {{}},\n\
-        \thurt_light_middle: {{}},\n\
-        \thurt_light_high: {{}},\n\
-        \thurt_medium: {{}},\n\
-        \thurt_heavy: {{}},\n\
-        \thurt_thrown: {{}},\n\
-        \ttumble: {{}},\n\n\
-        \t//CRASH\n\
-        \tcrash_bounce: {{}},\n\
-        \tcrash_loop: {{}},\n\
-        \tcrash_get_up: {{}},\n\
-        \tcrash_attack: {{}},\n\
-        \tcrash_roll: {{}},\n\n\
-        \t//LEDGE\n\
-        \tledge_in: {{}},\n\
-        \tledge_loop: {{}},\n\
-        \tledge_roll_in: {{}},\n\
-        \tledge_roll: {{}},\n\
-        \tledge_climb_in: {{}},\n\
-        \tledge_climb: {{}},\n\
-        \tledge_attack_in: {{}},\n\
-        \tledge_attack: {{}},\n\
-        \tledge_jump_in: {{}},\n\
-        \tledge_jump: {{}},\n\n\
-        \t//MISC\n\
-        \trevival: {{}},\n\
-        \temote: {{}}\n\
-        }}\n",
+         // Many values are automatically set by the Common class.\n\
+         // Entries here override those defaults.\n\
+         {{\n",
         data.name
-    )
+    );
+
+    // Emit template entries
+    for (name, props) in &template {
+        if props.is_empty() {
+            out.push_str(&format!("\t{}: {{}},\n", name));
+        } else {
+            out.push_str(&format!("\t{}: {{{}}},\n", name, props));
+        }
+    }
+
+    // Emit split animations not already in template
+    let mut extra_names: Vec<&str> = Vec::new();
+    for split in splits {
+        if !template_names.contains(split.fm_name.as_str()) && !extra_names.contains(&split.fm_name.as_str()) {
+            extra_names.push(&split.fm_name);
+        }
+    }
+    if !extra_names.is_empty() {
+        out.push_str("\n\t//SSF2 SPLIT ANIMATIONS\n");
+        for name in &extra_names {
+            // Check if this split has loop_tail
+            let is_loop = splits.iter().any(|s| s.fm_name == *name && s.loop_tail);
+            if is_loop {
+                out.push_str(&format!("\t{}: {{endType:AnimationEndType.LOOP}},\n", name));
+            } else {
+                out.push_str(&format!("\t{}: {{}},\n", name));
+            }
+        }
+    }
+
+    out.push_str("}\n");
+    out
 }
 
 // ─── Script.hx ───────────────────────────────────────────────────────────────
