@@ -6,6 +6,25 @@ Everything here was reverse-engineered from first principles during development.
 
 ---
 
+## Reference Resources
+
+Always check these before guessing about either format:
+- **Fraymakers community docs**: https://github.com/aJewelofRarity/FraymakersDocs/tree/main
+- **Fraymakers character template** (official): https://github.com/Fraymakers/character-template
+- **SSF2 modding docs**: https://ssf2-modding.readthedocs.io/en/latest/reference/index.html
+
+The character template's `library/entities/character.entity` is the ground truth for entity format.
+It is a 2.67 MB file — use `curl | python3` to parse it programmatically, not web_fetch (truncates).
+
+```bash
+curl -s https://raw.githubusercontent.com/Fraymakers/character-template/main/library/entities/character.entity | python3 -c "
+import sys, json; obj = json.load(sys.stdin)
+# inspect layers, keyframes, symbols as needed
+"
+```
+
+---
+
 ## What this tool does
 
 Converts Super Smash Flash 2 (SSF2) character `.ssf` files into Fraymakers character packages
@@ -107,18 +126,18 @@ The BASE_SIZE is measured from the actual shape bounds using the `dump_shape_bou
 | `hurtBox` | `HURT_BOX` | Hurtbox (alternate name) |
 | `grabBox` | `GRAB_BOX` | Grab range |
 | `itemBox` | `HURT_BOX` | Item pickup — treated as hurtbox in FM |
-| `touchBox` | `GRAB_HOLD_BOX`(?) | Grab hold point — **UNVERIFIED**, see below |
+| `touchBox` | `GRAB_HOLD_POINT` | Grab hold point — POINT layer, not COLLISION_BOX |
 | `shieldBox` | `REFLECT_BOX` | |
 | `reflectBox` | `REFLECT_BOX` | |
 | `absorbBox` | `COUNTER_BOX` | |
 | `ledgeBox` | `LEDGE_GRAB_BOX` | |
 
-**⚠️ UNRESOLVED: `touchBox` / `grabHoldPoint`**
+**`touchBox` / `grabholdpoint`**
 In SSF2, `touchBox` defines where a grabbed opponent is held (grab animations, throws).
-The current code maps it to `GRAB_HOLD_BOX` as a `COLLISION_BOX` layer named `grabHoldPoint0`.
-However, it's unclear whether Fraymakers uses a `COLLISION_BOX` layer or a distinct `POINT` layer type.
-A reference FrayTools entity with a grab hold point is needed to verify this.
-The Fraymakers API has `CollisionBoxType.GRABHOLD = 6` which suggests it IS a collision box type.
+Fraymakers uses a **`POINT` layer** (not `COLLISION_BOX`) named `grabholdpoint0`.
+The layer `pluginMetadata` uses `pointType: "GRAB_HOLD_POINT"` (not `collisionBoxType`).
+The symbol is type `POINT` with just `x` and `y` (center of the touchBox area).
+Verified from the official Fraymakers character template `grab_hold` animation.
 
 #### ItemBox Special Case
 
@@ -375,6 +394,57 @@ COLLISION_BOX keyframe — blank frame uses `"symbol": null`:
 | `REFLECT_BOX` | 11 | Reflect |
 | `COUNTER_BOX` | 8 | Counter/absorb |
 | `SHIELD_BOX` | 7 | Shield |
+
+#### POINT Layer
+
+Used for named points in space (grab hold position, pivot points, etc.).
+
+```json
+{
+  "$id": "...",
+  "name": "grabholdpoint0",
+  "type": "POINT",
+  "keyframes": [...],
+  "hidden": false,
+  "locked": false,
+  "pluginMetadata": {
+    "com.fraymakers.FraymakersMetadata": {
+      "pointType": "GRAB_HOLD_POINT"   // or "PIVOT_POINT" etc.
+    }
+  }
+}
+```
+
+POINT symbol — just a coordinate, no size:
+```json
+{
+  "$id": "...",
+  "alpha": 1,
+  "color": "0xff0000",
+  "pluginMetadata": {},
+  "rotation": 0,
+  "type": "POINT",
+  "x": 9.62,
+  "y": -9.7
+}
+```
+
+POINT keyframe:
+```json
+{
+  "$id": "...",
+  "type": "POINT",
+  "length": 1,
+  "symbol": "sym_$id_or_null",
+  "tweened": false,
+  "tweenType": "LINEAR",
+  "pluginMetadata": {}
+}
+```
+
+**Known point types** (from `com.fraymakers.FraymakersMetadata.pointType`):
+- `GRAB_HOLD_POINT` — where grabbed opponent is placed (from SSF2 `touchBox`)
+- `PIVOT_POINT` — rotation pivot override
 
 #### IMAGE Layer
 

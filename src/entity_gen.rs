@@ -41,7 +41,8 @@ fn box_type_to_fm(bt: BoxType) -> &'static str {
         BoxType::ReflectBox => "REFLECT_BOX",
         BoxType::AbsorbBox  => "COUNTER_BOX",
         BoxType::LedgeBox    => "LEDGE_GRAB_BOX",
-        BoxType::GrabHoldBox  => "GRAB_HOLD_BOX",
+        // GrabHoldBox uses a POINT layer, not COLLISION_BOX — handled separately.
+        BoxType::GrabHoldBox  => "GRAB_HOLD_POINT",
     }
 }
 
@@ -89,7 +90,7 @@ fn ssf2_box_name_to_fm(inst_name: &str) -> String {
         p if p.starts_with("ledgebox") || p.starts_with("ledgegrab") =>
             format!("ledgegrabbox{}", index),
         p if p.starts_with("touchbox") =>
-            format!("grabHoldPoint{}", index),
+            format!("grabholdpoint{}", index),
         _ => format!("{}{}", prefix_lower.trim_end_matches('_'), index),
     }
 }
@@ -396,6 +397,9 @@ pub fn generate_entity(
                 // into one keyframe; a gap in frame numbers means a blank keyframe.
                 // This correctly handles RemoveObject (box absent on frame N even
                 // if it was present on N-1 and reappears on N+1).
+                let is_point = box_type == crate::sprite_parser::BoxType::GrabHoldBox;
+                let kf_type = if is_point { "POINT" } else { "COLLISION_BOX" };
+
                 let mut i = 0;
                 while i < active_frames.len() {
                     let (start_frame, fb) = active_frames[i];
@@ -425,7 +429,7 @@ pub fn generate_entity(
                         let gap_kf_id = uuid(char_id, &format!("kf_box_gap_{}_{}_{}", anim_name, inst_name, frame_idx));
                         keyframes.push(json!({
                             "$id": gap_kf_id,
-                            "type": "COLLISION_BOX",
+                            "type": kf_type,
                             "length": (start_frame as u32) - frame_idx,
                             "symbol": Value::Null,
                             "tweened": false,
@@ -436,35 +440,52 @@ pub fn generate_entity(
                         frame_idx = start_frame as u32;
                     }
 
-                    // Create COLLISION_BOX symbol for this run.
-                    // itemBox rotates around the hand attachment point (bottom-center).
-                    // All other boxes rotate around their center.
                     let sym_id = uuid(char_id, &format!("sym_box_{}_{}_{}", anim_name, inst_name, start_frame));
-                    let (pivot_x, pivot_y) = if box_type == crate::sprite_parser::BoxType::ItemBox {
-                        (round2(fb.width / 2.0), round2(fb.height))  // bottom-center = hand
+
+                    if is_point {
+                        // POINT symbol: just x/y (center of the touchBox)
+                        let cx = round2(fb.x + fb.width / 2.0);
+                        let cy = round2(fb.y + fb.height / 2.0);
+                        symbols.push(json!({
+                            "$id": sym_id,
+                            "alpha": 1,
+                            "color": color,
+                            "pluginMetadata": {},
+                            "rotation": 0,
+                            "type": "POINT",
+                            "x": cx,
+                            "y": cy
+                        }));
                     } else {
-                        (round2(fb.width / 2.0), round2(fb.height / 2.0))  // center
-                    };
-                    symbols.push(json!({
-                        "$id": sym_id,
-                        "alpha": 0.5,
-                        "color": color,
-                        "pivotX": pivot_x,
-                        "pivotY": pivot_y,
-                        "pluginMetadata": {},
-                        // FrayTools uses CCW-positive; SWF atan2(b,a) is CW-positive in y-down.
-                        "rotation": round2(-fb.rotation),
-                        "scaleX": round2(fb.width),
-                        "scaleY": round2(fb.height),
-                        "type": "COLLISION_BOX",
-                        "x": round2(fb.x),
-                        "y": round2(fb.y)
-                    }));
+                        // COLLISION_BOX symbol
+                        // itemBox rotates around the hand attachment point (bottom-center).
+                        // All other boxes rotate around their center.
+                        let (pivot_x, pivot_y) = if box_type == crate::sprite_parser::BoxType::ItemBox {
+                            (round2(fb.width / 2.0), round2(fb.height))  // bottom-center = hand
+                        } else {
+                            (round2(fb.width / 2.0), round2(fb.height / 2.0))  // center
+                        };
+                        symbols.push(json!({
+                            "$id": sym_id,
+                            "alpha": 0.5,
+                            "color": color,
+                            "pivotX": pivot_x,
+                            "pivotY": pivot_y,
+                            "pluginMetadata": {},
+                            // FrayTools uses CCW-positive; SWF atan2(b,a) is CW-positive in y-down.
+                            "rotation": round2(-fb.rotation),
+                            "scaleX": round2(fb.width),
+                            "scaleY": round2(fb.height),
+                            "type": "COLLISION_BOX",
+                            "x": round2(fb.x),
+                            "y": round2(fb.y)
+                        }));
+                    }
 
                     let kf_id = uuid(char_id, &format!("kf_box_{}_{}_{}", anim_name, inst_name, start_frame));
                     keyframes.push(json!({
                         "$id": kf_id,
-                        "type": "COLLISION_BOX",
+                        "type": kf_type,
                         "length": run_len,
                         "symbol": sym_id,
                         "tweened": false,
@@ -481,7 +502,7 @@ pub fn generate_entity(
                     let tail_kf_id = uuid(char_id, &format!("kf_box_tail_{}_{}_{}", anim_name, inst_name, frame_idx));
                     keyframes.push(json!({
                         "$id": tail_kf_id,
-                        "type": "COLLISION_BOX",
+                        "type": kf_type,
                         "length": total - frame_idx,
                         "symbol": Value::Null,
                         "tweened": false,
@@ -493,22 +514,39 @@ pub fn generate_entity(
 
                 if box_kf_ids.is_empty() { continue; }
 
-                layers.push(json!({
-                    "$id": layer_id,
-                    "name": fm_layer_name,
-                    "type": "COLLISION_BOX",
-                    "keyframes": box_kf_ids,
-                    "hidden": false,
-                    "locked": false,
-                    "defaultAlpha": 0.5,
-                    "defaultColor": color,
-                    "pluginMetadata": {
-                        "com.fraymakers.FraymakersMetadata": {
-                            "collisionBoxType": fm_box_type,
-                            "index": box_idx
+                if box_type == crate::sprite_parser::BoxType::GrabHoldBox {
+                    // grabHoldPoint uses a POINT layer, not COLLISION_BOX
+                    layers.push(json!({
+                        "$id": layer_id,
+                        "name": fm_layer_name,
+                        "type": "POINT",
+                        "keyframes": box_kf_ids,
+                        "hidden": false,
+                        "locked": false,
+                        "pluginMetadata": {
+                            "com.fraymakers.FraymakersMetadata": {
+                                "pointType": "GRAB_HOLD_POINT"
+                            }
                         }
-                    }
-                }));
+                    }));
+                } else {
+                    layers.push(json!({
+                        "$id": layer_id,
+                        "name": fm_layer_name,
+                        "type": "COLLISION_BOX",
+                        "keyframes": box_kf_ids,
+                        "hidden": false,
+                        "locked": false,
+                        "defaultAlpha": 0.5,
+                        "defaultColor": color,
+                        "pluginMetadata": {
+                            "com.fraymakers.FraymakersMetadata": {
+                                "collisionBoxType": fm_box_type,
+                                "index": box_idx
+                            }
+                        }
+                    }));
+                }
                 anim_layer_ids.push(layer_id);
             }
         }
