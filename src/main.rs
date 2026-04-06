@@ -2,8 +2,9 @@ use ssf2_converter::*;
 use ssf2_converter::sound_extractor;
 
 use clap::Parser;
-use anyhow::Result;
+use anyhow::{Result, Context};
 use std::path::PathBuf;
+use std::fs;
 
 #[derive(Parser, Debug)]
 #[command(name = "SSF2 to Fraymakers Converter")]
@@ -22,10 +23,10 @@ struct Args {
     #[arg(short, long)]
     name: Option<String>,
 
-    /// Path to ssf2_costumes.json (from the extract_costumes binary run on misc.ssf).
-    /// If provided, uses real SSF2 palette data instead of k-means approximation.
-    #[arg(long, value_name = "JSON")]
-    costumes: Option<PathBuf>,
+    /// Path to misc.ssf for costume palette data.
+    /// Auto-detected from same directory as input if not provided.
+    #[arg(long, value_name = "FILE")]
+    misc_ssf: Option<PathBuf>,
 
     /// Verbose output
     #[arg(short, long)]
@@ -57,6 +58,40 @@ fn main() -> Result<()> {
     let swf = swf_parser::parse(&swf_data)?;
     log::info!("Parsed SWF: v{}, {} ABC blocks", swf.version, swf.abc_blocks.len());
 
+    // ── Palette extraction from misc.ssf ──────────────────────────────────────
+    // Look for misc.ssf next to the input file (or in the same directory).
+    // Extract all costume data in-process and cache to a temp JSON file.
+    // This file is passed to the character processor then deleted when done.
+    let costumes_path: Option<PathBuf> = args.misc_ssf.clone().and_then(|p| {
+        // Explicit --misc-ssf provided: extract from it
+        match extract_costumes_to_temp(&p) {
+            Ok(path) => Some(path),
+            Err(e) => {
+                log::warn!("Costume extraction from {:?} failed: {}", p, e);
+                None
+            }
+        }
+    }).or_else(|| {
+        let misc_ssf = args.input.parent()?.join("misc.ssf");
+        if !misc_ssf.exists() {
+            log::info!("misc.ssf not found next to input — skipping palette extraction");
+            return None;
+        }
+        log::info!("Found misc.ssf — extracting costume palettes...");
+        match extract_costumes_to_temp(&misc_ssf) {
+            Ok(path) => {
+                log::info!("Costume palettes cached to {}", path.display());
+                Some(path)
+            }
+            Err(e) => {
+                log::warn!("Costume extraction failed: {} — palettes will use k-means fallback", e);
+                None
+            }
+        }
+    });
+    // Always delete temp file after — both explicit and auto-detected paths create temp files
+    let costumes_is_temp = costumes_path.is_some();
+
     // Determine which character names to process
     let char_names: Vec<String> = if let Some(name) = args.name {
         vec![name]
@@ -81,13 +116,65 @@ fn main() -> Result<()> {
     for char_name in &char_names {
         log::info!("─── Processing: {} ───", char_name);
         if let Err(e) = process_character(
-            &swf_data, &swf, char_name, &args.output, args.costumes.as_deref()
+            &swf_data, &swf, char_name, &args.output, costumes_path.as_deref()
         ) {
             log::error!("Failed to process {}: {}", char_name, e);
         }
     }
 
+    // Clean up temp costumes file if we created it
+    if costumes_is_temp {
+        if let Some(ref p) = costumes_path {
+            if let Err(e) = fs::remove_file(p) {
+                log::warn!("Failed to remove temp costumes file: {}", e);
+            } else {
+                log::info!("Removed temp costumes cache");
+            }
+        }
+    }
+
     Ok(())
+}
+
+/// Extract all costume palettes from misc.ssf in-process and write to a temp JSON file.
+/// Returns the path to the temp file on success.
+fn extract_costumes_to_temp(misc_ssf: &std::path::Path) -> Result<PathBuf> {
+    let raw = fs::read(misc_ssf).context("read misc.ssf")?;
+    let swf_data = ssf::decompress(&raw).context("decompress misc.ssf")?;
+    let swf = swf_parser::parse(&swf_data).context("parse misc.ssf")?;
+
+    let mut all_costumes: std::collections::BTreeMap<String, Vec<abc_parser::CostumeData>> =
+        std::collections::BTreeMap::new();
+
+    for abc_bytes in &swf.abc_blocks {
+        let abc = abc_parser::parse(abc_bytes).context("parse ABC")?;
+        let found = abc_parser::scan_all_costume_methods(&abc);
+        for (char_name, costumes) in found {
+            all_costumes.entry(char_name).or_default().extend(costumes);
+        }
+    }
+
+    // Drop noise: unknown key, or fewer than 10 costumes
+    all_costumes.retain(|k, v| k != "unknown" && v.len() >= 10);
+
+    let json_val: serde_json::Value = all_costumes.iter().map(|(char_name, costumes)| {
+        let arr: serde_json::Value = costumes.iter().map(|c| serde_json::json!({
+            "name":         c.name,
+            "colors":       c.colors,
+            "replacements": c.replacements,
+        })).collect::<Vec<_>>().into();
+        (char_name.clone(), arr)
+    }).collect::<serde_json::Map<_, _>>().into();
+
+    // Write to a temp file next to misc.ssf
+    let temp_path = misc_ssf.parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join(".ssf2_costumes_cache.json");
+    fs::write(&temp_path, serde_json::to_string(&json_val)?)
+        .context("write costumes cache")?;
+
+    log::info!("Extracted {} characters' costume data from misc.ssf", all_costumes.len());
+    Ok(temp_path)
 }
 
 /// Detect all root character names in a SWF by looking for `{Name}Ext` ABC classes.

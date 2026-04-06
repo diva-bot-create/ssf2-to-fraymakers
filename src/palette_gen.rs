@@ -50,13 +50,25 @@ pub fn load_ssf2_costumes(json_path: &Path, char_name: &str) -> Option<Vec<Ssf2C
     let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
 
     // Try exact name and common variations (mario, Mario, mario_bro, etc.)
+    let lower = char_name.to_lowercase();
     let candidates = [
-        char_name.to_lowercase(),
+        lower.clone(),
         char_name.to_string(),
         char_name.replace(' ', "").to_lowercase(),
     ];
 
-    let arr = candidates.iter().find_map(|k| v.get(k).and_then(|x| x.as_array()))?;
+    let arr = candidates.iter().find_map(|k| v.get(k).and_then(|x| x.as_array()))
+        // Fuzzy fallback: find any key that starts with or contains char_name
+        .or_else(|| {
+            v.as_object()?.iter().find_map(|(k, val)| {
+                let kl = k.to_lowercase();
+                if kl.starts_with(&lower) || lower.starts_with(&kl) {
+                    val.as_array()
+                } else {
+                    None
+                }
+            })
+        })?;
 
     let costumes = arr.iter().filter_map(|entry| {
         let name = entry.get("name").and_then(|n| n.as_str())?.to_string();

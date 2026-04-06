@@ -22,9 +22,6 @@ byteorder = "1.5"
 encoding_rs = "0.8"
 image = "0.25.10"
 sha1 = "0.10"
-fltk = { version = "1.4", features = ["fltk-bundled"] }
-rfd = "0.12"
-
-[[bin]]
-name = "ssf2-converter-gui"
-path = "src/bin/gui.rs"
+stdio-override = { version = "0.1", optional = true }
+indicatif = "0.17"
+colored = "2.1"
