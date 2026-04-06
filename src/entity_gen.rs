@@ -469,25 +469,39 @@ pub fn generate_entity(
                                 &format!("sym_img_{}_s{}_f{}", anim_name, slot, f));
                             let meta_guid = image_guids.get(&img.symbol_name)
                                 .cloned().unwrap_or_default();
-                            // FM y-axis is flipped vs SSF2: world_ty (SSF2 y-down top of image)
-                            // In FM, y=0 at foot, y goes up.
-                            // The image tx/ty from SSF2 is the registration point of the image
-                            // (typically top-left in SWF space). In FM we pass the x/y as the
-                            // pivot offset from the character origin.
-                            // SSF2: ty is the top of the image (y-down). FM: y is the bottom (y-up).
-                            // We need the image height to compute the bottom edge, but we don't have
-                            // it in pixels here reliably. Use the pivot at the tx/ty position and
-                            // let FM handle pivot. Store world_ty negated (y-flip) as the FM y.
-                            let fm_x = round2(world_tx);
-                            let fm_y = round2(-world_ty);  // SSF2 y-down → FM y-up
+
+                            // Coordinate system:
+                            //   SSF2: y-down, y=0 at foot. world_ty = TOP of image in SSF2 space.
+                            //   FM:   y-up,   y=0 at foot.
+                            //
+                            // In SSF2, bitmaps placed directly via PlaceObject have (0,0) at
+                            // their TOP-LEFT corner. So world_ty is the top of the image.
+                            //   SSF2 image occupies: y = world_ty  (top) to world_ty + h*sy (bottom)
+                            //
+                            // In FM, IMAGE symbol "y" = bottom of the image in y-up coords
+                            //   (matching how COLLISION_BOX uses y = bottom edge).
+                            //
+                            //   FM bottom = -(SSF2 bottom) = -(world_ty + img_h * sy)
+                            //             = -world_ty - img_h * sy
+                            //   FM x = world_tx  (x-axis is the same, no flip needed)
+                            let img_w = img.width as f64;
+                            let img_h = img.height as f64;
                             let fm_sx = round2(world_sx.abs());
                             let fm_sy = round2(world_sy.abs());
+                            // x: same axis, no flip
+                            let fm_x = round2(world_tx);
+                            // y: FM bottom = -(SSF2 top) - scaled height
+                            let fm_y = round2(-world_ty - img_h * fm_sy);
+                            // Pivot at center of image
+                            let pivot_x = round2(img_w * fm_sx / 2.0);
+                            let pivot_y = round2(img_h * fm_sy / 2.0);
+
                             symbols.push(json!({
                                 "$id": per_placement_sym_id,
                                 "alpha": 1,
                                 "imageAsset": meta_guid,
-                                "pivotX": 0,
-                                "pivotY": 0,
+                                "pivotX": pivot_x,
+                                "pivotY": pivot_y,
                                 "pluginMetadata": {},
                                 "rotation": 0,
                                 "scaleX": fm_sx,
