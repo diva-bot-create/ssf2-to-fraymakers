@@ -11,3 +11,4 @@ pub mod palette_gen;
 pub mod sprite_parser;
 pub mod image_extractor;
 pub mod sound_extractor;
+pub mod api_mappings;

@@ -542,7 +542,8 @@ fn generate_script(data: &CharacterData, char_id: &str) -> String {
             } else {
                 script.code.clone()
             };
-            out.push_str(&code);
+            let translated = crate::api_mappings::translate_ssf2_to_fm(&code);
+            out.push_str(&translated);
             out.push('\n');
         }
     }
@@ -557,7 +558,9 @@ fn generate_script(data: &CharacterData, char_id: &str) -> String {
         out.push_str("// NOTE: These are SSF2 timeline frame methods, named by global frame number.\n");
         out.push_str("// They need to be manually assigned to animation FRAME_SCRIPT layers in FrayTools.\n\n");
         for script in &frame_scripts {
-            out.push_str(&script.code);
+            // Apply SSF2 → Fraymakers API translation
+            let translated = crate::api_mappings::translate_ssf2_to_fm(&script.code);
+            out.push_str(&translated);
             out.push('\n');
         }
     }
