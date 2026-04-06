@@ -1,4 +1,4 @@
-// Projectile script for bombArrow — converted from SSF2
+// Projectile script for bombArrow -- converted from SSF2
 // TODO: tune X_SPEED / Y_SPEED and gravity to match SSF2 behaviour.
 
 var X_SPEED = 8;

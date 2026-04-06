@@ -1023,6 +1023,19 @@ pub struct ProjectileInfo {
     pub image_frames: Vec<Option<String>>,
     /// Meta GUIDs for each unique image used
     pub image_guids: BTreeMap<String, String>,
+    /// Extra per-state data for multi-state projectiles (e.g. link_bomb).
+    /// Each entry is (ssf2_label, image_frames, image_guids, boxes, frame_count).
+    pub extra_states: Vec<ProjectileStateData>,
+}
+
+/// Image + box data for one state of a multi-state projectile.
+#[derive(Debug, Clone)]
+pub struct ProjectileStateData {
+    pub label: String,
+    pub image_frames: Vec<Option<String>>,
+    pub image_guids: BTreeMap<String, String>,
+    pub boxes: Option<AnimationBoxData>,
+    pub frame_count: u16,
 }
 
 /// Generate a projectile.entity file for a single SSF2 projectile.
@@ -1040,6 +1053,17 @@ pub struct ProjectileInfo {
 ///   - `projectileSpawn` — 1 frame, first frame image
 ///   - `projectileIdle` — all frames with hitbox/hurtbox
 ///   - `projectileDestroy` — last frame image + blank frame script
+/// Map an SSF2 projectile outer-sprite frame label to a Fraymakers animation name.
+/// attack_idle → projectileIdle (the default), attack_hold → projectileHeld, etc.
+pub fn ssf2_proj_label_to_fm_anim(label: &str) -> String {
+    match label {
+        "attack_idle" => "projectileIdle".to_string(),
+        "attack_hold" => "projectileHeld".to_string(),
+        "attack_toss" => "projectileActive".to_string(),
+        other => format!("projectile_{}", other.replace(|c: char| !c.is_alphanumeric(), "_")),
+    }
+}
+
 pub fn generate_projectile_entity(
     char_id: &str,
     proj: &ProjectileInfo,
@@ -1462,6 +1486,74 @@ pub fn generate_projectile_entity(
             "$id": uuid(char_id, &format!("proj_{}_anim_destroy", proj_id)),
             "name": "projectileDestroy",
             "layers": [destroy_img_layer, destroy_script_layer],
+            "pluginMetadata": {}
+        }));
+    }
+
+    // ── Extra animations for multi-state projectiles (e.g. link_bomb) ────────
+    for state_data in &proj.extra_states {
+        let state_slug = state_data.label.replace(|c: char| !c.is_alphanumeric(), "_");
+        let anim_name = ssf2_proj_label_to_fm_anim(&state_data.label);
+
+        // Image layer
+        let img_layer_id = uuid(char_id, &format!("proj_{}_extra_{}_img_layer", proj_id, state_slug));
+        let mut img_kf_ids: Vec<Value> = Vec::new();
+        let total = state_data.frame_count as usize;
+        for (fi, sym_opt) in state_data.image_frames.iter().enumerate().take(total) {
+            let kf_id = uuid(char_id, &format!("proj_{}_extra_{}_img_kf_{}", proj_id, state_slug, fi));
+            if let Some(sym_name) = sym_opt {
+                if let Some(guid) = state_data.image_guids.get(sym_name.as_str()) {
+                    let sym_id = uuid(char_id, &format!("proj_{}_extra_{}_sym_{}", proj_id, state_slug, fi));
+                    symbols.push(json!({
+                        "$id": sym_id, "alpha": 1, "imageAsset": guid,
+                        "pivotX": 0, "pivotY": 0, "pluginMetadata": {},
+                        "rotation": 0, "scaleX": 1, "scaleY": 1, "type": "IMAGE", "x": 0, "y": 0
+                    }));
+                    keyframes.push(json!({
+                        "$id": kf_id, "length": 1, "pluginMetadata": {},
+                        "symbol": sym_id, "tweenType": "LINEAR", "tweened": false, "type": "IMAGE"
+                    }));
+                    img_kf_ids.push(kf_id.into());
+                    continue;
+                }
+            }
+            keyframes.push(json!({
+                "$id": kf_id, "length": 1, "pluginMetadata": {},
+                "symbol": Value::Null, "tweenType": "LINEAR", "tweened": false, "type": "IMAGE"
+            }));
+            img_kf_ids.push(kf_id.into());
+        }
+        if img_kf_ids.is_empty() {
+            let kf_id = uuid(char_id, &format!("proj_{}_extra_{}_img_empty", proj_id, state_slug));
+            keyframes.push(json!({
+                "$id": kf_id, "length": total.max(1) as u32,
+                "pluginMetadata": {}, "symbol": Value::Null,
+                "tweenType": "LINEAR", "tweened": false, "type": "IMAGE"
+            }));
+            img_kf_ids.push(kf_id.into());
+        }
+        layers.push(json!({
+            "$id": img_layer_id, "name": "Image Layer", "type": "IMAGE",
+            "keyframes": img_kf_ids, "hidden": false, "locked": false, "pluginMetadata": {}
+        }));
+
+        // Script layer (blank)
+        let script_kf_id = uuid(char_id, &format!("proj_{}_extra_{}_script_kf", proj_id, state_slug));
+        let script_layer_id = uuid(char_id, &format!("proj_{}_extra_{}_script_layer", proj_id, state_slug));
+        keyframes.push(json!({
+            "$id": script_kf_id, "length": total.max(1) as u32,
+            "code": "", "pluginMetadata": {}, "symbol": Value::Null,
+            "tweenType": "LINEAR", "tweened": false, "type": "FRAME_SCRIPT"
+        }));
+        layers.push(json!({
+            "$id": script_layer_id, "name": "Frame Script Layer", "type": "FRAME_SCRIPT",
+            "keyframes": [script_kf_id], "hidden": false, "locked": false, "pluginMetadata": {}
+        }));
+
+        animations.push(json!({
+            "$id": uuid(char_id, &format!("proj_{}_extra_{}_anim", proj_id, state_slug)),
+            "name": anim_name,
+            "layers": [img_layer_id, script_layer_id],
             "pluginMetadata": {}
         }));
     }

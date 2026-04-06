@@ -1,4 +1,8 @@
-// Projectile script for linkbomb — converted from SSF2
+// Projectile script for linkbomb -- converted from SSF2
+// This projectile has multiple animation states from SSF2:
+//   'attack_hold' -> animation 'projectileHeld' (18 frames)
+//   'attack_toss' -> animation 'projectileActive' (35 frames)
+// TODO: wire up state transitions to match SSF2 behaviour.
 // TODO: tune X_SPEED / Y_SPEED and gravity to match SSF2 behaviour.
 
 var X_SPEED = 8;
@@ -29,6 +33,6 @@ function onHit(event) {
 }
 
 function update() {
-    // Projectile moves via setXSpeed/setYSpeed set in initialize().
-    // Add custom movement logic here if needed.
+    // TODO: implement multi-state transition logic here.
+    // Use self.toAnimation("projectileHeld") / "projectileActive" etc.
 }

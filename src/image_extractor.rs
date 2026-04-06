@@ -959,6 +959,20 @@ fn po_to_mat(po: &swf::PlaceObject) -> ImageLocalMatrix {
 
 // ─── Projectile and menu sprite discovery ───────────────────────────────────────
 
+/// A single named state within a multi-state projectile outer wrapper.
+/// SSF2 uses frame labels on the outer sprite to switch between inner sprites.
+#[derive(Debug, Clone)]
+pub struct ProjectileState {
+    /// SSF2 frame label (e.g. "attack_hold", "attack_idle", "attack_toss")
+    pub label: String,
+    /// Inner animation sprite ID for this state
+    pub inner_sprite_id: u16,
+    /// Inner animation sprite name (e.g. "link_fla.BombHeld_152")
+    pub inner_sprite_name: String,
+    /// Frame count of the inner sprite
+    pub inner_frame_count: u16,
+}
+
 /// A projectile sprite discovered in the SWF.
 #[derive(Debug, Clone)]
 pub struct DiscoveredProjectile {
@@ -966,12 +980,16 @@ pub struct DiscoveredProjectile {
     pub sprite_id: u16,
     /// Root projectile name (e.g. "mario_fireball")
     pub name: String,
-    /// Inner animation sprite ID (the 'stance' child), if any
+    /// Inner animation sprite ID (the 'stance' child), if any (single-state projectiles)
     pub inner_sprite_id: Option<u16>,
     /// Inner animation sprite name (e.g. "mario_fla.mario_fireball_mc_210")
     pub inner_sprite_name: Option<String>,
     /// Frame count of the inner animation sprite
     pub inner_frame_count: u16,
+    /// For multi-state projectiles (outer wrapper has multiple frame labels),
+    /// each entry is one SSF2 state with its own inner sprite.
+    /// Empty for single-state projectiles.
+    pub states: Vec<ProjectileState>,
 }
 
 /// The head/portrait sprite discovered in the SWF.
@@ -1109,38 +1127,52 @@ pub fn discover_projectiles_and_head(
             // Skip the root character sprite
             if name_lower == char_lower { continue; }
 
-            // Find inner 'stance' sprite (PlaceObject with name='stance')
-            let mut inner_sprite_id = None;
-            let mut inner_sprite_name = None;
+            // Walk the outer sprite timeline to collect all frame-label → stance placements.
+            // Single-state: one label ('attack_idle') + one PlaceObject(stance).
+            // Multi-state: multiple labels each followed by a new PlaceObject(stance).
+            let mut states: Vec<ProjectileState> = Vec::new();
+            let mut cur_label: Option<String> = None;
             for stag in &sprite.tags {
-                if let swf::Tag::PlaceObject(po) = stag {
-                    let po_name = po.name.as_ref().map(|n| n.to_str_lossy(encoding_rs::WINDOWS_1252).to_string());
-                    if po_name.as_deref() == Some("stance") {
-                        match &po.action {
-                            swf::PlaceObjectAction::Place(id) => {
-                                inner_sprite_id = Some(*id);
-                                inner_sprite_name = symbols.get(id).cloned();
-                                break;
+                match stag {
+                    swf::Tag::FrameLabel(fl) => {
+                        cur_label = Some(fl.label.to_str_lossy(encoding_rs::WINDOWS_1252).to_string());
+                    }
+                    swf::Tag::PlaceObject(po) => {
+                        let po_name = po.name.as_ref()
+                            .map(|n| n.to_str_lossy(encoding_rs::WINDOWS_1252).to_string());
+                        if po_name.as_deref() == Some("stance") {
+                            if let swf::PlaceObjectAction::Place(id) = &po.action {
+                                let inner_sym = symbols.get(id).cloned().unwrap_or_default();
+                                let inner_frames = swf.tags.iter().find_map(|t| {
+                                    if let swf::Tag::DefineSprite(s) = t {
+                                        if s.id == *id { return Some(s.num_frames); }
+                                    }
+                                    None
+                                }).unwrap_or(1);
+                                if let Some(label) = cur_label.take() {
+                                    states.push(ProjectileState {
+                                        label,
+                                        inner_sprite_id: *id,
+                                        inner_sprite_name: inner_sym,
+                                        inner_frame_count: inner_frames,
+                                    });
+                                }
                             }
-                            _ => {}
                         }
                     }
+                    _ => {}
                 }
             }
 
-            // Get inner frame count
-            let inner_frame_count = if let Some(inner_id) = inner_sprite_id {
-                swf.tags.iter().find_map(|t| {
-                    if let swf::Tag::DefineSprite(s) = t {
-                        if s.id == inner_id {
-                            return Some(s.num_frames);
-                        }
-                    }
-                    None
-                }).unwrap_or(1)
-            } else {
-                sprite.num_frames.max(1)
-            };
+            // Single-state shortcut: find the attack_idle entry
+            let idle_state = states.iter().find(|s| s.label == "attack_idle");
+            let inner_sprite_id = idle_state.map(|s| s.inner_sprite_id);
+            let inner_sprite_name = idle_state.map(|s| s.inner_sprite_name.clone());
+            let inner_frame_count = idle_state.map(|s| s.inner_frame_count)
+                .unwrap_or_else(|| sprite.num_frames.max(1));
+
+            // Only keep states vec if it has more than just attack_idle
+            let states = if states.len() > 1 { states } else { Vec::new() };
 
             projectiles.push(DiscoveredProjectile {
                 sprite_id: sprite.id,
@@ -1148,6 +1180,7 @@ pub fn discover_projectiles_and_head(
                 inner_sprite_id,
                 inner_sprite_name,
                 inner_frame_count,
+                states,
             });
         }
     }

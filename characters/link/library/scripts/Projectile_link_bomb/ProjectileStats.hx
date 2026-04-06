@@ -5,6 +5,12 @@
         PState.ACTIVE => {
             animation: "projectileIdle"
         },
+        PState.HELD => {
+            animation: "projectileHeld"
+        },
+        PState.TOSSED => {
+            animation: "projectileActive"
+        },
         PState.DESTROYING => {
             animation: "projectileDestroy"
         }

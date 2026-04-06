@@ -148,6 +148,32 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
             }
         } else { None };
 
+        // Extract image+box data for each extra state (multi-state projectiles like link_bomb)
+        let mut extra_states: Vec<entity_gen::ProjectileStateData> = Vec::new();
+        for state in &proj.states {
+            if state.label == "attack_idle" { continue; } // already extracted above
+            let (sf, sg) = match crate::image_extractor::extract_projectile_frame_images(
+                swf_data, &char_id, state.inner_sprite_id, img_result
+            ) {
+                Ok(pfi) => (pfi.frames, pfi.image_guids),
+                Err(e) => {
+                    log::warn!("State '{}' image extraction failed: {}", state.label, e);
+                    (vec![], std::collections::BTreeMap::new())
+                }
+            };
+            let sb = match crate::sprite_parser::extract_boxes_for_sprite_id(swf_data, state.inner_sprite_id) {
+                Ok(b) => b,
+                Err(_) => None,
+            };
+            extra_states.push(entity_gen::ProjectileStateData {
+                label: state.label.clone(),
+                image_frames: sf,
+                image_guids: sg,
+                boxes: sb,
+                frame_count: state.inner_frame_count,
+            });
+        }
+
         let proj_info = entity_gen::ProjectileInfo {
             name: proj.name.clone(),
             inner_sprite_name: proj.inner_sprite_name.clone(),
@@ -155,6 +181,7 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
             boxes,
             image_frames,
             image_guids,
+            extra_states,
         };
 
         let filename = format!("{}.entity", sanitize_entity_name(&proj.name));
@@ -178,7 +205,7 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
 
         fs::write(
             proj_scripts_dir.join("ProjectileScript.hx"),
-            generate_projectile_script(&char_id, &entity_id),
+            generate_projectile_script(&char_id, &entity_id, &proj_info.extra_states),
         )?;
         fs::write(
             proj_scripts_dir.join("ProjectileScript.hx.meta"),
@@ -190,7 +217,7 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
         )?;
         fs::write(
             proj_scripts_dir.join("ProjectileAnimationStats.hx"),
-            generate_projectile_animation_stats(),
+            generate_projectile_animation_stats(&proj_info.extra_states),
         )?;
         fs::write(
             proj_scripts_dir.join("ProjectileAnimationStats.hx.meta"),
@@ -202,7 +229,7 @@ pub fn generate(output_dir: &Path, char_name: &str, data: &CharacterData, sprite
         )?;
         fs::write(
             proj_scripts_dir.join("ProjectileStats.hx"),
-            generate_projectile_stats(&char_id, &entity_id),
+            generate_projectile_stats(&char_id, &entity_id, &proj_info.extra_states),
         )?;
         fs::write(
             proj_scripts_dir.join("ProjectileStats.hx.meta"),
@@ -947,9 +974,27 @@ fn script_meta(id: &str, guid: &str, is_projectile: bool) -> String {
     })).unwrap_or_default()
 }
 
-/// ProjectileScript.hx — handles lifecycle events (initialize, hit, ground, destroy).
-fn generate_projectile_script(char_id: &str, entity_id: &str) -> String {
-    format!(r#"// Projectile script for {entity_id} — converted from SSF2
+/// ProjectileScript.hx — handles lifecycle events.
+/// Multi-state projectiles get extra PState constants and state-switching logic.
+fn generate_projectile_script(
+    _char_id: &str,
+    entity_id: &str,
+    extra_states: &[entity_gen::ProjectileStateData],
+) -> String {
+    let (extra_comment, update_body) = if extra_states.is_empty() {
+        (String::new(), "    // Projectile moves via setXSpeed/setYSpeed set in initialize().\n    // Add custom movement logic here if needed.\n".to_string())
+    } else {
+        let state_comments: String = extra_states.iter().map(|s| {
+            let fm = entity_gen::ssf2_proj_label_to_fm_anim(&s.label);
+            format!("//   '{}' -> animation '{}' ({} frames)\n", s.label, fm, s.frame_count)
+        }).collect();
+        let comment = format!("// This projectile has multiple animation states from SSF2:\n{state_comments}// TODO: wire up state transitions to match SSF2 behaviour.\n");
+        let body = "    // TODO: implement multi-state transition logic here.\n    // Use self.toAnimation(\"projectileHeld\") / \"projectileActive\" etc.\n".to_string();
+        (comment, body)
+    };
+    format!(
+"// Projectile script for {entity_id} -- converted from SSF2
+{extra_comment}\
 // TODO: tune X_SPEED / Y_SPEED and gravity to match SSF2 behaviour.
 
 var X_SPEED = 8;
@@ -960,7 +1005,7 @@ function initialize() {{
     self.addEventListener(GameObjectEvent.HIT_DEALT,  onHit,       {{ persistent: true }});
 
     self.setCostumeIndex(self.getOwner().getCostumeIndex());
-    Common.enableReflectionListener({{ mode: "X", replaceOwner: true }});
+    Common.enableReflectionListener({{ mode: \"X\", replaceOwner: true }});
 
     self.setState(PState.ACTIVE);
     self.setXSpeed(X_SPEED);
@@ -980,38 +1025,60 @@ function onHit(event) {{
 }}
 
 function update() {{
-    // Projectile moves via setXSpeed/setYSpeed set in initialize().
-    // Add custom movement logic here if needed.
-}}
-"#,
+{update_body}}}
+",
         entity_id = entity_id,
+        extra_comment = extra_comment,
+        update_body = update_body,
     )
 }
 
 /// ProjectileAnimationStats.hx — endType for each projectile animation.
-fn generate_projectile_animation_stats() -> String {
-    r#"// Animation stats for projectile
-{
+fn generate_projectile_animation_stats(extra_states: &[entity_gen::ProjectileStateData]) -> String {
+    let mut extra_lines = String::new();
+    for state in extra_states {
+        let fm = entity_gen::ssf2_proj_label_to_fm_anim(&state.label);
+        extra_lines.push_str(&format!("    {fm}: {{ endType: AnimationEndType.NONE }},\n"));
+    }
+    format!(
+"// Animation stats for projectile
+{{
     projectileSpawn:   {{ endType: AnimationEndType.NONE }},
-    projectileIdle:    {{ endType: AnimationEndType.NONE }},
+{extra_lines}    projectileIdle:    {{ endType: AnimationEndType.NONE }},
     projectileDestroy: {{ xSpeedConservation: 0, ySpeedConservation: 0, resetId: false }}
-}
-"#.replace("{{ ", "{ ").replace(" }}", " }")
-        .replace("{{", "{").replace("}}", "}")
+}}
+",
+        extra_lines = extra_lines)
 }
 
 /// ProjectileStats.hx — physics, geometry, and state → animation mapping.
-fn generate_projectile_stats(char_id: &str, entity_id: &str) -> String {
+fn generate_projectile_stats(
+    _char_id: &str,
+    entity_id: &str,
+    extra_states: &[entity_gen::ProjectileStateData],
+) -> String {
     let content_id = format!("{}Projectile", entity_id);
-    format!(r#"// Projectile stats for {entity_id}
+    let extra_transitions: String = extra_states.iter().map(|s| {
+        let fm = entity_gen::ssf2_proj_label_to_fm_anim(&s.label);
+        // map attack_hold → HELD, attack_toss → custom PState
+        let pstate = match s.label.as_str() {
+            "attack_hold" => "PState.HELD".to_string(),
+            "attack_toss" => "PState.TOSSED".to_string(),
+            other => format!("PState.{}", other.to_uppercase().replace(|c: char| !c.is_alphanumeric(), "_")),
+        };
+        format!("        {pstate} => {{\n            animation: \"{fm}\"\n        }},\n",
+            pstate = pstate, fm = fm)
+    }).collect();
+    format!(
+"// Projectile stats for {entity_id}
 {{
-    spriteContent: self.getResource().getContent("{content_id}"),
+    spriteContent: self.getResource().getContent(\"{content_id}\"),
     stateTransitionMapOverrides: [
         PState.ACTIVE => {{
-            animation: "projectileIdle"
+            animation: \"projectileIdle\"
         }},
-        PState.DESTROYING => {{
-            animation: "projectileDestroy"
+{extra_transitions}        PState.DESTROYING => {{
+            animation: \"projectileDestroy\"
         }}
     ],
     gravity: 0.7,
@@ -1032,10 +1099,11 @@ fn generate_projectile_stats(char_id: &str, entity_id: &str) -> String {
     aerialHipYOffset: 0,
     aerialFootPosition: 0
 }}
-"#,
+",
         entity_id = entity_id,
         content_id = content_id,
-    ).replace("{{", "{").replace("}}", "}")
+        extra_transitions = extra_transitions,
+    )
 }
 
 /// ProjectileHitboxStats.hx — hitbox entries extracted from the SSF2 attack data.
