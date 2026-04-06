@@ -444,7 +444,8 @@ pub fn generate_entity(
                         "pivotX": pivot_x,
                         "pivotY": pivot_y,
                         "pluginMetadata": {},
-                        "rotation": round2(fb.rotation),
+                        // FrayTools uses CCW-positive; SWF atan2(b,a) is CW-positive in y-down.
+                        "rotation": round2(-fb.rotation),
                         "scaleX": round2(fb.width),
                         "scaleY": round2(fb.height),
                         "type": "COLLISION_BOX",
@@ -583,7 +584,8 @@ pub fn generate_entity(
                                 "pivotX": pivot_x,
                                 "pivotY": pivot_y,
                                 "pluginMetadata": {},
-                                "rotation": round2(world_rot),
+                                // FrayTools uses CCW-positive; SWF atan2(b,a) is CW-positive in y-down.
+                                "rotation": round2(-world_rot),
                                 "scaleX": fm_sx,
                                 "scaleY": fm_sy,
                                 "type": "IMAGE",
