@@ -402,7 +402,8 @@ pub fn generate_entity(
                         let same_geom = (next_fb.x - fb.x).abs() < 0.01
                             && (next_fb.y - fb.y).abs() < 0.01
                             && (next_fb.width - fb.width).abs() < 0.01
-                            && (next_fb.height - fb.height).abs() < 0.01;
+                            && (next_fb.height - fb.height).abs() < 0.01
+                            && (next_fb.rotation - fb.rotation).abs() < 0.01;
                         if consecutive && same_geom {
                             run_end += 1;
                         } else {
@@ -429,7 +430,6 @@ pub fn generate_entity(
 
                     // Create COLLISION_BOX symbol for this run
                     let sym_id = uuid(char_id, &format!("sym_box_{}_{}_{}", anim_name, inst_name, start_frame));
-                    let fm_y = fb.y;
                     symbols.push(json!({
                         "$id": sym_id,
                         "alpha": 0.5,
@@ -437,12 +437,12 @@ pub fn generate_entity(
                         "pivotX": round2(fb.width / 2.0),
                         "pivotY": round2(fb.height / 2.0),
                         "pluginMetadata": {},
-                        "rotation": 0,
+                        "rotation": round2(fb.rotation),
                         "scaleX": round2(fb.width),
                         "scaleY": round2(fb.height),
                         "type": "COLLISION_BOX",
                         "x": round2(fb.x),
-                        "y": round2(fm_y)
+                        "y": round2(fb.y)
                     }));
 
                     let kf_id = uuid(char_id, &format!("kf_box_{}_{}_{}", anim_name, inst_name, start_frame));

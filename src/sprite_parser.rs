@@ -103,12 +103,14 @@ pub struct FrameBox {
     /// X position in pixels (top-left, relative to character origin)
     pub x: f64,
     /// Y position in pixels (top-left, relative to character origin)
-    /// Note: SWF Y axis points DOWN; Fraymakers Y axis points UP — caller must negate
+    /// Note: SWF Y axis points DOWN; negative = above foot.
     pub y: f64,
     /// Box width in pixels
     pub width: f64,
     /// Box height in pixels
     pub height: f64,
+    /// Rotation in degrees (always 0 for hit/hurtboxes; itemBox can rotate)
+    pub rotation: f64,
 }
 
 /// All collision boxes for one animation, indexed by frame number (0-based).
@@ -124,6 +126,8 @@ pub struct AnimationBoxData {
     pub frames: BTreeMap<u16, Vec<FrameBox>>,
     /// Frame offset into the original SSF2 sprite where this sub-anim starts
     pub sprite_frame_offset: u16,
+    /// Frame labels within this animation: (label_name, frame_index relative to sub-anim start)
+    pub frame_labels: Vec<(String, u16)>,
 }
 
 /// Root MovieClip placement transform for one xframe animation.
@@ -335,6 +339,7 @@ pub fn parse_sprite_boxes(
                     total_frames: sprite.num_frames,
                     frames,
                     sprite_frame_offset: 0,
+                    frame_labels: frame_labels.clone(),
                 });
             } else {
                 // Split into multiple FM animations
@@ -345,9 +350,14 @@ pub fn parse_sprite_boxes(
                         .filter(|(&f, _)| f >= start_frame && f < end_frame)
                         .map(|(&f, boxes)| (f - start_frame, boxes.clone()))
                         .collect();
+                    // Remap frame labels the same way
+                    let sliced_labels: Vec<(String, u16)> = frame_labels.iter()
+                        .filter(|(_, f)| *f >= start_frame && *f < end_frame)
+                        .map(|(name, f)| (name.clone(), f - start_frame))
+                        .collect();
 
-                    log::debug!("  sub-anim '{}': frames {}..{} ({} frames with boxes)",
-                        sub_fm_name, start_frame, end_frame, sliced_frames.len());
+                    log::debug!("  sub-anim '{}': frames {}..{} ({} frames with boxes, {} labels)",
+                        sub_fm_name, start_frame, end_frame, sliced_frames.len(), sliced_labels.len());
 
                     result.insert(sub_fm_name.clone(), AnimationBoxData {
                         ssf2_name: ssf2_name.clone(),
@@ -355,6 +365,7 @@ pub fn parse_sprite_boxes(
                         total_frames: slice_len,
                         frames: sliced_frames,
                         sprite_frame_offset: start_frame,
+                        frame_labels: sliced_labels,
                     });
                 }
             }
@@ -933,11 +944,33 @@ fn extract_frame_boxes(
                     })
                     .filter_map(|item| {
                         let box_type = BoxType::from_instance_name(&item.instance_name)?;
-                        let (local_x, local_y, local_w, local_h) = matrix_to_box(&item.matrix, base_size);
-                        // Apply root MC transform: scale local coords, then add root offset.
-                        // root_xform.sx/sy may be negative (flipped); use abs for size.
                         let sx = root_xform.sx;
                         let sy = root_xform.sy;
+
+                        if box_type == BoxType::ItemBox {
+                            // itemBox (id=991) has its own geometry and can rotate.
+                            // The PlaceObject tx/ty is the center of the item grab area.
+                            let (lcx, lcy, lw, lh, rot) = matrix_to_itembox(&item.matrix);
+                            // Center in world space
+                            let wcx = root_xform.tx + lcx * sx;
+                            let wcy = root_xform.ty + lcy * sy;
+                            let ww = lw * sx.abs();
+                            let wh = lh * sy.abs();
+                            // Convert center → top-left
+                            return Some(FrameBox {
+                                box_type,
+                                instance_name: item.instance_name.clone(),
+                                x: wcx - ww / 2.0,
+                                y: wcy - wh / 2.0,
+                                width: ww,
+                                height: wh,
+                                rotation: rot,
+                            });
+                        }
+
+                        // CollisonBox_6: 50×50 centered at origin.
+                        // matrix_to_box returns (top_left_x, top_left_y, width, height).
+                        let (local_x, local_y, local_w, local_h) = matrix_to_box(&item.matrix, base_size);
                         let world_x = root_xform.tx + local_x * sx;
                         let world_y = root_xform.ty + local_y * sy;
                         let world_w = (local_w * sx).abs();
@@ -949,6 +982,7 @@ fn extract_frame_boxes(
                             y: world_y,
                             width: world_w,
                             height: world_h,
+                            rotation: 0.0,
                         })
                     })
                     .collect();
@@ -1019,26 +1053,66 @@ struct DisplayItem {
 }
 
 /// Convert a SWF matrix to (x, y, width, height) in pixels.
-/// The CollisonBox shape is base_size × base_size pixels, centered at (0,0).
-/// Matrix scale (a,d) gives the actual dimensions; tx/ty give the center position.
+/// The CollisonBox shape is base_size × base_size pixels, **centered at (0,0)**.
+/// Matrix scale (a,d) gives the actual dimensions; tx/ty give the **center** position.
+/// Returns (top_left_x, top_left_y, width, height) — all in pixels.
 fn matrix_to_box(m: &swf::Matrix, base_size: f64) -> (f64, f64, f64, f64) {
-    // tx/ty are in twips (1/20 pixel)
-    let cx = m.tx.get() as f64 / 20.0;
-    let cy = m.ty.get() as f64 / 20.0;
+    // tx/ty are in twips (1/20 pixel) → convert to pixels
+    let cx = m.tx.get() as f64 / 20.0;  // center x
+    let cy = m.ty.get() as f64 / 20.0;  // center y
 
     // a = scale_x, d = scale_y (Fixed16 → f64)
     let scale_x = m.a.to_f64();
     let scale_y = m.d.to_f64();
 
-    let w = scale_x * base_size;
-    let h = scale_y * base_size;
+    let w = (scale_x * base_size).abs();
+    let h = (scale_y * base_size).abs();
 
-    // tx/ty appear to be the top-left corner position based on dump_sprites output
-    // (the CollisonBox registration point is at 0,0 top-left in SSF2)
-    let x = cx;
-    let y = cy;
+    // The CollisonBox shape spans -25..25 (for base_size=50), so tx/ty is the CENTER.
+    // Convert center → top-left:
+    let x = cx - w / 2.0;
+    let y = cy - h / 2.0;
 
     (x, y, w, h)
+}
+
+/// Extract itemBox geometry from its PlaceObject matrix.
+/// The itemBox (id=991) contains itemPlaceholder_mc_5 (id=990) at offset (-1.45, -20.95),
+/// which contains a thin ~3.7x21.9 shape. The PlaceObject places id=991 with scale+rotation.
+/// The relevant geometry for Fraymakers is: center = (tx, ty), effective size from scale.
+/// Returns (center_x, center_y, scaled_width, scaled_height, rotation_degrees).
+fn matrix_to_itembox(m: &swf::Matrix) -> (f64, f64, f64, f64, f64) {
+    let cx = m.tx.get() as f64 / 20.0;
+    let cy = m.ty.get() as f64 / 20.0;
+
+    // The inner placeholder shape is roughly 3.7w x 21.9h centered near its origin.
+    // The itemBox inner offset is (-1.45, -20.95) relative to id=991's origin,
+    // meaning the shape's midpoint is approximately at (-1.45 + 1.85, -20.95 + 10.95) = (0.4, -10.0)
+    // relative to id=991's origin. Close enough to (0, -10.0) for practical purposes.
+    //
+    // In SSF2, the item box represents the grab range for holding items.
+    // It's placed with scale controlling overall size and b/c matrix for rotation.
+    // We extract: scale magnitude → size, atan2(b, a) → rotation.
+    let sx = m.a.to_f64();
+    let sy = m.d.to_f64();
+    let bx = m.b.to_f64();
+    let by = m.c.to_f64();
+
+    // Rotation from the matrix (degrees, CCW positive in SWF = CW positive visually)
+    let rotation_rad = bx.atan2(sx);  // atan2(b, a) gives rotation
+    let rotation_deg = rotation_rad.to_degrees();
+
+    // Scale magnitude (handles rotation shear)
+    let scale = (sx * sx + bx * bx).sqrt();
+
+    // The placeholder inner shape: ~3.7w x 21.9h
+    // After scale: these are approximate — the visual grab box.
+    let inner_w = 3.7;
+    let inner_h = 21.9;
+    let w = inner_w * scale;
+    let h = inner_h * scale;
+
+    (cx, cy, w, h, rotation_deg)
 }
 
 // ─── Root MovieClip xframe scale extraction ──────────────────────────────────
