@@ -981,20 +981,10 @@ fn generate_projectile_script(
     entity_id: &str,
     extra_states: &[entity_gen::ProjectileStateData],
 ) -> String {
-    let (extra_comment, update_body) = if extra_states.is_empty() {
-        (String::new(), "    // Projectile moves via setXSpeed/setYSpeed set in initialize().\n    // Add custom movement logic here if needed.\n".to_string())
-    } else {
-        let state_comments: String = extra_states.iter().map(|s| {
-            let fm = entity_gen::ssf2_proj_label_to_fm_anim(&s.label);
-            format!("//   '{}' -> animation '{}' ({} frames)\n", s.label, fm, s.frame_count)
-        }).collect();
-        let comment = format!("// This projectile has multiple animation states from SSF2:\n{state_comments}// TODO: wire up state transitions to match SSF2 behaviour.\n");
-        let body = "    // TODO: implement multi-state transition logic here.\n    // Use self.toAnimation(\"projectileHeld\") / \"projectileActive\" etc.\n".to_string();
-        (comment, body)
-    };
-    format!(
+    if extra_states.is_empty() {
+        // Single-state: standard template
+        format!(
 "// Projectile script for {entity_id} -- converted from SSF2
-{extra_comment}\
 // TODO: tune X_SPEED / Y_SPEED and gravity to match SSF2 behaviour.
 
 var X_SPEED = 8;
@@ -1025,12 +1015,101 @@ function onHit(event) {{
 }}
 
 function update() {{
-{update_body}}}
+    // Projectile moves via setXSpeed/setYSpeed set in initialize().
+    // Add custom movement logic here if needed.
+}}
 ",
-        entity_id = entity_id,
-        extra_comment = extra_comment,
-        update_body = update_body,
-    )
+            entity_id = entity_id)
+    } else {
+        // Multi-state: use Fraymakers local state machine instead of fake PStates
+        // Each SSF2 frame label becomes an LState that drives animation switching.
+        let mut lstate_prep: String = String::new();
+        let mut lstate_fields: String = String::new();
+        let mut update_branches: String = String::new();
+
+        // First LState: idle (the attack_idle inner sprite is already projectileIdle)
+        lstate_prep.push_str("    IDLE:    _prepLocalState(\"projectileIdle\"),\n");
+        for state in extra_states {
+            let fm = entity_gen::ssf2_proj_label_to_fm_anim(&state.label);
+            let lname = match state.label.as_str() {
+                "attack_hold" => "HELD",
+                "attack_toss" => "ACTIVE",
+                _ => "CUSTOM",
+            };
+            lstate_prep.push_str(&format!("    {lname}: _prepLocalState(\"{fm}\"),\n"));
+            let fc = state.frame_count;
+            update_branches.push_str(&format!(
+"    }} else if (Common.inLocalState(LState.{lname})) {{
+        // TODO: implement {lname} state logic ({fc} frames)
+        if (self.finalFramePlayed()) {{
+            Common.toLocalState(LState.IDLE);
+        }}
+",
+                lname = lname, fc = fc));
+        }
+
+        format!(
+"// Projectile script for {entity_id} -- converted from SSF2 (multi-state)
+// Uses the local state machine to switch between animations since PState
+// only supports built-in values (ACTIVE, DESTROYING, etc).
+// TODO: tune X_SPEED / Y_SPEED and gravity to match SSF2 behaviour.
+
+var X_SPEED = 8;
+var Y_SPEED = 0;
+
+// ---- Local state machine setup ----
+function _prepLocalState(animation:String, ?index:Int=Math.NaN):Int {{
+    if (!__hasInitLocalStateMachine) {{
+        Common.initLocalStateMachine();
+        __hasInitLocalStateMachine = true;
+    }}
+    if (index != Math.NaN) {{
+        index = __localStatePrepIndex++;
+    }}
+    Common.registerLocalState(index, animation);
+    return index;
+}}
+var __hasInitLocalStateMachine = false;
+var __localStatePrepIndex = -1;
+
+var LState = {{
+{lstate_prep}}}
+
+function initialize() {{
+    self.addEventListener(EntityEvent.COLLIDE_FLOOR, onGroundHit, {{ persistent: true }});
+    self.addEventListener(GameObjectEvent.HIT_DEALT,  onHit,       {{ persistent: true }});
+
+    self.setCostumeIndex(self.getOwner().getCostumeIndex());
+    Common.enableReflectionListener({{ mode: \"X\", replaceOwner: true }});
+
+    self.setState(PState.ACTIVE);
+    Common.toLocalState(LState.IDLE);
+    self.setXSpeed(X_SPEED);
+    self.setYSpeed(Y_SPEED);
+}}
+
+function onGroundHit(event) {{
+    self.removeEventListener(EntityEvent.COLLIDE_FLOOR, onGroundHit);
+    self.removeEventListener(GameObjectEvent.HIT_DEALT,  onHit);
+    self.toState(PState.DESTROYING);
+}}
+
+function onHit(event) {{
+    self.removeEventListener(EntityEvent.COLLIDE_FLOOR, onGroundHit);
+    self.removeEventListener(GameObjectEvent.HIT_DEALT,  onHit);
+    self.toState(PState.DESTROYING);
+}}
+
+function update() {{
+    if (Common.inLocalState(LState.IDLE)) {{
+        // TODO: implement IDLE state logic (projectileIdle animation)
+{update_branches}    }}
+}}
+",
+            entity_id = entity_id,
+            lstate_prep = lstate_prep,
+            update_branches = update_branches)
+    }
 }
 
 /// ProjectileAnimationStats.hx — endType for each projectile animation.
@@ -1058,17 +1137,9 @@ fn generate_projectile_stats(
     extra_states: &[entity_gen::ProjectileStateData],
 ) -> String {
     let content_id = format!("{}Projectile", entity_id);
-    let extra_transitions: String = extra_states.iter().map(|s| {
-        let fm = entity_gen::ssf2_proj_label_to_fm_anim(&s.label);
-        // map attack_hold → HELD, attack_toss → custom PState
-        let pstate = match s.label.as_str() {
-            "attack_hold" => "PState.HELD".to_string(),
-            "attack_toss" => "PState.TOSSED".to_string(),
-            other => format!("PState.{}", other.to_uppercase().replace(|c: char| !c.is_alphanumeric(), "_")),
-        };
-        format!("        {pstate} => {{\n            animation: \"{fm}\"\n        }},\n",
-            pstate = pstate, fm = fm)
-    }).collect();
+    // Multi-state projectiles still map PState.ACTIVE → projectileIdle;
+    // animation switching between substates is done via Common.toLocalState() in Script.hx.
+    let _ = extra_states; // used in Script.hx, not Stats
     format!(
 "// Projectile stats for {entity_id}
 {{
@@ -1077,7 +1148,7 @@ fn generate_projectile_stats(
         PState.ACTIVE => {{
             animation: \"projectileIdle\"
         }},
-{extra_transitions}        PState.DESTROYING => {{
+        PState.DESTROYING => {{
             animation: \"projectileDestroy\"
         }}
     ],
@@ -1102,7 +1173,6 @@ fn generate_projectile_stats(
 ",
         entity_id = entity_id,
         content_id = content_id,
-        extra_transitions = extra_transitions,
     )
 }
 
