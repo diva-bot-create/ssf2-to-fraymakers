@@ -563,6 +563,17 @@ fn parse_trait(r: &mut Reader, strings: &[String], multinames: &[Multiname]) -> 
 
 // ─── Character data extraction ────────────────────────────────────────────────
 
+/// Returns true if this frame method name is a root-MovieClip xframe setter
+/// (e.g. "frame1", "frame23") as opposed to a real animation frame script
+/// (e.g. "a__frame2", "stand__frame0").
+/// Root xframe setters just do `self.xframe = "..."; self.stop();` and have
+/// no gameplay value in Fraymakers — they only drive animation name extraction.
+fn is_root_xframe_method(name: &str) -> bool {
+    name.starts_with("frame")
+        && name["frame".len()..].chars().all(|c| c.is_ascii_digit())
+        && !name["frame".len()..].is_empty()
+}
+
 /// Extract the SSF2 animation name set by self.xframe from a frame* method's bytecode.
 /// Scans for the first PUSHSTRING instruction whose value looks like an animation name.
 fn extract_xframe_name(bytecode: &[u8], abc: &AbcFile) -> Option<String> {
@@ -676,11 +687,14 @@ pub fn extract_character(abc: &AbcFile, char_name: &str) -> Result<ExtractedChar
                     attacks.extend(extracted);
                 }
                 name if name.starts_with("frame") => {
-                    // Extract xframe animation name first
+                    // Extract xframe animation name first (always, for animation name mapping)
                     if let Some(anim_name) = extract_xframe_name(&body.bytecode, abc) {
                         xframe_map.insert(name.to_string(), anim_name);
+                        // Root xframe setters (frame1, frame23, ...) only set self.xframe and stop.
+                        // They have no gameplay value in Fraymakers — skip adding to frame_scripts.
+                        if is_root_xframe_method(name) { continue; }
                     }
-                    // Use decompiler for full Haxe output
+                    // Use decompiler for full Haxe output (real animation frame scripts only)
                     let params: Vec<String> = if let Some(method) = abc.methods.get(body.method_idx as usize) {
                         (0..method.param_count).map(|i| format!("arg{}", i)).collect()
                     } else { vec![] };

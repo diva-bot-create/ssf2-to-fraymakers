@@ -85,7 +85,10 @@ fn parse_pool(abc: &[u8]) -> (AbcPool, usize) {
     (AbcPool { strings, ints, uints, doubles, multinames }, pos)
 }
 
-struct MethodInfo { param_count: u32, name_idx: u32 }
+struct MethodInfo { // unused, fields reference external indices
+    param_count: u32, // number of parameters (ignored)
+    name_idx: u32     // multiname index (ignored)
+}
 
 fn skip_methods(abc: &[u8], pos: &mut usize) -> Vec<MethodInfo> {
     let n = read_u30(abc, pos) as usize;
