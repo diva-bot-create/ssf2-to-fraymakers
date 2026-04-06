@@ -345,7 +345,9 @@ pub fn generate_entity(
 
                     // Create COLLISION_BOX symbol for this keyframe
                     let sym_id = uuid(char_id, &format!("sym_box_{}_{}_{}", anim_name, inst_name, start_frame));
-                    let fm_y = -fb.y - fb.height;
+                    // FrayTools uses y-down (negative = above foot), same as SSF2.
+                    // x/y = top-left corner of the box. Direct pass-through.
+                    let fm_y = fb.y;
                     symbols.push(json!({
                         "$id": sym_id,
                         "alpha": 0.5,
@@ -470,29 +472,16 @@ pub fn generate_entity(
                             let meta_guid = image_guids.get(&img.symbol_name)
                                 .cloned().unwrap_or_default();
 
-                            // Coordinate system:
-                            //   SSF2: y-down, y=0 at foot. world_ty = TOP of image in SSF2 space.
-                            //   FM:   y-up,   y=0 at foot.
-                            //
-                            // In SSF2, bitmaps placed directly via PlaceObject have (0,0) at
-                            // their TOP-LEFT corner. So world_ty is the top of the image.
-                            //   SSF2 image occupies: y = world_ty  (top) to world_ty + h*sy (bottom)
-                            //
-                            // In FM, IMAGE symbol "y" = bottom of the image in y-up coords
-                            //   (matching how COLLISION_BOX uses y = bottom edge).
-                            //
-                            //   FM bottom = -(SSF2 bottom) = -(world_ty + img_h * sy)
-                            //             = -world_ty - img_h * sy
-                            //   FM x = world_tx  (x-axis is the same, no flip needed)
+                            // FrayTools uses y-down (negative = above foot), same as SSF2.
+                            // x/y = top-left corner of the image. Direct pass-through.
+                            // Pivot = offset from top-left to the transform origin
+                            //         (image center for rotation/scale).
                             let img_w = img.width as f64;
                             let img_h = img.height as f64;
                             let fm_sx = round2(world_sx.abs());
                             let fm_sy = round2(world_sy.abs());
-                            // x: same axis, no flip
                             let fm_x = round2(world_tx);
-                            // y: FM bottom = -(SSF2 top) - scaled height
-                            let fm_y = round2(-world_ty - img_h * fm_sy);
-                            // Pivot at center of image
+                            let fm_y = round2(world_ty);
                             let pivot_x = round2(img_w * fm_sx / 2.0);
                             let pivot_y = round2(img_h * fm_sy / 2.0);
 
