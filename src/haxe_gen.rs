@@ -498,7 +498,7 @@ fn generate_animation_stats(data: &CharacterData) -> String {
 fn generate_script(data: &CharacterData, char_id: &str) -> String {
     let mut out = format!(
         "// API Script for {} — converted from SSF2\n\
-        // Frame scripts are extracted from SSF2 timeline code.\n\
+        // Frame scripts are embedded in the entity file (FRAME_SCRIPT layers).\n\
         // SSF2 API calls are mapped to Fraymakers equivalents where possible.\n\
         // Lines marked TODO need manual review.\n\n\
         // start general functions ---\n\n\
@@ -550,22 +550,8 @@ fn generate_script(data: &CharacterData, char_id: &str) -> String {
         }
     }
 
-    // Frame scripts — emit as decompiled functions for reference / manual assignment
-    let frame_scripts: Vec<_> = data.scripts.iter().filter(|s| !s.is_ext_method).collect();
-    if !frame_scripts.is_empty() {
-        out.push_str(&format!(
-            "// ── Frame scripts ({} methods) ──────────────────────────────────────────────\n",
-            frame_scripts.len()
-        ));
-        out.push_str("// NOTE: These are SSF2 timeline frame methods, named by global frame number.\n");
-        out.push_str("// They need to be manually assigned to animation FRAME_SCRIPT layers in FrayTools.\n\n");
-        for script in &frame_scripts {
-            // Apply SSF2 → Fraymakers API translation
-            let translated = crate::api_mappings::translate_ssf2_to_fm(&script.code);
-            out.push_str(&translated);
-            out.push('\n');
-        }
-    }
+    // Frame scripts are embedded directly in the entity file via FRAME_SCRIPT layers.
+    // They are no longer duplicated here.
 
     // Jab chain transition logic
     out.push_str(&generate_jab_scripts());
