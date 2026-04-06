@@ -168,11 +168,27 @@ pub fn generate_entity(
         .map(|s| (s.name.clone(), s.code.clone()))
         .collect();
 
-    for (anim_name, anim_info) in &data.animations {
-        let frame_count = sprite_boxes.get(anim_name)
-            .map(|sb| sb.total_frames as u32)
-            .unwrap_or((anim_info.frames as u32).max(1))
-            .max(1);
+    // ── Apply animation splits ────────────────────────────────────────────────
+    // The splitter expands multi-label SSF2 animations into separate FM animations.
+    // Each SplitAnim carries (fm_name, source_anim, start_frame, end_frame, loop info).
+    let split_anims = crate::anim_splitter::split_animations(&data.animations, sprite_boxes);
+
+    for split in &split_anims {
+        let anim_name = &split.fm_name;
+        let source_anim = &split.source_anim;
+        let anim_info = data.animations.get(source_anim)
+            .or_else(|| data.animations.get(anim_name));
+        // frame_count is the length of this split slice
+        let split_len = if split.end_frame == u16::MAX {
+            sprite_boxes.get(source_anim)
+                .map(|sb| sb.total_frames as u32)
+                .or_else(|| anim_info.map(|ai| ai.frames as u32))
+                .unwrap_or(1)
+                .saturating_sub(split.start_frame as u32)
+        } else {
+            (split.end_frame as u32).saturating_sub(split.start_frame as u32)
+        };
+        let frame_count = split_len.max(1);
         let anim_id = uuid(char_id, &format!("anim_{}", anim_name));
         let mut anim_layer_ids: Vec<String> = Vec::new();
 
@@ -183,16 +199,11 @@ pub fn generate_entity(
             let layer_id = uuid(char_id, &format!("layer_label_{}", anim_name));
             let mut label_kf_ids: Vec<Value> = Vec::new();
 
-            // Collect SSF2 inner labels from sprite_boxes
-            let inner_labels: Vec<(String, u16)> = sprite_boxes.get(anim_name)
-                .map(|sb| sb.frame_labels.clone())
-                .unwrap_or_default();
-
-            // Build sorted list: (frame, label_name). Frame 0 always has the FM anim name.
+            // Use pre-sliced labels from the splitter (already rebased to this split's frame 0)
+            // Frame 0 always gets the FM animation name; splitter labels augment from there.
             let mut all_labels: Vec<(u16, String)> = vec![(0, anim_name.to_string())];
-            for (lbl, frame) in &inner_labels {
-                // Skip labels at frame 0 (we already have the anim name there)
-                if *frame == 0 { continue; }
+            for (lbl, frame) in &split.labels {
+                if *frame == 0 { continue; } // don't overwrite the fm_name at frame 0
                 all_labels.push((*frame, lbl.clone()));
             }
             all_labels.sort_by_key(|(f, _)| *f);
@@ -248,18 +259,20 @@ pub fn generate_entity(
         {
             let layer_id = uuid(char_id, &format!("layer_script_{}", anim_name));
 
-            // Find the SSF2 name for this animation
+            // Find the SSF2 name: check source_anim first, then fm_name
             let ssf2_name = data.ssf2_to_fm_anim.iter()
-                .find(|(_, fm)| fm.as_str() == anim_name.as_str())
+                .find(|(_, fm)| fm.as_str() == source_anim.as_str())
+                .or_else(|| data.ssf2_to_fm_anim.iter().find(|(_, fm)| fm.as_str() == anim_name.as_str()))
                 .map(|(ssf2, _)| ssf2.clone());
 
-            // Get the sub-animation frame offset (for split anims like jab1/jab2)
-            let frame_offset = sprite_boxes.get(anim_name)
+            // Frame offset = sprite base offset + split start frame
+            let sprite_frame_offset = sprite_boxes.get(source_anim.as_str())
                 .map(|sb| sb.sprite_frame_offset as u32)
                 .unwrap_or(0);
+            let split_start = split.start_frame as u32;
+            let frame_offset = sprite_frame_offset + split_start;
 
-            // Collect per-frame scripts: parse "{ssf2_name}__frame{N}" names,
-            // subtract frame_offset to get local frame index.
+            // Collect per-frame scripts within the split's frame range
             let mut frame_code: BTreeMap<u32, String> = BTreeMap::new();
             if let Some(ref ssf2) = ssf2_name {
                 let prefix = format!("{}__frame", ssf2);
@@ -270,9 +283,6 @@ pub fn generate_entity(
                             if global_frame >= frame_offset {
                                 let local_frame = global_frame - frame_offset;
                                 if local_frame < frame_count {
-                                    // Strip the outer "function name() {" wrapper and
-                                    // trailing "}", keeping only the function body.
-                                    // The body lines are indented by one tab; de-indent them.
                                     let body = extract_function_body(&script.code);
                                     frame_code.insert(local_frame, body);
                                 }
@@ -403,11 +413,15 @@ pub fn generate_entity(
         }
 
         // ── 4. COLLISION_BOX layers ───────────────────────────────────────────
-        if let Some(anim_box_data) = sprite_boxes.get(anim_name) {
+        if let Some(anim_box_data) = sprite_boxes.get(source_anim.as_str()) {
+            let split_start_f = split.start_frame;
+            let split_end_f   = if split.end_frame == u16::MAX { anim_box_data.total_frames } else { split.end_frame };
             let mut instances_in_anim: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-            for boxes in anim_box_data.frames.values() {
-                for b in boxes {
-                    instances_in_anim.insert(b.instance_name.clone());
+            for (f, boxes) in &anim_box_data.frames {
+                if *f >= split_start_f && *f < split_end_f {
+                    for b in boxes {
+                        instances_in_anim.insert(b.instance_name.clone());
+                    }
                 }
             }
 
@@ -421,14 +435,16 @@ pub fn generate_entity(
                 let layer_id = uuid(char_id, &format!("layer_box_{}_{}", anim_name, inst_name));
 
                 let mut box_kf_ids: Vec<String> = Vec::new();
-                let total = anim_box_data.total_frames as u32;
+                let total = frame_count; // use split length, not source total
                 let mut frame_idx: u32 = 0;
 
-                // Collect sorted frames that have this instance
+                // Collect sorted frames within split range, rebased to 0
                 let mut active_frames: Vec<(u16, &crate::sprite_parser::FrameBox)> = Vec::new();
                 for (f, boxes) in &anim_box_data.frames {
-                    if let Some(b) = boxes.iter().find(|b| b.instance_name == *inst_name) {
-                        active_frames.push((*f, b));
+                    if *f >= split_start_f && *f < split_end_f {
+                        if let Some(b) = boxes.iter().find(|b| b.instance_name == *inst_name) {
+                            active_frames.push((f - split_start_f, b));
+                        }
                     }
                 }
                 active_frames.sort_by_key(|(f, _)| *f);
@@ -597,19 +613,22 @@ pub fn generate_entity(
 
         // ── 5. IMAGE layers (one per depth slot, back-to-front) ────────────────────
         {
-            let num_slots = img_result.anim_images.get(anim_name)
+            let num_slots = img_result.anim_images.get(source_anim.as_str())
                 .map(|a| a.max_depth_slots.max(1))
                 .unwrap_or(1);
+            let img_split_start = split.start_frame;
 
             for slot in 0..num_slots {
                 let img_layer_id = uuid(char_id, &format!("layer_image_{}_{}", anim_name, slot));
                 let mut img_kf_ids: Vec<String> = Vec::new();
 
-                if let Some(anim_imgs) = img_result.anim_images.get(anim_name) {
+                if let Some(anim_imgs) = img_result.anim_images.get(source_anim.as_str()) {
                     let total = frame_count;
                     let mut f: u32 = 0;
                     while f < total {
-                        let entry = anim_imgs.frames.get(&(f as u16))
+                        // Offset into source animation frame table
+                        let src_f = f + img_split_start as u32;
+                        let entry = anim_imgs.frames.get(&(src_f as u16))
                             .and_then(|v| v.get(slot));
 
                         // Key for run-length: same symbol AND same world transform
@@ -624,7 +643,7 @@ pub fn generate_entity(
                         // Run-length encode consecutive frames with identical symbol + world transform
                         let mut run = 1u32;
                         while f + run < total {
-                            let next = anim_imgs.frames.get(&((f + run) as u16))
+                            let next = anim_imgs.frames.get(&((src_f + run) as u16))
                                 .and_then(|v| v.get(slot));
                             let matches = next.map(|e| e.symbol_name.as_str()) == sym_name
                                 && next.map(|e| round2(e.world_tx))       == Some(world_tx).filter(|_| sym_name.is_some())

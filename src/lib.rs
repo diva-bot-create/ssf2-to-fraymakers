@@ -5,6 +5,7 @@ pub mod swf_parser;
 pub mod abc_parser;
 pub mod decompiler;
 pub mod extractor;
+pub mod anim_splitter;
 pub mod entity_gen;
 pub mod fraytools_project;
 pub mod haxe_gen;
