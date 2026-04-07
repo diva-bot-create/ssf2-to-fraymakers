@@ -19,8 +19,9 @@ struct ContentView: View {
     @State private var progress: Double = 0
     @State private var statusLine = "Ready"
     @State private var outputDir: URL = {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("FraymakersCharacters")
+        Bundle.main.bundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("characters")
     }()
     @State private var miscSSF: URL? = nil
 
