@@ -22,6 +22,7 @@ struct ContentView: View {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             .appendingPathComponent("FraymakersCharacters")
     }()
+    @State private var miscSSF: URL? = nil
 
     // Path to the ssf2_converter binary — bundled inside Contents/MacOS/
     var converterBin: URL {
@@ -52,10 +53,47 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            outputDirPicker
+            VStack(alignment: .trailing, spacing: 6) {
+                miscSsfPicker
+                outputDirPicker
+            }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
+    }
+
+    var miscSsfPicker: some View {
+        HStack(spacing: 8) {
+            Text("Palettes:")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            if let misc = miscSSF {
+                Text(misc.lastPathComponent)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.green)
+                    .lineLimit(1)
+                Button("✕") { miscSSF = nil }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("auto-detect")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .italic()
+            }
+            Button("Set") {
+                let panel = NSOpenPanel()
+                panel.allowedContentTypes = [UTType(filenameExtension: "ssf") ?? .data]
+                panel.allowsMultipleSelection = false
+                panel.prompt = "Select misc.ssf"
+                if panel.runModal() == .OK, let url = panel.url {
+                    miscSSF = url
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
     }
 
     var outputDirPicker: some View {
@@ -265,6 +303,14 @@ struct ContentView: View {
     }
 
     func startConversion(url: URL) {
+        // Auto-detect misc.ssf if not manually set
+        if miscSSF == nil {
+            let siblingMisc = url.deletingLastPathComponent().appendingPathComponent("misc.ssf")
+            if FileManager.default.fileExists(atPath: siblingMisc.path) {
+                miscSSF = siblingMisc
+            }
+        }
+
         conversionState = .converting
         progress = 0.05
         statusLine = "Starting…"
@@ -272,6 +318,7 @@ struct ContentView: View {
         let bin = converterBin.path
         let input = url.path
         let outDir = outputDir.path
+        let miscPath = miscSSF?.path
 
         DispatchQueue.global(qos: .userInitiated).async {
             // Animate progress while running
@@ -297,7 +344,11 @@ struct ContentView: View {
 
             let process = Process()
             process.executableURL = URL(fileURLWithPath: bin)
-            process.arguments = [input, "--output", outDir]
+            var args = [input, "--output", outDir]
+            if let misc = miscPath {
+                args += ["--misc-ssf", misc]
+            }
+            process.arguments = args
 
             let stdoutPipe = Pipe()
             let stderrPipe = Pipe()
