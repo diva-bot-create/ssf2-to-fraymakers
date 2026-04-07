@@ -42,6 +42,10 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
     <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>LSUIElement</key>
+    <false/>
+    <key>NSSupportsAutomaticTermination</key>
+    <false/>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
