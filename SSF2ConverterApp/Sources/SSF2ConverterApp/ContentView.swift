@@ -64,7 +64,7 @@ struct ContentView: View {
 
     var miscSsfPicker: some View {
         HStack(spacing: 8) {
-            Text("Palettes:")
+            Text("misc.ssf:")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             if let misc = miscSSF {
