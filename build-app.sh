@@ -64,6 +64,8 @@ PLIST
 echo "→ Launching..."
 pkill -f SSF2ConverterAp 2>/dev/null || true
 sleep 0.3
-open "$APP"
+open "$APP" &
+disown
 
 echo "✓ Done — SSF2 Converter is running"
+exit 0

@@ -3,11 +3,9 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Hide terminal window if launched from one
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        // Ensure at least one window is open
-        if NSApp.windows.isEmpty {
-            NSApp.windows.first?.makeKeyAndOrderFront(nil)
-        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
