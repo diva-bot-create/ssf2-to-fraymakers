@@ -599,10 +599,9 @@ fn build_anim_frame_images(
 
                         // Regular display list entries
                         for (&depth, (id, sym, mat)) in &display_list {
-                            let world_tx = root_xf.tx + mat.tx * root_xf.sx;
-                            let world_ty = root_xf.ty + mat.ty * root_xf.sy;
-                            let world_sx = mat.sx * root_xf.sx.abs();
-                            let world_sy = mat.sy * root_xf.sy.abs();
+                            let (world_tx, world_ty) = root_xf.apply(mat.tx, mat.ty);
+                            let world_sx = mat.sx * root_xf.scale_x();
+                            let world_sy = mat.sy * root_xf.scale_y();
                             entries.push(FrameImageEntry {
                                 depth,
                                 shape_id: *id,
@@ -624,10 +623,9 @@ fn build_anim_frame_images(
                                 let eff_frame = eff_frame.min(effect_frames.len().saturating_sub(1));
                                 for (inner_id, inner_sym, inner_mat) in &effect_frames[eff_frame] {
                                     let composed = parent_mat.compose(inner_mat);
-                                    let world_tx = root_xf.tx + composed.tx * root_xf.sx;
-                                    let world_ty = root_xf.ty + composed.ty * root_xf.sy;
-                                    let world_sx = composed.sx * root_xf.sx.abs();
-                                    let world_sy = composed.sy * root_xf.sy.abs();
+                                    let (world_tx, world_ty) = root_xf.apply(composed.tx, composed.ty);
+                                    let world_sx = composed.sx * root_xf.scale_x();
+                                    let world_sy = composed.sy * root_xf.scale_y();
                                     let effect_depth = depth + 1000;
                                     entries.push(FrameImageEntry {
                                         depth: effect_depth,

@@ -681,17 +681,19 @@ pub fn generate_entity(
                             let img_h = img.height as f64;
                             let fm_sx = round2(world_sx.abs());
                             let fm_sy = round2(world_sy.abs());
+
+                            // SSF2 tx/ty is where the sprite's local origin (top-left) maps to in world space.
+                            // Fraymakers x/y is that same point. Pivot is (0,0) — rotation around the
+                            // sprite's own origin, matching SSF2 behavior.
                             let fm_x = round2(world_tx);
                             let fm_y = round2(world_ty);
-                            let pivot_x = round2(img_w * fm_sx / 2.0);
-                            let pivot_y = round2(img_h * fm_sy / 2.0);
 
                             symbols.push(json!({
                                 "$id": per_placement_sym_id,
                                 "alpha": 1,
                                 "imageAsset": meta_guid,
-                                "pivotX": pivot_x,
-                                "pivotY": pivot_y,
+                                "pivotX": 0,
+                                "pivotY": 0,
                                 "pluginMetadata": {},
                                 // FrayTools uses CCW-positive; SWF atan2(b,a) is CW-positive in y-down.
                                 "rotation": round2(-world_rot),

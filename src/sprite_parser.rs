@@ -149,12 +149,29 @@ pub struct XframeTransform {
     pub sx: f64,
     /// Root placement scaleY
     pub sy: f64,
+    /// Full affine matrix components for correct world-space composition
+    pub a: f64,
+    pub b: f64,
+    pub c: f64,
+    pub d: f64,
 }
 
 impl Default for XframeTransform {
     fn default() -> Self {
-        Self { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0 }
+        Self { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0, a: 1.0, b: 0.0, c: 0.0, d: 1.0 }
     }
+}
+
+impl XframeTransform {
+    /// Apply this root transform to a local point (lx, ly), returning world coords.
+    pub fn apply(&self, lx: f64, ly: f64) -> (f64, f64) {
+        (self.a * lx + self.b * ly + self.tx,
+         self.c * lx + self.d * ly + self.ty)
+    }
+
+    /// Scale magnitude for a local scale value (ignores rotation/skew components).
+    pub fn scale_x(&self) -> f64 { self.sx.abs() }
+    pub fn scale_y(&self) -> f64 { self.sy.abs() }
 }
 
 // ─── Main entry point ────────────────────────────────────────────────────────
@@ -225,9 +242,13 @@ pub fn extract_xframe_transforms(
                         if let (Some(label), Some(m)) = (&current_ssf2_label, &stance_matrix) {
                             let tx = m.tx.get() as f64 / 20.0;
                             let ty = m.ty.get() as f64 / 20.0;
-                            // Use absolute value of scale — negative = flipped, magnitude is what we want
-                            let sx = m.a.to_f64();
-                            let sy = m.d.to_f64();
+                            // Store full affine matrix for correct world-space composition
+                            let a = m.a.to_f64();
+                            let b = m.b.to_f64();
+                            let c = m.c.to_f64();
+                            let d = m.d.to_f64();
+                            let sx = (a*a + b*b).sqrt();
+                            let sy = (c*c + d*d).sqrt();
 
                             // Map SSF2 label → FM name
                             let fm_name = ssf2_to_fm.get(label.as_str())
@@ -236,7 +257,7 @@ pub fn extract_xframe_transforms(
                                 .unwrap_or_else(|| label.clone());
 
                             // Also insert for sub-animations (jab1/jab2/jab3/jab4, taunt_up/taunt_down)
-                            let xform = XframeTransform { tx, ty, sx, sy };
+                            let xform = XframeTransform { tx, ty, sx, sy, a, b, c, d };
                             result.entry(fm_name.clone()).or_insert(xform);
 
                             // Seed sub-anim names with the same transform
@@ -933,7 +954,7 @@ pub fn extract_boxes_for_sprite_id(
     }
 
     let box_base_size = find_collision_box_base_size(&swf, &sym_names);
-    let identity = XframeTransform { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0 };
+    let identity = XframeTransform::default();
 
     for tag in &swf.tags {
         if let swf::Tag::DefineSprite(sprite) = tag {
