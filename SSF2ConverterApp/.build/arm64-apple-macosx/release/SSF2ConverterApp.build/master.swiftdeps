@@ -1,0 +1,7 @@
+version: "Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)"
+options: "008040795c926d08ad060105e9530625d2087dcea1303e55eaf9b5b3b2b4f6a8"
+build_start_time: [1775529141, 232454000]
+build_end_time: [1775529171, 100518000]
+inputs:
+  "/Users/jimmy/.openclaw/workspace-main/ssf2-fraymakers-converter/SSF2ConverterApp/Sources/SSF2ConverterApp/App.swift": [1775529134, 315815629]
+  "/Users/jimmy/.openclaw/workspace-main/ssf2-fraymakers-converter/SSF2ConverterApp/Sources/SSF2ConverterApp/ContentView.swift": [1775529122, 453377823]
