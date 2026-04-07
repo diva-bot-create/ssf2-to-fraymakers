@@ -23,9 +23,9 @@ struct ContentView: View {
             .appendingPathComponent("FraymakersCharacters")
     }()
 
-    // Path to the ssf2_converter binary (next to this app)
+    // Path to the ssf2_converter binary — bundled inside Contents/MacOS/
     var converterBin: URL {
-        Bundle.main.bundleURL
+        Bundle.main.executableURL!
             .deletingLastPathComponent()
             .appendingPathComponent("ssf2_converter")
     }
