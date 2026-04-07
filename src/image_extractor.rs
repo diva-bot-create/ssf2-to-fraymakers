@@ -27,6 +27,7 @@ pub type ShapeToBitmapMap = BTreeMap<u16, u16>;
 /// Local placement matrix for an image within its sub-sprite (in SSF2 local pixel space).
 /// tx/ty are in pixels (already divided by 20 from twips).
 /// sx/sy are scale magnitudes (always positive).
+/// Full 2D affine matrix from SWF PlaceObject.
 /// rotation is in degrees, derived from the matrix b/c shear components.
 #[derive(Debug, Clone, Copy)]
 pub struct ImageLocalMatrix {
@@ -36,10 +37,47 @@ pub struct ImageLocalMatrix {
     pub sy: f64,
     /// Rotation in degrees (from matrix a/b components). 0 = no rotation.
     pub rotation: f64,
+    /// Full affine matrix components for skew detection & pre-rendering
+    pub a: f64,
+    pub b: f64,
+    pub c: f64,
+    pub d: f64,
 }
 
 impl Default for ImageLocalMatrix {
-    fn default() -> Self { Self { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0, rotation: 0.0 } }
+    fn default() -> Self { Self { tx: 0.0, ty: 0.0, sx: 1.0, sy: 1.0, rotation: 0.0, a: 1.0, b: 0.0, c: 0.0, d: 1.0 } }
+}
+
+impl ImageLocalMatrix {
+    /// Construct from raw SWF matrix components.
+    pub fn from_abcd(a: f64, b: f64, c: f64, d: f64, tx: f64, ty: f64) -> Self {
+        Self {
+            tx, ty,
+            sx: (a*a + b*b).sqrt(),
+            sy: (c*c + d*d).sqrt(),
+            rotation: b.atan2(a).to_degrees(),
+            a, b, c, d,
+        }
+    }
+
+    /// Compose two matrices (self * other), producing a new affine matrix.
+    pub fn compose(&self, other: &ImageLocalMatrix) -> Self {
+        let a = self.a * other.a + self.b * other.c;
+        let b = self.a * other.b + self.b * other.d;
+        let c = self.c * other.a + self.d * other.c;
+        let d = self.c * other.b + self.d * other.d;
+        let tx = self.a * other.tx + self.b * other.ty + self.tx;
+        let ty = self.c * other.tx + self.d * other.ty + self.ty;
+        Self::from_abcd(a, b, c, d, tx, ty)
+    }
+
+    /// Returns true if this matrix contains a skew (not just scale + rotation).
+    /// A pure rotation has atan2(b,a) == atan2(-c,d). Skew means they differ.
+    pub fn has_skew(&self) -> bool {
+        let rot1 = self.b.atan2(self.a);
+        let rot2 = (-self.c).atan2(self.d);
+        (rot1 - rot2).abs() > 0.02 // ~1 degree tolerance
+    }
 }
 
 /// A single image layer placed at a specific depth in one frame.
@@ -202,11 +240,159 @@ pub fn extract_images(
     apply_image_fallbacks(&mut anim_images);
     log::info!("Animation image mappings: {} animations (after fallbacks)", anim_images.len());
 
+    // 5. Pre-render skewed frames as new bitmaps
+    // Fraymakers doesn't support skew transforms, so we bake the full affine
+    // into a new PNG and replace the frame entry with identity placement.
+    let skew_count = prerender_skewed_frames(
+        &mut anim_images, &mut images, &shape_to_bitmap, &sprites_dir, char_name,
+    );
+    if skew_count > 0 {
+        log::info!("Pre-rendered {} skewed frame placements as new bitmaps", skew_count);
+    }
+
     Ok(ImageExtractionResult {
         images,
         shape_to_bitmap,
         anim_images,
     })
+}
+
+/// Pre-render any frame image entries that have skew transforms.
+/// Loads the source bitmap, applies the full affine matrix, writes a new PNG.
+/// Replaces the entry's symbol/matrix with the pre-rendered version.
+fn prerender_skewed_frames(
+    anim_images: &mut BTreeMap<String, AnimFrameImages>,
+    images: &mut BTreeMap<u16, ExtractedImage>,
+    shape_to_bitmap: &ShapeToBitmapMap,
+    sprites_dir: &std::path::Path,
+    char_name: &str,
+) -> usize {
+    use image::{GenericImageView, RgbaImage, Rgba};
+    let mut count = 0;
+    let mut prerendered_cache: BTreeMap<String, (String, u32, u32)> = BTreeMap::new();
+
+    // Collect all (anim, frame, entry_idx) that need pre-rendering
+    let mut work: Vec<(String, u16, usize)> = Vec::new();
+    for (anim_name, anim_data) in anim_images.iter() {
+        for (frame, entries) in &anim_data.frames {
+            for (idx, entry) in entries.iter().enumerate() {
+                if entry.local_matrix.has_skew() {
+                    work.push((anim_name.clone(), *frame, idx));
+                }
+            }
+        }
+    }
+
+    for (anim_name, frame, entry_idx) in &work {
+        let entry = &anim_images[anim_name].frames[frame][*entry_idx];
+        let mat = entry.local_matrix;
+
+        // Resolve shape_id → bitmap_id → on-disk PNG
+        let bitmap_id = shape_to_bitmap.get(&entry.shape_id)
+            .copied()
+            .unwrap_or(entry.shape_id);
+        let src_img = match images.get(&bitmap_id) {
+            Some(img) => img,
+            None => continue,
+        };
+
+        // Cache key: shape_id + quantized matrix (avoid redundant renders)
+        let cache_key = format!("{}_{:.2}_{:.2}_{:.2}_{:.2}",
+            entry.shape_id, mat.a, mat.b, mat.c, mat.d);
+
+        let (new_sym, new_w, new_h) = if let Some(cached) = prerendered_cache.get(&cache_key) {
+            cached.clone()
+        } else {
+            // Load source image
+            let src_path = sprites_dir.parent()
+                .unwrap_or(sprites_dir)
+                .join(&src_img.png_path);
+            let src = match image::open(&src_path) {
+                Ok(img) => img.to_rgba8(),
+                Err(_) => continue,
+            };
+            let (sw, sh) = (src.width() as f64, src.height() as f64);
+
+            // Compute bounding box of transformed image
+            let corners = [
+                (0.0, 0.0),
+                (sw, 0.0),
+                (0.0, sh),
+                (sw, sh),
+            ];
+            let transformed: Vec<(f64, f64)> = corners.iter()
+                .map(|(x, y)| (mat.a * x + mat.b * y, mat.c * x + mat.d * y))
+                .collect();
+            let min_x = transformed.iter().map(|p| p.0).fold(f64::MAX, f64::min);
+            let min_y = transformed.iter().map(|p| p.1).fold(f64::MAX, f64::min);
+            let max_x = transformed.iter().map(|p| p.0).fold(f64::MIN, f64::max);
+            let max_y = transformed.iter().map(|p| p.1).fold(f64::MIN, f64::max);
+
+            let dst_w = (max_x - min_x).ceil() as u32;
+            let dst_h = (max_y - min_y).ceil() as u32;
+            if dst_w == 0 || dst_h == 0 || dst_w > 4096 || dst_h > 4096 { continue; }
+
+            // Inverse affine for backward mapping
+            let det = mat.a * mat.d - mat.b * mat.c;
+            if det.abs() < 1e-10 { continue; }
+            let inv_a =  mat.d / det;
+            let inv_b = -mat.b / det;
+            let inv_c = -mat.c / det;
+            let inv_d =  mat.a / det;
+
+            let mut dst = RgbaImage::new(dst_w, dst_h);
+            for dy in 0..dst_h {
+                for dx in 0..dst_w {
+                    // Map destination pixel back to source coordinates
+                    let fx = dx as f64 + min_x;
+                    let fy = dy as f64 + min_y;
+                    let sx = inv_a * fx + inv_b * fy;
+                    let sy = inv_c * fx + inv_d * fy;
+                    let sxi = sx.round() as i64;
+                    let syi = sy.round() as i64;
+                    if sxi >= 0 && sxi < sw as i64 && syi >= 0 && syi < sh as i64 {
+                        dst.put_pixel(dx, dy, *src.get_pixel(sxi as u32, syi as u32));
+                    }
+                }
+            }
+
+            // Write new PNG
+            let new_sym_name = format!("skew_{}_{}_f{}", char_name, anim_name.replace('/', "_"), frame);
+            let filename = format!("{}.png", sanitize_name(&new_sym_name));
+            let png_path = sprites_dir.join(&filename);
+            if let Err(e) = dst.save(&png_path) {
+                log::warn!("Failed to save pre-rendered skew bitmap: {}", e);
+                continue;
+            }
+
+            // Register as a new extracted image with a synthetic bitmap ID
+            let new_id = 60000 + count as u16;
+            images.insert(new_id, ExtractedImage {
+                bitmap_id: new_id,
+                symbol_name: new_sym_name.clone(),
+                width: dst_w,
+                height: dst_h,
+                png_path: format!("library/sprites/{}", filename),
+            });
+
+            prerendered_cache.insert(cache_key.clone(), (new_sym_name.clone(), dst_w, dst_h));
+            (new_sym_name, dst_w, dst_h)
+        };
+
+        // Replace the frame entry with identity placement at adjusted position
+        let entry = &mut anim_images.get_mut(anim_name).unwrap().frames.get_mut(frame).unwrap()[*entry_idx];
+        // The pre-rendered bitmap's origin is offset by (min_x, min_y) from the original
+        // transform, so adjust tx/ty to account for this
+        entry.symbol_name = new_sym.clone();
+        entry.local_matrix = ImageLocalMatrix::from_abcd(1.0, 0.0, 0.0, 1.0,
+            entry.local_matrix.tx, entry.local_matrix.ty);
+        entry.world_sx = new_w as f64;
+        entry.world_sy = new_h as f64;
+
+        count += 1;
+    }
+
+    count
 }
 
 /// Find the symbol name for a bitmap by looking up which shape references it
@@ -269,11 +455,8 @@ fn build_anim_frame_images(
                         let local_mat = po.matrix.map(|m| {
                             let a = m.a.to_f64(); let b = m.b.to_f64();
                             let c = m.c.to_f64(); let d = m.d.to_f64();
-                            ImageLocalMatrix {
-                                tx: m.tx.get() as f64 / 20.0, ty: m.ty.get() as f64 / 20.0,
-                                sx: (a*a + b*b).sqrt(), sy: (c*c + d*d).sqrt(),
-                                rotation: b.atan2(a).to_degrees(),
-                            }
+                            ImageLocalMatrix::from_abcd(a, b, c, d,
+                                m.tx.get() as f64 / 20.0, m.ty.get() as f64 / 20.0)
                         }).unwrap_or_default();
                         match &po.action {
                             swf::PlaceObjectAction::Place(cid) | swf::PlaceObjectAction::Replace(cid) => {
@@ -321,13 +504,7 @@ fn build_anim_frame_images(
                                     let uf_idx = (cur_frame.saturating_sub(*place_frame) as usize)
                                         .min(uframes.len().saturating_sub(1));
                                     for (inner_id, inner_sym, inner_mat) in &uframes[uf_idx] {
-                                        let composed = ImageLocalMatrix {
-                                            tx: parent_mat.tx + inner_mat.tx * parent_mat.sx,
-                                            ty: parent_mat.ty + inner_mat.ty * parent_mat.sy,
-                                            sx: parent_mat.sx * inner_mat.sx,
-                                            sy: parent_mat.sy * inner_mat.sy,
-                                            rotation: parent_mat.rotation + inner_mat.rotation,
-                                        };
+                                        let composed = parent_mat.compose(inner_mat);
                                         snap.push((*inner_id, inner_sym.clone(), composed));
                                     }
                                 }
@@ -339,11 +516,8 @@ fn build_anim_frame_images(
                             let local_mat = po.matrix.map(|m| {
                                 let a = m.a.to_f64(); let b = m.b.to_f64();
                                 let c = m.c.to_f64(); let d = m.d.to_f64();
-                                ImageLocalMatrix {
-                                    tx: m.tx.get() as f64 / 20.0, ty: m.ty.get() as f64 / 20.0,
-                                    sx: (a*a + b*b).sqrt(), sy: (c*c + d*d).sqrt(),
-                                    rotation: b.atan2(a).to_degrees(),
-                                }
+                                ImageLocalMatrix::from_abcd(a, b, c, d,
+                                    m.tx.get() as f64 / 20.0, m.ty.get() as f64 / 20.0)
                             }).unwrap_or_default();
                             match &po.action {
                                 swf::PlaceObjectAction::Place(cid) | swf::PlaceObjectAction::Replace(cid) => {
@@ -441,32 +615,22 @@ fn build_anim_frame_images(
                                 // Clamp to last frame (effect may loop or hold)
                                 let eff_frame = eff_frame.min(effect_frames.len().saturating_sub(1));
                                 for (inner_id, inner_sym, inner_mat) in &effect_frames[eff_frame] {
-                                    // Compose parent_mat • inner_mat
-                                    let composed_tx = parent_mat.tx + inner_mat.tx * parent_mat.sx;
-                                    let composed_ty = parent_mat.ty + inner_mat.ty * parent_mat.sy;
-                                    let composed_sx = parent_mat.sx * inner_mat.sx;
-                                    let composed_sy = parent_mat.sy * inner_mat.sy;
-                                    let composed_rot = parent_mat.rotation + inner_mat.rotation;
-                                    let world_tx = root_xf.tx + composed_tx * root_xf.sx;
-                                    let world_ty = root_xf.ty + composed_ty * root_xf.sy;
-                                    let world_sx = composed_sx * root_xf.sx.abs();
-                                    let world_sy = composed_sy * root_xf.sy.abs();
-                                    // Use a high depth slot so effect renders on top
+                                    let composed = parent_mat.compose(inner_mat);
+                                    let world_tx = root_xf.tx + composed.tx * root_xf.sx;
+                                    let world_ty = root_xf.ty + composed.ty * root_xf.sy;
+                                    let world_sx = composed.sx * root_xf.sx.abs();
+                                    let world_sy = composed.sy * root_xf.sy.abs();
                                     let effect_depth = depth + 1000;
                                     entries.push(FrameImageEntry {
                                         depth: effect_depth,
                                         shape_id: *inner_id,
                                         symbol_name: inner_sym.clone(),
-                                        local_matrix: ImageLocalMatrix {
-                                            tx: composed_tx, ty: composed_ty,
-                                            sx: composed_sx, sy: composed_sy,
-                                            rotation: composed_rot,
-                                        },
+                                        local_matrix: composed,
                                         world_tx,
                                         world_ty,
                                         world_sx,
                                         world_sy,
-                                        world_rotation: composed_rot,
+                                        world_rotation: composed.rotation,
                                     });
                                 }
                             }
@@ -495,13 +659,8 @@ fn build_anim_frame_images(
                             let b = m.b.to_f64();
                             let c = m.c.to_f64();
                             let d = m.d.to_f64();
-                            ImageLocalMatrix {
-                                tx: m.tx.get() as f64 / 20.0,
-                                ty: m.ty.get() as f64 / 20.0,
-                                sx: (a*a + b*b).sqrt(),
-                                sy: (c*c + d*d).sqrt(),
-                                rotation: b.atan2(a).to_degrees(),
-                            }
+                            ImageLocalMatrix::from_abcd(a, b, c, d,
+                                m.tx.get() as f64 / 20.0, m.ty.get() as f64 / 20.0)
                         }).unwrap_or_default();
 
                         match &po.action {
@@ -876,13 +1035,7 @@ pub fn extract_projectile_frame_images(
                         let uf_idx = (cur_frame.saturating_sub(*place_frame) as usize)
                             .min(uframes.len().saturating_sub(1));
                         for (inner_id, inner_sym, inner_mat) in &uframes[uf_idx] {
-                            let composed = ImageLocalMatrix {
-                                tx: parent_mat.tx + inner_mat.tx * parent_mat.sx,
-                                ty: parent_mat.ty + inner_mat.ty * parent_mat.sy,
-                                sx: parent_mat.sx * inner_mat.sx,
-                                sy: parent_mat.sy * inner_mat.sy,
-                                rotation: parent_mat.rotation + inner_mat.rotation,
-                            };
+                            let composed = parent_mat.compose(inner_mat);
                             snap.push((*inner_id, inner_sym.clone(), composed));
                         }
                     }
@@ -953,6 +1106,7 @@ fn po_to_mat(po: &swf::PlaceObject) -> ImageLocalMatrix {
             sx: (a*a + b*b).sqrt(),
             sy: (c*c + d*d).sqrt(),
             rotation: b.atan2(a).to_degrees(),
+            a, b, c, d,
         }
     }).unwrap_or_default()
 }
