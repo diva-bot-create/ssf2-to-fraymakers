@@ -235,7 +235,7 @@ pub fn extract_images(
         .unwrap_or_default();
 
     // 4. Build per-animation per-frame image references from DefineSprite tags
-    let mut anim_images = build_anim_frame_images(&swf, char_name, ssf2_to_fm, &symbols, &shape_to_bitmap, &xform_map);
+    let mut anim_images = build_anim_frame_images(&swf, char_name, ssf2_to_fm, &symbols, &shape_to_bitmap, &xform_map, &images);
     // Apply same fallbacks as sprite_parser for animations with no image data
     apply_image_fallbacks(&mut anim_images);
     log::info!("Animation image mappings: {} animations (after fallbacks)", anim_images.len());
@@ -419,8 +419,9 @@ fn build_anim_frame_images(
     char_name: &str,
     ssf2_to_fm: &BTreeMap<String, String>,
     symbols: &BTreeMap<u16, String>,
-    _shape_to_bitmap: &ShapeToBitmapMap,
+    shape_to_bitmap: &ShapeToBitmapMap,
     xform_map: &BTreeMap<String, crate::sprite_parser::XframeTransform>,
+    images: &BTreeMap<u16, ExtractedImage>,
 ) -> BTreeMap<String, AnimFrameImages> {
     use crate::sprite_parser::extract_ssf2_anim_name;
 
@@ -464,6 +465,10 @@ fn build_anim_frame_images(
                                     let lower = sname.to_lowercase();
                                     if !lower.contains("collisonbox") && !lower.contains("collisionbox") {
                                         disp.insert(po.depth, (*cid, sname.clone(), local_mat));
+                                    }
+                                } else if let Some(&bitmap_id) = shape_to_bitmap.get(cid) {
+                                    if let Some(img) = images.get(&bitmap_id) {
+                                        disp.insert(po.depth, (*cid, img.symbol_name.clone(), local_mat));
                                     }
                                 }
                             }
@@ -526,6 +531,10 @@ fn build_anim_frame_images(
                                         if !lower.contains("collisonbox") && !lower.contains("collisionbox") {
                                             disp.insert(po.depth, (*cid, sname.clone(), local_mat));
                                         }
+                                    } else if let Some(&bitmap_id) = shape_to_bitmap.get(cid) {
+                                        if let Some(img) = images.get(&bitmap_id) {
+                                            disp.insert(po.depth, (*cid, img.symbol_name.clone(), local_mat));
+                                        }
                                     } else if unnamed_frames.contains_key(cid) {
                                         unnamed_placements.insert(po.depth, (*cid, local_mat, cur_frame));
                                     }
@@ -562,16 +571,15 @@ fn build_anim_frame_images(
             // Only process character animation sprites
             if !sym.contains("_fla.") { continue; }
 
-            let ssf2_name = match extract_ssf2_anim_name(sym, &char_lower, ssf2_to_fm) {
-                Some(name) => name,
+            let fm_name = match extract_ssf2_anim_name(sym, &char_lower, ssf2_to_fm) {
+                Some(ssf2_name) => ssf2_to_fm.get(&ssf2_name).cloned().unwrap_or(ssf2_name),
                 None => {
-                    log::debug!("image_extractor: no SSF2 name for sprite '{}'", sym);
-                    continue;
+                    // No mapping but still process — use raw symbol name as key
+                    // e.g. "sandbag_fla.UpThrow_69" contains trail/effect images
+                    sym.to_string()
                 }
             };
-            // Convert SSF2 name → FM name (same as sprite_parser does)
-            let fm_name = ssf2_to_fm.get(&ssf2_name).cloned().unwrap_or_else(|| ssf2_name.clone());
-            log::debug!("image_extractor: sprite '{}' → ssf2='{}' fm='{}'", sym, ssf2_name, fm_name);
+            log::debug!("image_extractor: sprite '{}' → fm='{}'", sym, fm_name);
 
             // Root MC transform for this animation
             let root_xf = xform_map.get(&fm_name).copied()
@@ -666,23 +674,32 @@ fn build_anim_frame_images(
                         match &po.action {
                             swf::PlaceObjectAction::Place(char_id)
                             | swf::PlaceObjectAction::Replace(char_id) => {
-                                // Skip unnamed sprites (no SymbolClass entry) — they have no PNG.
-                                let sym_name = match symbols.get(char_id) {
-                                    Some(n) => n.clone(),
-                                    None => continue,
-                                };
-                                let lower = sym_name.to_lowercase();
-                                if lower.contains("collisonbox") || lower.contains("collisionbox") {
-                                    continue;
-                                }
-                                // Effect sprite (nested _fla. movieclip)? Track as sub-sprite.
-                                if lower.contains("_fla.") {
-                                    if effect_sprites.contains_key(char_id) {
-                                        sub_sprite_placements.insert(depth, (*char_id, current_frame, local_mat));
+                                if let Some(sym_name) = symbols.get(char_id) {
+                                    let lower = sym_name.to_lowercase();
+                                    if lower.contains("collisonbox") || lower.contains("collisionbox") {
+                                        continue;
                                     }
-                                    continue;
+                                    // Effect sprite (nested _fla. movieclip)? Track as sub-sprite.
+                                    if lower.contains("_fla.") {
+                                        if effect_sprites.contains_key(char_id) {
+                                            sub_sprite_placements.insert(depth, (*char_id, current_frame, local_mat));
+                                        }
+                                        continue;
+                                    }
+                                    display_list.insert(depth, (*char_id, sym_name.clone(), local_mat));
+                                } else if effect_sprites.contains_key(char_id) {
+                                    // Unnamed sub-sprite that was pre-built as an effect sprite
+                                    sub_sprite_placements.insert(depth, (*char_id, current_frame, local_mat));
+                                } else if shape_to_bitmap.contains_key(char_id) {
+                                    // Unnamed shape with a bitmap fill — resolve to bitmap symbol
+                                    let bitmap_id = shape_to_bitmap[char_id];
+                                    if let Some(img) = images.get(&bitmap_id) {
+                                        display_list.insert(depth, (*char_id, img.symbol_name.clone(), local_mat));
+                                    }
+                                } else if all_sprites.contains_key(char_id) {
+                                    // Unnamed sub-sprite not pre-built — track as effect
+                                    sub_sprite_placements.insert(depth, (*char_id, current_frame, local_mat));
                                 }
-                                display_list.insert(depth, (*char_id, sym_name, local_mat));
                             }
                             swf::PlaceObjectAction::Modify => {
                                 if let Some(entry) = display_list.get_mut(&depth) {
