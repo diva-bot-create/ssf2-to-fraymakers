@@ -2,7 +2,7 @@
 set -e
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
-APP="$REPO/SSF2ConverterApp/.build/SSF2ConverterApp.app"
+APP="$REPO/SSF2ConverterApp/build/SSF2ConverterApp.app"
 
 echo "→ Building Rust converter..."
 cd "$REPO"
